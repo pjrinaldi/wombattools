@@ -5,8 +5,8 @@
 *.a
 *.la
 *.lai
-*.so
-*.so.*
+#*.so
+#*.so.*
 *.dll
 *.dylib
 
@@ -14,8 +14,8 @@
 object_script.*.Release
 object_script.*.Debug
 *_plugin_import.cpp
-/.qmake.cache
-/.qmake.stash
+.qmake.cache
+*/.qmake.stash
 *.pro.user
 *.pro.user.*
 *.qbs.user
@@ -31,6 +31,9 @@ Makefile*
 *build-*
 *.qm
 *.prl
+wombatimager/.qmake.stash
+wombatimager/debug
+wombatimager/release
 
 # Qt unit tests
 target_wrapper.*
