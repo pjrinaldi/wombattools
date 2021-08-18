@@ -13,11 +13,14 @@
 
 #include <QFile>
 #include <QDataStream>
+#include <QTextStream>
 #include <QCommandLineParser>
+#include <QDateTime>
 #include <QDebug>
 #include "../blake3.h"
 #include <zstd.h>
 
+/*
 #define DTTMFMT "%F %T %z"
 #define DTTMSZ 35
 
@@ -48,6 +51,7 @@ void ShowUsage(int outtype)
         printf("Written by Pasquale Rinaldi\n");
     }
 };
+*/
 
 int main(int argc, char* argv[])
 {
@@ -59,7 +63,7 @@ int main(int argc, char* argv[])
     parser.addHelpOption();
     parser.addVersionOption();
     parser.addPositionalArgument("source", QCoreApplication::translate("main", "Block device to copy."));
-    parser.addPositionalArgument("image", QCoreApplication::translate("main", "Desination forensic image."));
+    parser.addPositionalArgument("image", QCoreApplication::translate("main", "Desination forensic image without a file name w/o extension."));
 
     QCommandLineOption compressionleveloption(QStringList() << "c" << "compress", QCoreApplication::translate("main", "Set compression level default=3."), QCoreApplication::translate("main", "clevel"));
     parser.addOption(compressionleveloption);
@@ -68,16 +72,199 @@ int main(int argc, char* argv[])
 
     const QStringList args = parser.positionalArguments();
     QString clevel = parser.value(compressionleveloption);
-    qDebug() << args << clevel;
+    QString blockdevice = args.at(0);
+    QString imgfile = args.at(1) + ".wfi";
+    QString logfile = args.at(1) + ".log";
+    int compressionlevel = 3;
+    if(clevel.toInt() > 0)
+        compressionlevel = clevel.toInt();
+    qDebug() << "compression level:" << compressionlevel;
 
-    QFile wfi("header.wfi");
+    // Initialize the datastream and header for the custom forensic image
+    QFile wfi(imgfile);
     wfi.open(QIODevice::WriteOnly);
     QDataStream out(&wfi);
+    //QByteArray imgarray;
+    //imgarray.clear();
     out.setVersion(QDataStream::Qt_5_15);
-    out << (quint64)0x776f6d6261746669; // wombatfi
-    //out << (quint64)0x776f6d6261746c69; // wombatli
+    out << (quint64)0x776f6d6261746669; // wombatfi - wombat forensic image signature
+    //out << (quint64)0x776f6d6261746c69; // wombatli - wombat logical image signature
     out << (uint8_t)0x1; // version 1
+
+    // Initialize the block device file for ioctl
+    int infile = open(blockdevice.toStdString().c_str(), O_RDONLY | O_NONBLOCK);
+    // Get Basic Device Information
+    uint64_t totalbytes = 0;
+    uint16_t sectorsize = 0;
+    ioctl(infile, BLKGETSIZE64, &totalbytes);
+    ioctl(infile, BLKSSZGET, &sectorsize);
+    close(infile);
+
+    // Initialize the block device for byte reading
+    QFile blkdev(blockdevice);
+    blkdev.open(QIODevice::ReadOnly);
+    QDataStream in(&blkdev);
+    //QByteArray blkarray;
+    //blkarray.clear();
+
+    // Initialize the log file
+    QFile log(logfile);
+    log.open(QIODevice::WriteOnly | QIODevice::Text);
+    QTextStream logout(&log);
+    
+    logout << "wombatimager v0.1 Forensic Imager started at: " << QDateTime::currentDateTime().toString("MM/dd/yyyy hh:mm:ss ap") << Qt::endl;
+    logout << "Source Device" << Qt::endl;
+    logout << "-------------" << Qt::endl;
+
+
+
+    //Initialize ZSTD Stream Compressor
+    //size_t const buffinsize = ZSTD_CStreamInSize();
+    //size_t const buffoutsize = ZSTD_CStreamOutSize();
+    ZSTD_CCtx* const cctx = ZSTD_createCCtx();
+    ZSTD_CCtx_setParameter(cctx, ZSTD_c_compressionLevel, compressionlevel);
+    ZSTD_CCtx_setParameter(cctx, ZSTD_c_checksumFlag, 1);
+    ZSTD_CCtx_setParameter(cctx, ZSTD_c_nbWorkers, 4);
+    //size_t const toread = buffinsize;
+    //qDebug() << "buffinsize:" << buffinsize << "buffoutsize:" << buffoutsize;
+
+    // Initialize Blake3 Hasher for block device and forensic image
+    uint8_t sourcehash[BLAKE3_OUT_LEN];
+//    uint8_t forimghash[BLAKE3_OUT_LEN];
+    blake3_hasher blkhasher;
+//    blake3_hasher imghasher;
+    blake3_hasher_init(&blkhasher);
+//    blake3_hasher_init(&imghasher);
+
+    // GET UDEV INFORMATION FOR THE LOG
+    struct udev* udev;
+    struct udev_device* dev;
+    struct udev_enumerate* enumerate;
+    struct udev_list_entry* devices;
+    struct udev_list_entry* devlistentry;
+    udev = udev_new();
+    enumerate = udev_enumerate_new(udev);
+    udev_enumerate_add_match_subsystem(enumerate, "block");
+    udev_enumerate_scan_devices(enumerate);
+    devices = udev_enumerate_get_list_entry(enumerate);
+    udev_list_entry_foreach(devlistentry, devices)
+    {
+        const char* path;
+        const char* tmp;
+        path = udev_list_entry_get_name(devlistentry);
+        dev = udev_device_new_from_syspath(udev, path);
+        if(strncmp(udev_device_get_devtype(dev), "partition", 9) != 0 && strncmp(udev_device_get_sysname(dev), "loop", 4) != 0)
+        {
+            tmp = udev_device_get_devnode(dev);
+            if(strcmp(tmp, blockdevice.toStdString().c_str()) == 0)
+            {
+                logout << "Device:";
+                const char* devvendor = udev_device_get_property_value(dev, "ID_VENDOR");
+                if(devvendor != NULL)
+                    logout << " " << devvendor;
+                const char* devmodel = udev_device_get_property_value(dev, "ID_MODEL");
+                if(devmodel != NULL)
+                    logout << " " << devmodel;
+                const char* devname = udev_device_get_property_value(dev, "ID_NAME");
+                if(devname != NULL)
+                    logout << " " << devname;
+                logout << Qt::endl;
+                tmp = udev_device_get_devnode(dev);
+                logout << "Device Path: " << tmp << Qt::endl;
+                tmp = udev_device_get_property_value(dev, "ID_SERIAL_SHORT");
+                logout << "Serial Number: " << tmp << Qt::endl;
+                logout << "Size: " << totalbytes << " bytes" << Qt::endl;
+                logout << "Block Size: " << sectorsize << " bytes" << Qt::endl;
+            }
+        }
+        udev_device_unref(dev);
+    }
+    udev_enumerate_unref(enumerate);
+    udev_unref(udev);
+
+
+    qDebug() << "start reading block device and send to hasher and zstd";
+    // start reading the block device and send to the hasher and the zstd_stream compressor
+    uint64_t curpos = 0;
+    //char* bytebuf = new char[sectorsize];
+    //char* outbuf = new char[sectorsize];
+    char bytebuf[sectorsize];
+    char outbuf[sectorsize];
+    memset(bytebuf, 0, sizeof(bytebuf));
+    memset(outbuf, 0, sizeof(outbuf));
+    int bytesread = 0;
+    uint64_t errorcount = 0;
+    while(curpos < totalbytes)
+    {
+        bytesread = in.readRawData(bytebuf, sectorsize);
+        if(bytesread == -1)
+        {
+            memset(bytebuf, 0, sizeof(bytebuf));
+            errorcount++;
+            perror("Read Error, writing zeros instead.\n");
+        }
+        blake3_hasher_update(&blkhasher, bytebuf, bytesread); // add bytes read to block device source hasher
+        curpos = curpos + bytesread;
+
+        ssize_t byteswrite = out.writeRawData(bytebuf, bytesread); // writes zstd compressed stream data to wfi file.
+        //qDebug() << "bytes written:" << byteswrite;
+
+        printf("Wrote %llu out of %llu bytes\r", curpos, totalbytes);
+        fflush(stdout);
+    }
+        /*
+        ssize_t byteswrite = write(outfile, bytebuf, sectorsize);
+        if(byteswrite == -1)
+            perror("Write error, I haven't accounted for this yet so you probably want to use dc3dd instead.");
+        blake3_hasher_update(&srchash, bytebuf, bytesread);
+        ssize_t byteswrote = pread(outfile, imgbuf, sectorsize, curpos);
+        blake3_hasher_update(&imghash, imgbuf, byteswrote);
+        curpos = curpos + sectorsize;
+        printf("Wrote %llu out of %llu bytes\r", curpos, totalbytes);
+        fflush(stdout);
+         */ 
+    /*
+    for (;;)
+    {
+        size_t const readsize = fread(buffin, 1, toread, fin);
+        int const lastchunk = (readsize < toread);
+        ZSTD_EndDirective const mode = lastchunk ? ZSTD_e_end : ZSTD_e_continue;
+        ZSTD_inBuffer input = { buffin, readsize, 0 };
+        int finished;
+        do
+        {
+            ZSTD_outBuffer output = { buffout, buffoutsize, 0 };
+            size_t const remaining = ZSTD_compressStream2(cctx, &output, &input, mode);
+
+            size_t const writtensize = fwrite(buffout, 1, output.pos, fout);
+            finished = lastchunk ? (remaining == 0) : (input.pos == input.size);
+        }
+        while(!finished);
+
+        if(lastchunk)
+            break;
+    }
+
+     */ 
+    ZSTD_freeCCtx(cctx);
+    //free(bytebuf);
+    //free(outbuf);
+    //delete bytebuf;
+    //delete outbuf;
+
+    blake3_hasher_finalize(&blkhasher, sourcehash, BLAKE3_OUT_LEN);
+    for(size_t i=0; i < BLAKE3_OUT_LEN; i++)
+    {
+        //logout << 
+        //fprintf(filelog, "%02x", sourcehash[i]);
+        printf("%02x", sourcehash[i]);
+    }
+    printf("\n");
+
+
     wfi.close();
+    blkdev.close();
+    log.close();
 
     /*
     char* inputstr = NULL;
