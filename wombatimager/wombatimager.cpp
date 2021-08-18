@@ -198,13 +198,15 @@ int main(int argc, char* argv[])
     //char* outbuf = new char[sectorsize];
     char bytebuf[sectorsize];
     memset(bytebuf, 0, sizeof(bytebuf));
+    size_t cbufsize = ZSTD_compressBound(sectorsize);
+    char outbuf[cbufsize];
     //bytebuf = { 0 };
     //outbuf = { 0 };
     int bytesread = 0;
     uint64_t errorcount = 0;
     //size_t dstsize = ZSTD_compressBound(sectorsize);
-    char outbuf[sectorsize];
-    memset(outbuf, 0, sizeof(outbuf));
+    //char outbuf[sectorsize];
+    //memset(outbuf, 0, sizeof(outbuf));
     //qDebug() << "dstsize:" << dstsize;
     while(curpos < totalbytes)
     {
@@ -216,6 +218,25 @@ int main(int argc, char* argv[])
             errorcount++;
             perror("Read Error, writing zeros instead.\n");
         }
+        size_t csize = ZSTD_compress(outbuf, cbufsize, bytebuf, bytesread, compressionlevel);
+        //CHECK_ZSTD(csize);
+        /*
+         *    size_t fSize;
+    void* const fBuff = mallocAndLoadFile_orDie(fname, &fSize);
+    size_t const cBuffSize = ZSTD_compressBound(fSize);
+    void* const cBuff = malloc_orDie(cBuffSize);
+    size_t const cSize = ZSTD_compress(cBuff, cBuffSize, fBuff, fSize, 1);
+    CHECK_ZSTD(cSize);
+
+    saveFile_orDie(oname, cBuff, cSize);
+
+    // success
+    printf("%25s : %6u -> %7u - %s \n", fname, (unsigned)fSize, (unsigned)cSize, oname);
+
+    free(fBuff);
+    free(cBuff);
+         *
+         */ 
         //ZSTD_inBuffer input = { bytebuf, bytesread, curpos };
         //ZSTD_outBuffer output = { outbuf, bytesread, curpos };
         blake3_hasher_update(&blkhasher, bytebuf, bytesread); // add bytes read to block device source hasher
@@ -227,12 +248,12 @@ int main(int argc, char* argv[])
         //    size_t remaining = ZSTD_compressStream2_simpleArgs(cctx, outbuf, sectorsize, curpos, bytebuf, sectorsize, curpos, ZSTD_e_continue);
         //size_t remaining = ZSTD_compressStream2_simpleArgs(cctx, buffout, buffoutsize, 0, 
         //size_t ZSTD_compressStream2_simpleArgs ( ZSTD_CCtx* cctx, void* dst, size_t dstCapacity, size_t* dstPos, const void* src, size_t srcSize, size_t* srcPos, ZSTD_EndDirective endOp);
-        size_t csize = ZSTD_compress2(cctx, outbuf, bytesread, bytebuf, bytesread);
+        //size_t csize = ZSTD_compress2(cctx, outbuf, bytesread, bytebuf, bytesread);
         //qDebug() << "csize:" << csize << ZSTD_isError(csize);
         // size_t ZSTD_compress2( ZSTD_CCtx* cctx, void* dst, size_t dstCapacity, const void* src, size_t srcSize);
         curpos = curpos + bytesread;
         //ssize_t remaining = 0;
-        ssize_t byteswrite = out.writeRawData(outbuf, bytesread); // writes zstd compressed stream data to wfi file.
+        ssize_t byteswrite = out.writeRawData(outbuf, cbufsize); // writes zstd compressed stream data to wfi file.
         printf("Wrote %llu of %llu bytes\r", curpos, totalbytes);
         fflush(stdout);
     }
