@@ -126,8 +126,11 @@ int main(int argc, char* argv[])
     //size_t const buffoutsize = ZSTD_CStreamOutSize();
     //void* const buffin = malloc(buffinsize);
     //void* const buffout = malloc(buffoutsize);
-    ZSTD_CCtx* const cctx = ZSTD_createCCtx();
-    ZSTD_CCtx_setParameter(cctx, ZSTD_c_compressionLevel, 3);
+    //ZSTD_CCtx* const cctx = ZSTD_createCCtx();
+    //ZSTD_CCtx_setParameter(cctx, ZSTD_c_compressionLevel, 3);
+    ZSTD_CStream* zcs = ZSTD_createCStream();
+    size_t zcssizer = ZSTD_initCStream(zcs, compressionlevel);
+
     /*
     ZSTD_CCtx_setParameter(cctx, ZSTD_c_checksumFlag, 1);
     ZSTD_CCtx_setParameter(cctx, ZSTD_c_nbWorkers, 1);
@@ -208,6 +211,7 @@ int main(int argc, char* argv[])
     //char outbuf[sectorsize];
     //memset(outbuf, 0, sizeof(outbuf));
     //qDebug() << "dstsize:" << dstsize;
+
     while(curpos < totalbytes)
     {
         // NEED TO MOVE THIS WHILE LOOP BIT INTO THE FOR LOOP BIT DOWN THERE...
@@ -218,7 +222,20 @@ int main(int argc, char* argv[])
             errorcount++;
             perror("Read Error, writing zeros instead.\n");
         }
-        size_t csize = ZSTD_compress(outbuf, cbufsize, bytebuf, bytesread, compressionlevel);
+        /*
+        ZSTD_inBuffer input = { bytebuf, 512, 0 };
+        ZSTD_outBuffer output = { outbuf, cbufsize, 0 };
+        //ZSTD_compressStream2(zcs, output, &emptyInput, ZSTD_e_flush);
+        //ZSTD_compressStream2(zcs, output, &emptyInput, ZSTD_e_end);
+        size_t cssize = ZSTD_compressStream(zcs, &output, &input);
+        //! Equivalent to ZSTD_compressStream2(zcs, output, &emptyInput, ZSTD_e_flush). 
+        size_t fsize = ZSTD_flushStream(zcs, &output);
+        //! Equivalent to ZSTD_compressStream2(zcs, output, &emptyInput, ZSTD_e_end).
+        size_t esize = ZSTD_endStream(zcs, &output);
+        */
+
+
+        //size_t csize = ZSTD_compress(outbuf, cbufsize, bytebuf, bytesread, compressionlevel);
         //CHECK_ZSTD(csize);
         /*
          *    size_t fSize;
@@ -304,7 +321,8 @@ int main(int argc, char* argv[])
         fflush(stdout);
          */ 
 
-    ZSTD_freeCCtx(cctx);
+    size_t zcssize = ZSTD_freeCStream(zcs);
+    //ZSTD_freeCCtx(cctx);
     //fclose(fin);
     //fclose(fout);
     //free(buffin);
