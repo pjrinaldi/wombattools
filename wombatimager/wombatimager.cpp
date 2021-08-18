@@ -122,15 +122,17 @@ int main(int argc, char* argv[])
 
 
     //Initialize ZSTD Stream Compressor
-    size_t const buffinsize = ZSTD_CStreamInSize();
-    size_t const buffoutsize = ZSTD_CStreamOutSize();
-    void* const buffin = malloc(buffinsize);
-    void* const buffout = malloc(buffoutsize);
+    //size_t const buffinsize = ZSTD_CStreamInSize();
+    //size_t const buffoutsize = ZSTD_CStreamOutSize();
+    //void* const buffin = malloc(buffinsize);
+    //void* const buffout = malloc(buffoutsize);
     ZSTD_CCtx* const cctx = ZSTD_createCCtx();
     ZSTD_CCtx_setParameter(cctx, ZSTD_c_compressionLevel, 3);
+    /*
     ZSTD_CCtx_setParameter(cctx, ZSTD_c_checksumFlag, 1);
     ZSTD_CCtx_setParameter(cctx, ZSTD_c_nbWorkers, 1);
-    size_t const toread = buffinsize;
+    */
+    //size_t const toread = buffinsize;
     //size_t const toread = buffinsize;
     //qDebug() << "buffinsize:" << buffinsize << "buffoutsize:" << buffoutsize;
 
@@ -195,13 +197,15 @@ int main(int argc, char* argv[])
     //char* bytebuf = new char[sectorsize];
     //char* outbuf = new char[sectorsize];
     char bytebuf[sectorsize];
-    char outbuf[sectorsize];
     memset(bytebuf, 0, sizeof(bytebuf));
-    memset(outbuf, 0, sizeof(outbuf));
     //bytebuf = { 0 };
     //outbuf = { 0 };
     int bytesread = 0;
     uint64_t errorcount = 0;
+    //size_t dstsize = ZSTD_compressBound(sectorsize);
+    char outbuf[sectorsize];
+    memset(outbuf, 0, sizeof(outbuf));
+    //qDebug() << "dstsize:" << dstsize;
     while(curpos < totalbytes)
     {
         // NEED TO MOVE THIS WHILE LOOP BIT INTO THE FOR LOOP BIT DOWN THERE...
@@ -212,16 +216,20 @@ int main(int argc, char* argv[])
             errorcount++;
             perror("Read Error, writing zeros instead.\n");
         }
-        ZSTD_inBuffer input = { bytebuf, bytesread, curpos };
-        ZSTD_outBuffer output = { outbuf, bytesread, curpos };
+        //ZSTD_inBuffer input = { bytebuf, bytesread, curpos };
+        //ZSTD_outBuffer output = { outbuf, bytesread, curpos };
         blake3_hasher_update(&blkhasher, bytebuf, bytesread); // add bytes read to block device source hasher
-        size_t remaining = ZSTD_compressStream2(cctx, &output, &input, ZSTD_e_end);
+        //size_t csize = ZSTD_compress(outbuf, bytesread, bytebuf, bytesread, compressionlevel);
+        //size_t remaining = ZSTD_compressStream2(cctx, &output, &input, ZSTD_e_end);
         //if(curpos + bytesread == totalbytes)
         //size_t remaining = ZSTD_compressStream2_simpleArgs(cctx, outbuf, sectorsize, curpos, bytebuf, sectorsize, curpos, ZSTD_e_end);
         //else
         //    size_t remaining = ZSTD_compressStream2_simpleArgs(cctx, outbuf, sectorsize, curpos, bytebuf, sectorsize, curpos, ZSTD_e_continue);
         //size_t remaining = ZSTD_compressStream2_simpleArgs(cctx, buffout, buffoutsize, 0, 
         //size_t ZSTD_compressStream2_simpleArgs ( ZSTD_CCtx* cctx, void* dst, size_t dstCapacity, size_t* dstPos, const void* src, size_t srcSize, size_t* srcPos, ZSTD_EndDirective endOp);
+        size_t csize = ZSTD_compress2(cctx, outbuf, bytesread, bytebuf, bytesread);
+        //qDebug() << "csize:" << csize << ZSTD_isError(csize);
+        // size_t ZSTD_compress2( ZSTD_CCtx* cctx, void* dst, size_t dstCapacity, const void* src, size_t srcSize);
         curpos = curpos + bytesread;
         //ssize_t remaining = 0;
         ssize_t byteswrite = out.writeRawData(outbuf, bytesread); // writes zstd compressed stream data to wfi file.
@@ -278,8 +286,8 @@ int main(int argc, char* argv[])
     ZSTD_freeCCtx(cctx);
     //fclose(fin);
     //fclose(fout);
-    free(buffin);
-    free(buffout);
+    //free(buffin);
+    //free(buffout);
     //delete bytebuf;
     //delete outbuf;
 
