@@ -90,6 +90,7 @@ int main(int argc, char* argv[])
     out << (quint64)0x776f6d6261746669; // wombatfi - wombat forensic image signature
     //out << (quint64)0x776f6d6261746c69; // wombatli - wombat logical image signature
     out << (uint8_t)0x1; // version 1
+    wfi.close();
 
     // Initialize the block device file for ioctl
     int infile = open(blockdevice.toStdString().c_str(), O_RDONLY | O_NONBLOCK);
@@ -101,11 +102,13 @@ int main(int argc, char* argv[])
     close(infile);
 
     // Initialize the block device for byte reading
-    QFile blkdev(blockdevice);
-    blkdev.open(QIODevice::ReadOnly);
-    QDataStream in(&blkdev);
+    //QFile blkdev(blockdevice);
+    //blkdev.open(QIODevice::ReadOnly);
+    //QDataStream in(&blkdev);
     //QByteArray blkarray;
     //blkarray.clear();
+    FILE* const fin = fopen(blockdevice.toStdString().c_str(), "rb");
+    FILE* const fout = fopen(imgfile.toStdString().c_str(), "ab+");
 
     // Initialize the log file
     QFile log(logfile);
@@ -119,14 +122,17 @@ int main(int argc, char* argv[])
 
 
     //Initialize ZSTD Stream Compressor
-    //size_t const buffinsize = ZSTD_CStreamInSize();
-    //size_t const buffoutsize = ZSTD_CStreamOutSize();
+    size_t const buffinsize = ZSTD_CStreamInSize();
+    size_t const buffoutsize = ZSTD_CStreamOutSize();
+    void* const buffin = malloc(512);
+    void* const buffout = malloc(522);
     ZSTD_CCtx* const cctx = ZSTD_createCCtx();
-    ZSTD_CCtx_setParameter(cctx, ZSTD_c_compressionLevel, compressionlevel);
+    ZSTD_CCtx_setParameter(cctx, ZSTD_c_compressionLevel, 1);
     ZSTD_CCtx_setParameter(cctx, ZSTD_c_checksumFlag, 1);
     ZSTD_CCtx_setParameter(cctx, ZSTD_c_nbWorkers, 4);
+    size_t const toread = 512;
     //size_t const toread = buffinsize;
-    //qDebug() << "buffinsize:" << buffinsize << "buffoutsize:" << buffoutsize;
+    qDebug() << "buffinsize:" << buffinsize << "buffoutsize:" << buffoutsize;
 
     // Initialize Blake3 Hasher for block device and forensic image
     uint8_t sourcehash[BLAKE3_OUT_LEN];
@@ -188,14 +194,18 @@ int main(int argc, char* argv[])
     uint64_t curpos = 0;
     //char* bytebuf = new char[sectorsize];
     //char* outbuf = new char[sectorsize];
-    char bytebuf[sectorsize];
-    char outbuf[sectorsize];
-    memset(bytebuf, 0, sizeof(bytebuf));
-    memset(outbuf, 0, sizeof(outbuf));
+    //char bytebuf[sectorsize];
+    //char outbuf[sectorsize];
+    //memset(bytebuf, 0, sizeof(bytebuf));
+    //memset(outbuf, 0, sizeof(outbuf));
+    //bytebuf = { 0 };
+    //outbuf = { 0 };
     int bytesread = 0;
     uint64_t errorcount = 0;
+    /*
     while(curpos < totalbytes)
     {
+        // NEED TO MOVE THIS WHILE LOOP BIT INTO THE FOR LOOP BIT DOWN THERE...
         bytesread = in.readRawData(bytebuf, sectorsize);
         if(bytesread == -1)
         {
@@ -205,13 +215,39 @@ int main(int argc, char* argv[])
         }
         blake3_hasher_update(&blkhasher, bytebuf, bytesread); // add bytes read to block device source hasher
         curpos = curpos + bytesread;
-
-        ssize_t byteswrite = out.writeRawData(bytebuf, bytesread); // writes zstd compressed stream data to wfi file.
-        //qDebug() << "bytes written:" << byteswrite;
-
+        ssize_t remaining = 0;
+        ssize_t byteswrite = out.writeRawData(outbuf, bytesread); // writes zstd compressed stream data to wfi file.
         printf("Wrote %llu out of %llu bytes\r", curpos, totalbytes);
         fflush(stdout);
     }
+    */
+    for (;;)
+    {
+        //size_t const readsize = in.readRawData(buffin, toread);
+        size_t const readsize = fread(buffin, 1, toread, fin);
+        int const lastchunk = (readsize < toread);
+        ZSTD_EndDirective const mode = lastchunk ? ZSTD_e_end : ZSTD_e_continue;
+        ZSTD_inBuffer input = { buffin, readsize, 0 };
+        int finished;
+        do
+        {
+            ZSTD_outBuffer output = { buffout, readsize, 0 };
+            size_t const remaining = ZSTD_compressStream2(cctx, &output, &input, mode);
+
+            blake3_hasher_update(&blkhasher, (char*)buffin, readsize);
+
+            //ssize_t byteswrite = out.writeRawData((char*)buffout, readsize);
+            size_t const writtensize = fwrite(buffout, 1, output.pos, fout);
+            finished = lastchunk ? (remaining == 0) : (input.pos == input.size);
+            printf("compressing %d\r", remaining);
+            fflush(stdout);
+        }
+        while(!finished);
+
+        if(lastchunk)
+            break;
+    }
+
         /*
         ssize_t byteswrite = write(outfile, bytebuf, sectorsize);
         if(byteswrite == -1)
@@ -223,32 +259,12 @@ int main(int argc, char* argv[])
         printf("Wrote %llu out of %llu bytes\r", curpos, totalbytes);
         fflush(stdout);
          */ 
-    /*
-    for (;;)
-    {
-        size_t const readsize = fread(buffin, 1, toread, fin);
-        int const lastchunk = (readsize < toread);
-        ZSTD_EndDirective const mode = lastchunk ? ZSTD_e_end : ZSTD_e_continue;
-        ZSTD_inBuffer input = { buffin, readsize, 0 };
-        int finished;
-        do
-        {
-            ZSTD_outBuffer output = { buffout, buffoutsize, 0 };
-            size_t const remaining = ZSTD_compressStream2(cctx, &output, &input, mode);
 
-            size_t const writtensize = fwrite(buffout, 1, output.pos, fout);
-            finished = lastchunk ? (remaining == 0) : (input.pos == input.size);
-        }
-        while(!finished);
-
-        if(lastchunk)
-            break;
-    }
-
-     */ 
     ZSTD_freeCCtx(cctx);
-    //free(bytebuf);
-    //free(outbuf);
+    fclose(fin);
+    fclose(fout);
+    free(buffin);
+    free(buffout);
     //delete bytebuf;
     //delete outbuf;
 
@@ -262,8 +278,8 @@ int main(int argc, char* argv[])
     printf("\n");
 
 
-    wfi.close();
-    blkdev.close();
+    //wfi.close();
+    //blkdev.close();
     log.close();
 
     /*
