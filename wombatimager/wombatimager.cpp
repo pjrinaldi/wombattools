@@ -11,6 +11,8 @@
 #include <string.h>
 #include <stdlib.h>
 
+#include <iostream>
+#include <string>
 #include <QFile>
 #include <QDataStream>
 #include <QTextStream>
@@ -18,7 +20,10 @@
 #include <QDateTime>
 #include <QDebug>
 #include "../blake3.h"
-#include <zstd.h>
+//#include <zstd.h>
+//#include "zstdpp.hpp"
+#include <snappy.h>
+#include <lz4.h>
 
 /*
 #define DTTMFMT "%F %T %z"
@@ -100,6 +105,7 @@ int main(int argc, char* argv[])
     ioctl(infile, BLKGETSIZE64, &totalbytes);
     ioctl(infile, BLKSSZGET, &sectorsize);
     close(infile);
+    qDebug() << "sector size:" << sectorsize;
 
     // Initialize the block device for byte reading
     QFile blkdev(blockdevice);
@@ -128,8 +134,8 @@ int main(int argc, char* argv[])
     //void* const buffout = malloc(buffoutsize);
     //ZSTD_CCtx* const cctx = ZSTD_createCCtx();
     //ZSTD_CCtx_setParameter(cctx, ZSTD_c_compressionLevel, 3);
-    ZSTD_CStream* zcs = ZSTD_createCStream();
-    size_t zcssizer = ZSTD_initCStream(zcs, compressionlevel);
+    //ZSTD_CStream* zcs = ZSTD_createCStream();
+    //size_t zcssizer = ZSTD_initCStream(zcs, compressionlevel);
 
     /*
     ZSTD_CCtx_setParameter(cctx, ZSTD_c_checksumFlag, 1);
@@ -197,12 +203,13 @@ int main(int argc, char* argv[])
     qDebug() << "start reading block device and send to hasher and zstd";
     // start reading the block device and send to the hasher and the zstd_stream compressor
     uint64_t curpos = 0;
-    //char* bytebuf = new char[sectorsize];
-    //char* outbuf = new char[sectorsize];
-    char bytebuf[sectorsize];
-    memset(bytebuf, 0, sizeof(bytebuf));
-    size_t cbufsize = ZSTD_compressBound(sectorsize);
-    char outbuf[cbufsize];
+    char* bytebuf = new char[sectorsize];
+    int dstsize = LZ4_compressBound(sectorsize);
+    char* outbuf = new char[dstsize];
+    //char bytebuf[sectorsize];
+    //memset(bytebuf, 0, sizeof(bytebuf));
+    //size_t cbufsize = ZSTD_compressBound(sectorsize);
+    //char outbuf[cbufsize];
     //bytebuf = { 0 };
     //outbuf = { 0 };
     int bytesread = 0;
@@ -218,10 +225,28 @@ int main(int argc, char* argv[])
         bytesread = in.readRawData(bytebuf, sectorsize);
         if(bytesread == -1)
         {
-            memset(bytebuf, 0, sizeof(bytebuf));
+            //bytebuf = { 0 };
+            //memset(bytebuf, 0, sizeof(bytebuf));
             errorcount++;
             perror("Read Error, writing zeros instead.\n");
         }
+        //std::string inbuffer = std::string(bytebuf, bytesread);
+
+        // WORKING SNAPPY COMPRESSION
+        //std::string outbuffer;
+        //size_t csize = snappy::Compress(bytebuf, bytesread, &outbuffer);
+
+
+        // LZ4 COMPRESSION
+        int bwrote = LZ4_compress_default(bytebuf, outbuf, bytesread, dstsize);
+
+        //size_t csize = snappy::Compress(inbuffer.data(), inbuffer.size(), &outbuffer);
+        //std::string inbuffer = std::string(bytebuf);
+        //char* outbuffer = new char[snappy::MaxCompressedLength(sectorsize)];
+        //size_t outlength;
+        //snappy::RawCompress(bytebuf, strlen(bytebuf), outbuffer, &outlength);
+        //std::string outbuffer;
+        //size_t csize = snappy::Compress(inbuffer.c_str(), inbuffer.size(), &outbuffer);
         /*
         ZSTD_inBuffer input = { bytebuf, 512, 0 };
         ZSTD_outBuffer output = { outbuf, cbufsize, 0 };
@@ -257,6 +282,35 @@ int main(int argc, char* argv[])
         //ZSTD_inBuffer input = { bytebuf, bytesread, curpos };
         //ZSTD_outBuffer output = { outbuf, bytesread, curpos };
         blake3_hasher_update(&blkhasher, bytebuf, bytesread); // add bytes read to block device source hasher
+
+        //std::string buffer;
+        //zstdpp::buff_compress(std::string(bytebuf), buffer, compressionlevel);
+
+        /*
+        size_t estcompresssize = ZSTD_compressBound(sizeof(bytebuf));
+        std::string buffer;
+        buffer.resize(estcompresssize);
+        auto compresssize = ZSTD_compress((void*)buffer.data(), estcompresssize, bytebuf, sizeof(bytebuf), compressionlevel);
+        buffer.resize(compresssize);
+        buffer.shrink_to_fit();
+        */
+
+        /*
+        inline std::string& buff_compress(const std::string data, std::string& buffer, int compress_level) {
+          size_t est_compress_size = ZSTD_compressBound(data.size());
+
+          buffer.resize(est_compress_size);
+
+          auto compress_size = ZSTD_compress((void*)buffer.data(), est_compress_size,
+                                             data.data(), data.size(), compress_level);
+
+          buffer.resize(compress_size);
+          buffer.shrink_to_fit();
+
+          return buffer;
+        }
+         */ 
+        //auto compressed = zstdpp::compress(std::string(bytebuf), compressionlevel);
         //size_t csize = ZSTD_compress(outbuf, bytesread, bytebuf, bytesread, compressionlevel);
         //size_t remaining = ZSTD_compressStream2(cctx, &output, &input, ZSTD_e_end);
         //if(curpos + bytesread == totalbytes)
@@ -270,7 +324,19 @@ int main(int argc, char* argv[])
         // size_t ZSTD_compress2( ZSTD_CCtx* cctx, void* dst, size_t dstCapacity, const void* src, size_t srcSize);
         curpos = curpos + bytesread;
         //ssize_t remaining = 0;
-        ssize_t byteswrite = out.writeRawData(outbuf, cbufsize); // writes zstd compressed stream data to wfi file.
+        
+        // SNAPPY WRITE COMMAND
+        //size_t byteswrite = out.writeRawData(outbuffer.data(), outbuffer.size());
+
+        // LZ4 WRITE COMMAND
+        size_t byteswrite = out.writeRawData(outbuf, bwrote);
+
+        //size_t byteswrite = out.writeRawData(outbuf, outlength);
+        //size_t byteswrite = out.writeRawData(outbuffer.c_str(), csize);
+        //size_t byteswrite = out.writeRawData(buffer.c_str(), buffer.size());
+
+        //ssize_t byteswrite = out.writeRawData(compressed.c_str(), strlen(compressed.c_str()));
+        //ssize_t byteswrite = out.writeRawData(outbuf, cbufsize); // writes zstd compressed stream data to wfi file.
         printf("Wrote %llu of %llu bytes\r", curpos, totalbytes);
         fflush(stdout);
     }
@@ -321,14 +387,14 @@ int main(int argc, char* argv[])
         fflush(stdout);
          */ 
 
-    size_t zcssize = ZSTD_freeCStream(zcs);
+    //size_t zcssize = ZSTD_freeCStream(zcs);
     //ZSTD_freeCCtx(cctx);
     //fclose(fin);
     //fclose(fout);
     //free(buffin);
     //free(buffout);
-    //delete bytebuf;
-    //delete outbuf;
+    delete bytebuf;
+    delete outbuf;
 
     blake3_hasher_finalize(&blkhasher, sourcehash, BLAKE3_OUT_LEN);
     for(size_t i=0; i < BLAKE3_OUT_LEN; i++)
