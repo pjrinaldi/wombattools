@@ -20,7 +20,7 @@
 #include <QDateTime>
 #include <QDebug>
 #include "../blake3.h"
-//#include <zstd.h>
+#include <zstd.h>
 //#include "zstdpp.hpp"
 #include <snappy.h>
 #include <lz4.h>
@@ -204,7 +204,10 @@ int main(int argc, char* argv[])
     // start reading the block device and send to the hasher and the zstd_stream compressor
     uint64_t curpos = 0;
     char* bytebuf = new char[sectorsize];
-    int dstsize = LZ4_compressBound(sectorsize);
+
+    //int dstsize = LZ4_compressBound(sectorsize);
+    size_t dstsize = ZSTD_compressBound(sectorsize);
+
     char* outbuf = new char[dstsize];
     //char bytebuf[sectorsize];
     //memset(bytebuf, 0, sizeof(bytebuf));
@@ -238,7 +241,11 @@ int main(int argc, char* argv[])
 
 
         // LZ4 COMPRESSION
-        int bwrote = LZ4_compress_default(bytebuf, outbuf, bytesread, dstsize);
+        //int bwrote = LZ4_compress_default(bytebuf, outbuf, bytesread, dstsize);
+
+        // ZSTD COMPRESSION
+        size_t bwrote = ZSTD_compress(outbuf, dstsize, bytebuf, bytesread, compressionlevel);
+        //size_t ZSTD_compress( void* dst, size_t dstCapacity,const void* src, size_t srcSize,int compressionLevel);
 
         //size_t csize = snappy::Compress(inbuffer.data(), inbuffer.size(), &outbuffer);
         //std::string inbuffer = std::string(bytebuf);
@@ -329,6 +336,9 @@ int main(int argc, char* argv[])
         //size_t byteswrite = out.writeRawData(outbuffer.data(), outbuffer.size());
 
         // LZ4 WRITE COMMAND
+        //size_t byteswrite = out.writeRawData(outbuf, bwrote);
+
+        // ZSTD WRITE COMMAND
         size_t byteswrite = out.writeRawData(outbuf, bwrote);
 
         //size_t byteswrite = out.writeRawData(outbuf, outlength);
