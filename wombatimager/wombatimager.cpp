@@ -23,6 +23,7 @@
 #include <zstd.h>
 #include <snappy.h>
 #include <lz4.h>
+#include <lz4frame.h>
 
 /*
 #define DTTMFMT "%F %T %z"
@@ -94,7 +95,10 @@ int main(int argc, char* argv[])
 
     // Initialize the datastream and header for the custom forensic image
     QFile wfi(imgfile);
-    wfi.open(QIODevice::WriteOnly);
+    if(!wfi.isOpen())
+	wfi.open(QIODevice::WriteOnly);
+    if(wfi.isOpen())
+	qDebug() << "wfi is open...";
     QDataStream out(&wfi);
     out.setVersion(QDataStream::Qt_5_15);
     out << (quint64)0x776f6d6261746669; // wombatfi - wombat forensic image signature (8 bytes)
@@ -109,7 +113,7 @@ int main(int argc, char* argv[])
     ioctl(infile, BLKGETSIZE64, &totalbytes);
     ioctl(infile, BLKSSZGET, &sectorsize);
     close(infile);
-    //qDebug() << "sector size:" << sectorsize;
+    qDebug() << "sector size:" << sectorsize;
     out << (quint64)totalbytes; // forensic image size (8 bytes)
 
     // Initialize the block device for byte reading
@@ -179,10 +183,135 @@ int main(int argc, char* argv[])
     }
     udev_enumerate_unref(enumerate);
     udev_unref(udev);
+    
+    // ATTEMPT USING A SINGLE LZ4FRAME SIMILAR TO BLAKE3 HASHING SETUP.
+    qint64 curpos = 0;
+    char* dstbuf = new char[sectorsize];
+    char* srcbuf = new char[sectorsize];
+    int dstbytes = 0;
 
-    uint64_t curpos = 0;
-    char* bytebuf = new char[sectorsize];
-    memset(bytebuf, 0, sizeof(bytebuf));
+    LZ4F_cctx* lz4cctx;
+    LZ4F_createCompressionContext(&lz4cctx, LZ4F_getVersion());
+    dstbytes = LZ4F_compressBegin(lz4cctx, dstbuf, sectorsize, NULL);
+    qDebug() << "compressbegin dstbytes:" << dstbytes;
+    size_t byteswrite = out.writeRawData(dstbuf, dstbytes);
+
+    while(curpos < totalbytes)
+    {
+        int bytesread = in.readRawData(srcbuf, sectorsize);
+	dstbytes = LZ4F_compressUpdate(lz4cctx, dstbuf, sectorsize, srcbuf, bytesread, NULL);
+	dstbytes = LZ4F_flush(lz4cctx, dstbuf, sectorsize, NULL);
+	qDebug() << "update dstbytes:" << dstbytes;
+	byteswrite = out.writeRawData(dstbuf, dstbytes);
+	curpos = curpos + bytesread;
+    }
+    dstbytes = LZ4F_compressEnd(lz4cctx, dstbuf, sectorsize, NULL);
+    qDebug() << "compressend dstbytes:" << dstbytes;
+    byteswrite = out.writeRawData(dstbuf, dstbytes);
+    delete[] srcbuf;
+    delete[] dstbuf;
+    wfi.close();
+    log.close();
+    blkdev.close();
+
+
+
+
+    //LZ4FLIB_API LZ4F_errorCode_t LZ4F_createCompressionContext(LZ4F_cctx** cctxPtr, unsigned version);
+    //LZ4FLIB_API LZ4F_errorCode_t LZ4F_freeCompressionContext(LZ4F_cctx* cctx);
+    //LZ4FLIB_API size_t LZ4F_compressBegin(LZ4F_cctx* cctx,void* dstBuffer, size_t dstCapacity,const LZ4F_preferences_t* prefsPtr);
+    //LZ4FLIB_API size_t LZ4F_compressUpdate(LZ4F_cctx* cctx,void* dstBuffer, size_t dstCapacity,const void* srcBuffer, size_t srcSize,const LZ4F_compressOptions_t* cOptPtr);
+    //LZ4FLIB_API size_t LZ4F_flush(LZ4F_cctx* cctx,void* dstBuffer, size_t dstCapacity,const LZ4F_compressOptions_t* cOptPtr);
+    //LZ4FLIB_API size_t LZ4F_compressEnd(LZ4F_cctx* cctx,void* dstBuffer, size_t dstCapacity,const LZ4F_compressOptions_t* cOptPtr);
+    //LZ4FLIB_API size_t LZ4F_getFrameInfo(LZ4F_dctx* dctx,LZ4F_frameInfo_t* frameInfoPtr,const void* srcBuffer, size_t* srcSizePtr);
+    //LZ4FLIB_API size_t LZ4F_decompress(LZ4F_dctx* dctx,void* dstBuffer, size_t* dstSizePtr,const void* srcBuffer, size_t* srcSizePtr,const LZ4F_decompressOptions_t* dOptPtr);
+
+    /*
+     *unsigned long long filesize = 0;
+    unsigned long long compressedfilesize = 0;
+    FILE* dstFile;
+    void* const srcBuffer = ress.srcBuffer;
+    void* const dstBuffer = ress.dstBuffer;
+    const size_t dstBufferSize = ress.dstBufferSize;
+    const size_t blockSize = io_prefs->blockSize;
+    size_t readSize;
+    LZ4F_compressionContext_t ctx = ress.ctx;   //* just a pointer
+    LZ4F_preferences_t prefs;
+
+    //* Init
+    FILE* const srcFile = LZ4IO_openSrcFile(srcFileName);
+    if (srcFile == NULL) return 1;
+    dstFile = LZ4IO_openDstFile(dstFileName, io_prefs);
+    if (dstFile == NULL) { fclose(srcFile); return 1; }
+    memset(&prefs, 0, sizeof(prefs));
+
+    //* Set compression parameters 
+    prefs.autoFlush = 1;
+    prefs.compressionLevel = compressionLevel;
+    prefs.frameInfo.blockMode = (LZ4F_blockMode_t)io_prefs->blockIndependence;
+    prefs.frameInfo.blockSizeID = (LZ4F_blockSizeID_t)io_prefs->blockSizeId;
+    prefs.frameInfo.blockChecksumFlag = (LZ4F_blockChecksum_t)io_prefs->blockChecksum;
+    prefs.frameInfo.contentChecksumFlag = (LZ4F_contentChecksum_t)io_prefs->streamChecksum;
+    prefs.favorDecSpeed = io_prefs->favorDecSpeed;
+    if (io_prefs->contentSizeFlag) {
+      U64 const fileSize = UTIL_getOpenFileSize(srcFile);
+      prefs.frameInfo.contentSize = fileSize;   //* == 0 if input == stdin
+      if (fileSize==0)
+          DISPLAYLEVEL(3, "Warning : cannot determine input content size \n");
+    }
+     *
+     * //multiple-blocks file 
+    {
+        //* Write Frame Header
+        size_t const headerSize = LZ4F_compressBegin_usingCDict(ctx, dstBuffer, dstBufferSize, ress.cdict, &prefs);
+        if (LZ4F_isError(headerSize)) EXM_THROW(33, "File header generation failed : %s", LZ4F_getErrorName(headerSize));
+        if (fwrite(dstBuffer, 1, headerSize, dstFile) != headerSize)
+            EXM_THROW(34, "Write error : cannot write header");
+        compressedfilesize += headerSize;
+
+        //* Main Loop - one block at a time 
+        while (readSize>0) {
+            size_t const outSize = LZ4F_compressUpdate(ctx, dstBuffer, dstBufferSize, srcBuffer, readSize, NULL);
+            if (LZ4F_isError(outSize))
+                EXM_THROW(35, "Compression failed : %s", LZ4F_getErrorName(outSize));
+            compressedfilesize += outSize;
+            DISPLAYUPDATE(2, "\rRead : %u MB   ==> %.2f%%   ",
+                        (unsigned)(filesize>>20), (double)compressedfilesize/filesize*100);
+
+            //* Write Block 
+            if (fwrite(dstBuffer, 1, outSize, dstFile) != outSize)
+                EXM_THROW(36, "Write error : cannot write compressed block");
+
+            //* Read next block
+            readSize  = fread(srcBuffer, (size_t)1, (size_t)blockSize, srcFile);
+            filesize += readSize;
+        }
+        if (ferror(srcFile)) EXM_THROW(37, "Error reading %s ", srcFileName);
+
+        //* End of Frame mark
+        {   size_t const endSize = LZ4F_compressEnd(ctx, dstBuffer, dstBufferSize, NULL);
+            if (LZ4F_isError(endSize))
+                EXM_THROW(38, "End of frame error : %s", LZ4F_getErrorName(endSize));
+            if (fwrite(dstBuffer, 1, endSize, dstFile) != endSize)
+                EXM_THROW(39, "Write error : cannot write end of frame");
+            compressedfilesize += endSize;
+    }   }
+     */ 
+
+
+
+
+
+
+
+
+
+
+
+
+    //uint64_t curpos = 0;
+    //char* bytebuf = new char[sectorsize];
+    //memset(bytebuf, 0, sizeof(bytebuf));
 
     //int dstsize = LZ4_compressBound(sectorsize); // lz4 compression
     //size_t dstsize = ZSTD_compressBound(sectorsize); // zstd compression
@@ -191,13 +320,16 @@ int main(int argc, char* argv[])
     //char bytebuf[sectorsize];
     //memset(bytebuf, 0, sizeof(bytebuf));
     //bytebuf = { 0 };
-    int bytesread = 0;
-    uint64_t errorcount = 0;
-    quint64 totalcompressedsize = 0;
+    //int bytesread = 0;
+    //uint64_t errorcount = 0;
+    //quint64 totalcompressedsize = 0;
+    //qint64 stringcount = 0;
 
+    /*
     while(curpos < totalbytes)
     {
         // NEED TO MOVE THIS WHILE LOOP BIT INTO THE FOR LOOP BIT DOWN THERE...
+	std::string instring = blkdev.read(sectorsize).toStdString();
         bytesread = in.readRawData(bytebuf, sectorsize);
         if(bytesread == -1)
         {
@@ -210,7 +342,8 @@ int main(int argc, char* argv[])
 
         // WORKING SNAPPY COMPRESSION
         std::string outbuffer;
-        size_t csize = snappy::Compress(bytebuf, bytesread, &outbuffer);
+	size_t csize = snappy::Compress(instring.data(), instring.size(), &outbuffer);
+        //size_t csize = snappy::Compress(bytebuf, bytesread, &outbuffer);
 
         // LZ4 COMPRESSION
         //int bwrote = LZ4_compress_default(bytebuf, outbuf, bytesread, dstsize);
@@ -219,45 +352,56 @@ int main(int argc, char* argv[])
         //size_t bwrote = ZSTD_compress(outbuf, dstsize, bytebuf, bytesread, compressionlevel);
         //totalcompressedsize += bwrote;
 
-        blake3_hasher_update(&blkhasher, bytebuf, bytesread); // add bytes read to block device source hasher
+	blake3_hasher_update(&blkhasher, instring.data(), instring.size());
+        //blake3_hasher_update(&blkhasher, bytebuf, bytesread); // add bytes read to block device source hasher
 
-        curpos = curpos + bytesread;
+        curpos = curpos + instring.size();
+        //curpos = curpos + bytesread;
         
+	// WHETHER I GO WITH ZSTD, SNAPPY, OR LZ4, I CAN WRITE EACH BUFFER AS A QSTRING RATHER THAN A RAWDATA, KEEP TRACK OF THE COUNT OF 
+	// QSTRINGS, AND THEN WRITE THE COUNT AT THE END OF THE FILE AFTER THE HASH. WHEN READING IMAGE, I CAN SKIP TO THE END, THEN SKIP
+	// BACK THE QINT64 SIZE (8), THEN READ THE << QINT64 SO I HAVE MY LOOP OF STRINGS... THEN I DON'T NEED THE COMPRESSED SIZE...
+	// ANOTHER OPTION IS TO WRITE THE INT WITH THE COMPRESSED SIZE THEN THE QSTRING SO I CAN SIMPLY READ EACH SEGMENT AND HAVE THE END SEGMENT BE SOMETHING
+	// ELSE LIKE -1
+	
+
         // SNAPPY WRITE COMMAND
+	//out << QString::fromStdString(outbuffer);
+	//stringcount++;
         size_t byteswrite = out.writeRawData(outbuffer.data(), outbuffer.size());
-        totalcompressedsize += byteswrite;
-        // LZ4 WRITE COMMAND
+        totalcompressedsize += outbuffer.size();
+        
+
+	// LZ4 WRITE COMMAND
         //size_t byteswrite = out.writeRawData(outbuf, bwrote);
 
         // ZSTD WRITE COMMAND
         //size_t byteswrite = out.writeRawData(outbuf, bwrote);
 
-        /*
         char* imgbuf = new char[bwrote];
         wfi.seek(curpos - bytesread);
         qint64 bytesread = wfi.read(imgbuf, bwrote);
         char* dimgbuf = new char[1024];
         size_t dsize = ZSTD_decompress(dimgbuf, 1024, imgbuf, bwrote);
         blake3_hasher_update(&imghasher, dimgbuf, dsize);
-        */
 
         //size_t const dSize = ZSTD_decompress(rBuff, rSize, cBuff, cSize);
 
-        /*
         ssize_t byteswrite = write(outfile, bytebuf, sectorsize);
         if(byteswrite == -1)
             perror("Write error, I haven't accounted for this yet so you probably want to use dc3dd instead.");
         blake3_hasher_update(&srchash, bytebuf, bytesread);
         ssize_t byteswrote = pread(outfile, imgbuf, sectorsize, curpos);
         blake3_hasher_update(&imghash, imgbuf, byteswrote);
-         */ 
 
         printf("Wrote %llu of %llu bytes\r", curpos, totalbytes);
         fflush(stdout);
         //delete[] imgbuf;
         //delete[] dimgbuf;
     }
-    delete[] bytebuf;
+    //qDebug() << "string count:" << stringcount;
+    //out << (qint64)stringcount;
+    //delete[] bytebuf;
     //delete[] outbuf;
 
     qDebug() << "totalcompressed size:" << totalcompressedsize;
@@ -272,13 +416,11 @@ int main(int argc, char* argv[])
         printf("%02x", sourcehash[i]);
     }
     printf(" - Source Device Hash\n");
-    /*
     for(size_t i=0; i < BLAKE3_OUT_LEN; i++)
     {
         printf("%02x", forimghash[i]);
     }
     printf("\n");
-    */
 
 
     wfi.close();
@@ -297,6 +439,36 @@ int main(int argc, char* argv[])
 
     qDebug() << "totalcompressedsize / sectorsize:" << totalcompressedsize / sectorsize;
     qDebug() << "mostly compressed size:" << (totalcompressedsize / sectorsize) * sectorsize;
+    qDebug() << "stringcount:" << stringcount;
+    QFile rawdd("test.dd");
+    rawdd.open(QIODevice::WriteOnly);
+
+    verwfi.seek(17);
+    //qDebug() << "position 17:" << verwfi.read(1).toHex();
+    //while(compressedread < ((totalcompressedsize / sectorsize) * sectorsize))
+    {
+	std::string instring = verwfi.read(sectorsize).toStdString();
+	std::string uncomp;
+	snappy::Uncompress(instring.data(), instring.size(), &uncomp);
+	int byteswrote = rawdd.write(uncomp.data(), uncomp.size());
+	blake3_hasher_update(&imghasher, uncomp.data(), uncomp.size());
+
+	compressedread += sectorsize;
+    }
+    std::string instring = verwfi.read((totalcompressedsize - ((totalcompressedsize/sectorsize) * sectorsize))).toStdString();
+    std::string uncomp;
+    snappy::Uncompress(instring.data(), instring.size(), &uncomp);
+    int bytewrote = rawdd.write(uncomp.data(), uncomp.size());
+    blake3_hasher_update(&imghasher, uncomp.data(), uncomp.size());
+    for(qint64 i=0; i < stringcount; i++)
+    {
+	QString compstring;
+	vin >> compstring;
+	std::string uncomp;
+	snappy::Uncompress(compstring.toStdString().data(), compstring.toStdString().size(), &uncomp);
+	int byteswrote = rawdd.write(uncomp.data(), uncomp.size());
+    }
+    rawdd.close();
     char* imgbuf = new char[sectorsize];
     while(compressedread < ((totalcompressedsize / sectorsize) * sectorsize))
     {
@@ -325,6 +497,7 @@ int main(int argc, char* argv[])
         printf("%02x", forimghash[i]);
     }
     printf(" - Forensic Image Hash\n");
+    */
 
     //char* imgbuf = new char[sectorsize];
     //char* dimgbuf = new char[2*sectorsize];
