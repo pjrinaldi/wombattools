@@ -21,7 +21,6 @@
 #include <QDebug>
 #include "../blake3.h"
 #include <zstd.h>
-//#include "zstdpp.hpp"
 #include <snappy.h>
 #include <lz4.h>
 
@@ -68,10 +67,18 @@ int main(int argc, char* argv[])
     parser.addHelpOption();
     parser.addVersionOption();
     parser.addPositionalArgument("source", QCoreApplication::translate("main", "Block device to copy."));
-    parser.addPositionalArgument("image", QCoreApplication::translate("main", "Desination forensic image without a file name w/o extension."));
+    parser.addPositionalArgument("image", QCoreApplication::translate("main", "Desination forensic image file name w/o extension."));
 
-    QCommandLineOption compressionleveloption(QStringList() << "c" << "compress", QCoreApplication::translate("main", "Set compression level default=3."), QCoreApplication::translate("main", "clevel"));
+    QCommandLineOption compressionleveloption(QStringList() << "l" << "compress-level", QCoreApplication::translate("main", "Set compression level, default=3."), QCoreApplication::translate("main", "clevel"));
+    QCommandLineOption casenumberoption(QStringList() << "c" << "case-number", QCoreApplication::translate("main", "List the case number."), QCoreApplication::translate("main", "casenum"));
+    QCommandLineOption evidencenumberoption(QStringList() << "e" << "evidence-number", QCoreApplication::translate("main", "List the evidence number."), QCoreApplication::translate("main", "evidnum"));
+    QCommandLineOption examineroption(QStringList() << "x" << "examiner", QCoreApplication::translate("main", "Examiner creating forensic image."), QCoreApplication::translate("main", "examiner"));
+    QCommandLineOption descriptionoption(QStringList() << "d" << "description", QCoreApplication::translate("main", "Enter description of evidence to be imaged."), QCoreApplication::translate("main", "desciption"));
     parser.addOption(compressionleveloption);
+    parser.addOption(casenumberoption);
+    parser.addOption(evidencenumberoption);
+    parser.addOption(examineroption);
+    parser.addOption(descriptionoption);
 
     parser.process(app);
 
@@ -83,38 +90,32 @@ int main(int argc, char* argv[])
     int compressionlevel = 3;
     if(clevel.toInt() > 0)
         compressionlevel = clevel.toInt();
-    qDebug() << "compression level:" << compressionlevel;
+    //qDebug() << "compression level:" << compressionlevel;
 
     // Initialize the datastream and header for the custom forensic image
     QFile wfi(imgfile);
     wfi.open(QIODevice::WriteOnly);
     QDataStream out(&wfi);
-    //QByteArray imgarray;
-    //imgarray.clear();
     out.setVersion(QDataStream::Qt_5_15);
-    out << (quint64)0x776f6d6261746669; // wombatfi - wombat forensic image signature
-    //out << (quint64)0x776f6d6261746c69; // wombatli - wombat logical image signature
-    out << (uint8_t)0x1; // version 1
-    //wfi.close();
+    out << (quint64)0x776f6d6261746669; // wombatfi - wombat forensic image signature (8 bytes)
+    //out << (quint64)0x776f6d6261746c69; // wombatli - wombat logical image signature (8 bytes)
+    out << (uint8_t)0x01; // version 1 (1 byte)
 
     // Initialize the block device file for ioctl
     int infile = open(blockdevice.toStdString().c_str(), O_RDONLY | O_NONBLOCK);
     // Get Basic Device Information
-    uint64_t totalbytes = 0;
+    quint64 totalbytes = 0;
     uint16_t sectorsize = 0;
     ioctl(infile, BLKGETSIZE64, &totalbytes);
     ioctl(infile, BLKSSZGET, &sectorsize);
     close(infile);
-    qDebug() << "sector size:" << sectorsize;
+    //qDebug() << "sector size:" << sectorsize;
+    out << (quint64)totalbytes; // forensic image size (8 bytes)
 
     // Initialize the block device for byte reading
     QFile blkdev(blockdevice);
     blkdev.open(QIODevice::ReadOnly);
     QDataStream in(&blkdev);
-    //QByteArray blkarray;
-    //blkarray.clear();
-    //FILE* const fin = fopen(blockdevice.toStdString().c_str(), "rb");
-    //FILE* const fout = fopen(imgfile.toStdString().c_str(), "ab+");
 
     // Initialize the log file
     QFile log(logfile);
@@ -125,33 +126,13 @@ int main(int argc, char* argv[])
     logout << "Source Device" << Qt::endl;
     logout << "-------------" << Qt::endl;
 
-
-
-    //Initialize ZSTD Stream Compressor
-    //size_t const buffinsize = ZSTD_CStreamInSize();
-    //size_t const buffoutsize = ZSTD_CStreamOutSize();
-    //void* const buffin = malloc(buffinsize);
-    //void* const buffout = malloc(buffoutsize);
-    //ZSTD_CCtx* const cctx = ZSTD_createCCtx();
-    //ZSTD_CCtx_setParameter(cctx, ZSTD_c_compressionLevel, 3);
-    //ZSTD_CStream* zcs = ZSTD_createCStream();
-    //size_t zcssizer = ZSTD_initCStream(zcs, compressionlevel);
-
-    /*
-    ZSTD_CCtx_setParameter(cctx, ZSTD_c_checksumFlag, 1);
-    ZSTD_CCtx_setParameter(cctx, ZSTD_c_nbWorkers, 1);
-    */
-    //size_t const toread = buffinsize;
-    //size_t const toread = buffinsize;
-    //qDebug() << "buffinsize:" << buffinsize << "buffoutsize:" << buffoutsize;
-
     // Initialize Blake3 Hasher for block device and forensic image
     uint8_t sourcehash[BLAKE3_OUT_LEN];
-//    uint8_t forimghash[BLAKE3_OUT_LEN];
+    uint8_t forimghash[BLAKE3_OUT_LEN];
     blake3_hasher blkhasher;
-//    blake3_hasher imghasher;
+    blake3_hasher imghasher;
     blake3_hasher_init(&blkhasher);
-//    blake3_hasher_init(&imghasher);
+    blake3_hasher_init(&imghasher);
 
     // GET UDEV INFORMATION FOR THE LOG
     struct udev* udev;
@@ -199,28 +180,20 @@ int main(int argc, char* argv[])
     udev_enumerate_unref(enumerate);
     udev_unref(udev);
 
-
-    qDebug() << "start reading block device and send to hasher and zstd";
-    // start reading the block device and send to the hasher and the zstd_stream compressor
     uint64_t curpos = 0;
     char* bytebuf = new char[sectorsize];
+    memset(bytebuf, 0, sizeof(bytebuf));
 
-    //int dstsize = LZ4_compressBound(sectorsize);
-    size_t dstsize = ZSTD_compressBound(sectorsize);
+    //int dstsize = LZ4_compressBound(sectorsize); // lz4 compression
+    //size_t dstsize = ZSTD_compressBound(sectorsize); // zstd compression
 
-    char* outbuf = new char[dstsize];
+    //char* outbuf = new char[dstsize];
     //char bytebuf[sectorsize];
     //memset(bytebuf, 0, sizeof(bytebuf));
-    //size_t cbufsize = ZSTD_compressBound(sectorsize);
-    //char outbuf[cbufsize];
     //bytebuf = { 0 };
-    //outbuf = { 0 };
     int bytesread = 0;
     uint64_t errorcount = 0;
-    //size_t dstsize = ZSTD_compressBound(sectorsize);
-    //char outbuf[sectorsize];
-    //memset(outbuf, 0, sizeof(outbuf));
-    //qDebug() << "dstsize:" << dstsize;
+    quint64 totalcompressedsize = 0;
 
     while(curpos < totalbytes)
     {
@@ -236,154 +209,39 @@ int main(int argc, char* argv[])
         //std::string inbuffer = std::string(bytebuf, bytesread);
 
         // WORKING SNAPPY COMPRESSION
-        //std::string outbuffer;
-        //size_t csize = snappy::Compress(bytebuf, bytesread, &outbuffer);
-
+        std::string outbuffer;
+        size_t csize = snappy::Compress(bytebuf, bytesread, &outbuffer);
 
         // LZ4 COMPRESSION
         //int bwrote = LZ4_compress_default(bytebuf, outbuf, bytesread, dstsize);
 
         // ZSTD COMPRESSION
-        size_t bwrote = ZSTD_compress(outbuf, dstsize, bytebuf, bytesread, compressionlevel);
-        //size_t ZSTD_compress( void* dst, size_t dstCapacity,const void* src, size_t srcSize,int compressionLevel);
+        //size_t bwrote = ZSTD_compress(outbuf, dstsize, bytebuf, bytesread, compressionlevel);
+        //totalcompressedsize += bwrote;
 
-        //size_t csize = snappy::Compress(inbuffer.data(), inbuffer.size(), &outbuffer);
-        //std::string inbuffer = std::string(bytebuf);
-        //char* outbuffer = new char[snappy::MaxCompressedLength(sectorsize)];
-        //size_t outlength;
-        //snappy::RawCompress(bytebuf, strlen(bytebuf), outbuffer, &outlength);
-        //std::string outbuffer;
-        //size_t csize = snappy::Compress(inbuffer.c_str(), inbuffer.size(), &outbuffer);
-        /*
-        ZSTD_inBuffer input = { bytebuf, 512, 0 };
-        ZSTD_outBuffer output = { outbuf, cbufsize, 0 };
-        //ZSTD_compressStream2(zcs, output, &emptyInput, ZSTD_e_flush);
-        //ZSTD_compressStream2(zcs, output, &emptyInput, ZSTD_e_end);
-        size_t cssize = ZSTD_compressStream(zcs, &output, &input);
-        //! Equivalent to ZSTD_compressStream2(zcs, output, &emptyInput, ZSTD_e_flush). 
-        size_t fsize = ZSTD_flushStream(zcs, &output);
-        //! Equivalent to ZSTD_compressStream2(zcs, output, &emptyInput, ZSTD_e_end).
-        size_t esize = ZSTD_endStream(zcs, &output);
-        */
-
-
-        //size_t csize = ZSTD_compress(outbuf, cbufsize, bytebuf, bytesread, compressionlevel);
-        //CHECK_ZSTD(csize);
-        /*
-         *    size_t fSize;
-    void* const fBuff = mallocAndLoadFile_orDie(fname, &fSize);
-    size_t const cBuffSize = ZSTD_compressBound(fSize);
-    void* const cBuff = malloc_orDie(cBuffSize);
-    size_t const cSize = ZSTD_compress(cBuff, cBuffSize, fBuff, fSize, 1);
-    CHECK_ZSTD(cSize);
-
-    saveFile_orDie(oname, cBuff, cSize);
-
-    // success
-    printf("%25s : %6u -> %7u - %s \n", fname, (unsigned)fSize, (unsigned)cSize, oname);
-
-    free(fBuff);
-    free(cBuff);
-         *
-         */ 
-        //ZSTD_inBuffer input = { bytebuf, bytesread, curpos };
-        //ZSTD_outBuffer output = { outbuf, bytesread, curpos };
         blake3_hasher_update(&blkhasher, bytebuf, bytesread); // add bytes read to block device source hasher
 
-        //std::string buffer;
-        //zstdpp::buff_compress(std::string(bytebuf), buffer, compressionlevel);
-
-        /*
-        size_t estcompresssize = ZSTD_compressBound(sizeof(bytebuf));
-        std::string buffer;
-        buffer.resize(estcompresssize);
-        auto compresssize = ZSTD_compress((void*)buffer.data(), estcompresssize, bytebuf, sizeof(bytebuf), compressionlevel);
-        buffer.resize(compresssize);
-        buffer.shrink_to_fit();
-        */
-
-        /*
-        inline std::string& buff_compress(const std::string data, std::string& buffer, int compress_level) {
-          size_t est_compress_size = ZSTD_compressBound(data.size());
-
-          buffer.resize(est_compress_size);
-
-          auto compress_size = ZSTD_compress((void*)buffer.data(), est_compress_size,
-                                             data.data(), data.size(), compress_level);
-
-          buffer.resize(compress_size);
-          buffer.shrink_to_fit();
-
-          return buffer;
-        }
-         */ 
-        //auto compressed = zstdpp::compress(std::string(bytebuf), compressionlevel);
-        //size_t csize = ZSTD_compress(outbuf, bytesread, bytebuf, bytesread, compressionlevel);
-        //size_t remaining = ZSTD_compressStream2(cctx, &output, &input, ZSTD_e_end);
-        //if(curpos + bytesread == totalbytes)
-        //size_t remaining = ZSTD_compressStream2_simpleArgs(cctx, outbuf, sectorsize, curpos, bytebuf, sectorsize, curpos, ZSTD_e_end);
-        //else
-        //    size_t remaining = ZSTD_compressStream2_simpleArgs(cctx, outbuf, sectorsize, curpos, bytebuf, sectorsize, curpos, ZSTD_e_continue);
-        //size_t remaining = ZSTD_compressStream2_simpleArgs(cctx, buffout, buffoutsize, 0, 
-        //size_t ZSTD_compressStream2_simpleArgs ( ZSTD_CCtx* cctx, void* dst, size_t dstCapacity, size_t* dstPos, const void* src, size_t srcSize, size_t* srcPos, ZSTD_EndDirective endOp);
-        //size_t csize = ZSTD_compress2(cctx, outbuf, bytesread, bytebuf, bytesread);
-        //qDebug() << "csize:" << csize << ZSTD_isError(csize);
-        // size_t ZSTD_compress2( ZSTD_CCtx* cctx, void* dst, size_t dstCapacity, const void* src, size_t srcSize);
         curpos = curpos + bytesread;
-        //ssize_t remaining = 0;
         
         // SNAPPY WRITE COMMAND
-        //size_t byteswrite = out.writeRawData(outbuffer.data(), outbuffer.size());
-
+        size_t byteswrite = out.writeRawData(outbuffer.data(), outbuffer.size());
+        totalcompressedsize += byteswrite;
         // LZ4 WRITE COMMAND
         //size_t byteswrite = out.writeRawData(outbuf, bwrote);
 
         // ZSTD WRITE COMMAND
-        size_t byteswrite = out.writeRawData(outbuf, bwrote);
+        //size_t byteswrite = out.writeRawData(outbuf, bwrote);
 
-        //size_t byteswrite = out.writeRawData(outbuf, outlength);
-        //size_t byteswrite = out.writeRawData(outbuffer.c_str(), csize);
-        //size_t byteswrite = out.writeRawData(buffer.c_str(), buffer.size());
+        /*
+        char* imgbuf = new char[bwrote];
+        wfi.seek(curpos - bytesread);
+        qint64 bytesread = wfi.read(imgbuf, bwrote);
+        char* dimgbuf = new char[1024];
+        size_t dsize = ZSTD_decompress(dimgbuf, 1024, imgbuf, bwrote);
+        blake3_hasher_update(&imghasher, dimgbuf, dsize);
+        */
 
-        //ssize_t byteswrite = out.writeRawData(compressed.c_str(), strlen(compressed.c_str()));
-        //ssize_t byteswrite = out.writeRawData(outbuf, cbufsize); // writes zstd compressed stream data to wfi file.
-        printf("Wrote %llu of %llu bytes\r", curpos, totalbytes);
-        fflush(stdout);
-    }
-    /*
-    for (;;)
-    {
-        //size_t const readsize = in.readRawData(buffin, toread);
-        size_t const readsize = fread(buffin, 1, toread, fin);
-        //qDebug() << "readsize:" << readsize << "toread:" << toread;
-        //qDebug() << "(readsize < toread):" << (readsize < toread);
-        int const lastchunk = (readsize < toread);
-        //qDebug() << "lastchunk:" << lastchunk;
-        ZSTD_EndDirective const mode = lastchunk ? ZSTD_e_end : ZSTD_e_continue;
-        ZSTD_inBuffer input = { buffin, readsize, 0 };
-        int finished;
-        do
-        {
-            ZSTD_outBuffer output = { buffout, readsize, 0 };
-            //size_t const remaining = ZSTD_compressStream2(cctx, &output, &input, mode);
-            //size_t remaining = ZSTD_compressStream2_simpleArgs(cctx, buffout, buffoutsize, 0, 
-            //size_t ZSTD_compressStream2_simpleArgs ( ZSTD_CCtx* cctx, void* dst, size_t dstCapacity, size_t* dstPos, const void* src, size_t srcSize, size_t* srcPos, ZSTD_EndDirective endOp);
-
-            blake3_hasher_update(&blkhasher, buffin, readsize);
-
-            //ssize_t byteswrite = out.writeRawData((char*)buffout, readsize);
-            size_t const writtensize = fwrite(buffout, 1, output.pos, fout);
-            finished = lastchunk ? (remaining == 0) : (input.pos == input.size);
-            qDebug() << "lastchunk:" << lastchunk << "finished:" << finished;
-            //printf("compressing %ld\r", remaining);
-            //fflush(stdout);
-        }
-        while(!finished);
-
-        if(lastchunk)
-            break;
-    }
-    */
+        //size_t const dSize = ZSTD_decompress(rBuff, rSize, cBuff, cSize);
 
         /*
         ssize_t byteswrite = write(outfile, bytebuf, sectorsize);
@@ -392,33 +250,125 @@ int main(int argc, char* argv[])
         blake3_hasher_update(&srchash, bytebuf, bytesread);
         ssize_t byteswrote = pread(outfile, imgbuf, sectorsize, curpos);
         blake3_hasher_update(&imghash, imgbuf, byteswrote);
-        curpos = curpos + sectorsize;
-        printf("Wrote %llu out of %llu bytes\r", curpos, totalbytes);
-        fflush(stdout);
          */ 
 
-    //size_t zcssize = ZSTD_freeCStream(zcs);
-    //ZSTD_freeCCtx(cctx);
-    //fclose(fin);
-    //fclose(fout);
-    //free(buffin);
-    //free(buffout);
-    delete bytebuf;
-    delete outbuf;
+        printf("Wrote %llu of %llu bytes\r", curpos, totalbytes);
+        fflush(stdout);
+        //delete[] imgbuf;
+        //delete[] dimgbuf;
+    }
+    delete[] bytebuf;
+    //delete[] outbuf;
+
+    qDebug() << "totalcompressed size:" << totalcompressedsize;
 
     blake3_hasher_finalize(&blkhasher, sourcehash, BLAKE3_OUT_LEN);
+    //blake3_hasher_finalize(&imghasher, forimghash, BLAKE3_OUT_LEN);
+
     for(size_t i=0; i < BLAKE3_OUT_LEN; i++)
     {
         //logout << 
         //fprintf(filelog, "%02x", sourcehash[i]);
         printf("%02x", sourcehash[i]);
     }
+    printf(" - Source Device Hash\n");
+    /*
+    for(size_t i=0; i < BLAKE3_OUT_LEN; i++)
+    {
+        printf("%02x", forimghash[i]);
+    }
     printf("\n");
+    */
 
 
     wfi.close();
     blkdev.close();
     log.close();
+
+    QFile verwfi(imgfile);
+    verwfi.open(QIODevice::ReadOnly);
+    QDataStream vin(&verwfi);
+    quint64 getheader;
+    uint8_t getversion;
+    quint64 getimgsize;
+    vin >> getheader >> getversion >> getimgsize;
+    qint64 compressedread = 0;
+    qDebug() << QString::number(getheader, 16) << getversion << getimgsize;
+
+    qDebug() << "totalcompressedsize / sectorsize:" << totalcompressedsize / sectorsize;
+    qDebug() << "mostly compressed size:" << (totalcompressedsize / sectorsize) * sectorsize;
+    char* imgbuf = new char[sectorsize];
+    while(compressedread < ((totalcompressedsize / sectorsize) * sectorsize))
+    {
+        int bread = vin.readRawData(imgbuf, sectorsize);
+        std::string uncomp;
+        snappy::Uncompress(imgbuf, bread, &uncomp);
+        //LZ4_decompress_safe(src, dst, comp_size, src_size);
+        blake3_hasher_update(&imghasher, uncomp.data(), uncomp.size());
+        compressedread += bread;
+        printf("Verifying %d of %d bytes\r", compressedread, totalcompressedsize);
+        fflush(stdout);
+    }
+    qDebug() << "compressed read:" << compressedread;
+    // MIGHT BE ABLE TO DO SKIPRAWDATA() AND SKIP BACK BY BYTESWRITE AND THEN READ THE DATA I JUST WROTE SO BYTESWRITE TO A CHAR WHICH I PUSH TO THE HASH, ASSUMING THE CURRENT SEPARATE ATTEMPT WORKS.
+    int bread = vin.readRawData(imgbuf, totalcompressedsize - ((totalcompressedsize / sectorsize) * sectorsize));
+    qDebug() << "final bread:" << bread;
+    std::string uncomp;
+    snappy::Uncompress(imgbuf, bread, &uncomp);
+    qDebug() << "uncomp.size():" << uncomp.size();
+    blake3_hasher_update(&imghasher, uncomp.data(), uncomp.size());
+    compressedread += bread;
+    qDebug() << "final compressedread:" << compressedread;
+    blake3_hasher_finalize(&imghasher, forimghash, BLAKE3_OUT_LEN);
+    for(size_t i=0; i < BLAKE3_OUT_LEN; i++)
+    {
+        printf("%02x", forimghash[i]);
+    }
+    printf(" - Forensic Image Hash\n");
+
+    //char* imgbuf = new char[sectorsize];
+    //char* dimgbuf = new char[2*sectorsize];
+
+    //snappy::Uncompress(input.data(), input.size(), &output);
+
+    //qint64 bread = vin.readRawData(imgbuf, sectorsize);
+    //quint64 rSize = ZSTD_getFrameContentSize(imgbuf, sectorsize);
+    //qDebug() << "rsize: " << rSize;
+    /*
+    while(compressedread < totalcompressedsize)
+    {
+        int bread = vin.readRawData(imgbuf, sectorsize);
+        size_t dsize = ZSTD_decompress(dimgbuf, 2*sectorsize, imgbuf, bread);
+        qDebug() << "dsize:" << dsize;
+        compressedread += bread;
+    }*/
+    /*
+    char* imgbuf = new char[sectorsize];
+    char* dimgbuf = new char[2*sectorsize];
+    wfi.open(QIODevice::ReadOnly);
+    while(curpos < wfi.size())
+    {
+        wfi.seek(curpos);
+        qint64 bread = wfi.read(imgbuf, sectorsize);
+        qDebug() << "start decompress." << curpos;
+        size_t dsize = ZSTD_decompress(dimgbuf, 2*sectorsize, imgbuf, bread);
+        qDebug() << "end decompress." << curpos;
+        //blake3_hasher_update(&imghasher, dimgbuf, dsize);
+        curpos = curpos + sectorsize;
+        
+        printf("Verifying %llu of %llu bytes\r", curpos, totalbytes);
+        fflush(stdout);
+    }
+    //delete[] imgbuf;
+    //delete[] dimgbuf;
+
+    blake3_hasher_finalize(&imghasher, forimghash, BLAKE3_OUT_LEN);
+    for(size_t i=0; i < BLAKE3_OUT_LEN; i++)
+    {
+        printf("%02x", forimghash[i]);
+    }
+    printf(" - Forensic Image Hash\n");
+    */
 
     /*
     char* inputstr = NULL;
