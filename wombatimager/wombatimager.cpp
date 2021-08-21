@@ -235,18 +235,24 @@ int main(int argc, char* argv[])
         fflush(stdout);
     }
     blake3_hasher_finalize(&blkhasher, sourcehash, BLAKE3_OUT_LEN);
+    QString srchash = "";
     for(size_t i=0; i < BLAKE3_OUT_LEN; i++)
     {
         //logout << 
         //fprintf(filelog, "%02x", sourcehash[i]);
+        //logout << QString("%1").arg(forimghash[i], 2, 16, QChar('0'));
+        srchash.append(QString("%1").arg(sourcehash[i], 2, 16, QChar('0')));
         printf("%02x", sourcehash[i]);
     }
     printf(" - Source Device Hash\n");
+    //QString srchash = QString::fromUtf8(sourcehash);
+    //qDebug() << "srchash as string:" << srchash;
     dstbytes = LZ4F_compressEnd(lz4cctx, dstbuf, destsize, NULL);
     compressedsize += dstbytes;
     //qDebug() << "compressed size:" << compressedsize;
     //qDebug() << "compressend dstbytes:" << dstbytes;
     out.writeRawData(dstbuf, dstbytes);
+    out << srchash;
     //byteswrite = out.writeRawData(dstbuf, dstbytes);
     delete[] srcbuf;
     delete[] dstbuf;
@@ -274,9 +280,9 @@ int main(int argc, char* argv[])
     if(!cwfi.isOpen())
 	cwfi.open(QIODevice::ReadOnly);
     QDataStream cin(&cwfi);
-    QFile rawdd(imgfile.split(".").first() + ".dd");
-    rawdd.open(QIODevice::WriteOnly);
-    QDataStream cout(&rawdd);
+    //QFile rawdd(imgfile.split(".").first() + ".dd");
+    //rawdd.open(QIODevice::WriteOnly);
+    //QDataStream cout(&rawdd);
     int skipbytes = cin.skipRawData(17);
     if(skipbytes == -1)
         qDebug() << "skip failed";
@@ -328,8 +334,19 @@ int main(int argc, char* argv[])
     printf(" - Forensic Image Hash\n");
     logout << " - Forensic Image Hash" << Qt::endl;
 
+    /* HOW TO GET HASH OUT OF THE IMAGE FOR THE WOMBATVERIFY FUNCTION...
+    cwfi.seek(cwfi.size() - 128);
+    QString readhash;
+    QByteArray tmparray = cwfi.read(128);
+    for(int i=1; i < 128; i++)
+    {
+        if(i % 2 != 0)
+            readhash.append(tmparray.at(i));
+    }
+    qDebug() << "readhash:" << readhash;
+    */
     cwfi.close();
-    rawdd.close();
+    //rawdd.close();
     delete[] cmpbuf;
     delete[] rawbuf;
 
@@ -349,494 +366,6 @@ int main(int argc, char* argv[])
     printf("Finished Forensic Image Verification at %s\n", QDateTime::currentDateTime().toString("MM/dd/yyyy hh:mm:ss ap").toStdString().c_str());
     logout << "Finished Forensic Image Verification at:" << QDateTime::currentDateTime().toString("MM/dd/yyyy hh:mm:ss ap") << Qt::endl;
     log.close();
-
-    //uint64_t curpos = 0;
-    //char* bytebuf = new char[sectorsize];
-    //memset(bytebuf, 0, sizeof(bytebuf));
-
-    //int dstsize = LZ4_compressBound(sectorsize); // lz4 compression
-    //size_t dstsize = ZSTD_compressBound(sectorsize); // zstd compression
-
-    //char* outbuf = new char[dstsize];
-    //char bytebuf[sectorsize];
-    //memset(bytebuf, 0, sizeof(bytebuf));
-    //bytebuf = { 0 };
-    //int bytesread = 0;
-    //uint64_t errorcount = 0;
-    //quint64 totalcompressedsize = 0;
-    //qint64 stringcount = 0;
-
-    /*
-    while(curpos < totalbytes)
-    {
-        // NEED TO MOVE THIS WHILE LOOP BIT INTO THE FOR LOOP BIT DOWN THERE...
-	std::string instring = blkdev.read(sectorsize).toStdString();
-        bytesread = in.readRawData(bytebuf, sectorsize);
-        if(bytesread == -1)
-        {
-            //bytebuf = { 0 };
-            //memset(bytebuf, 0, sizeof(bytebuf));
-            errorcount++;
-            perror("Read Error, writing zeros instead.\n");
-        }
-        //std::string inbuffer = std::string(bytebuf, bytesread);
-
-        // WORKING SNAPPY COMPRESSION
-        std::string outbuffer;
-	size_t csize = snappy::Compress(instring.data(), instring.size(), &outbuffer);
-        //size_t csize = snappy::Compress(bytebuf, bytesread, &outbuffer);
-
-        // LZ4 COMPRESSION
-        //int bwrote = LZ4_compress_default(bytebuf, outbuf, bytesread, dstsize);
-
-        // ZSTD COMPRESSION
-        //size_t bwrote = ZSTD_compress(outbuf, dstsize, bytebuf, bytesread, compressionlevel);
-        //totalcompressedsize += bwrote;
-
-	blake3_hasher_update(&blkhasher, instring.data(), instring.size());
-        //blake3_hasher_update(&blkhasher, bytebuf, bytesread); // add bytes read to block device source hasher
-
-        curpos = curpos + instring.size();
-        //curpos = curpos + bytesread;
-        
-	// WHETHER I GO WITH ZSTD, SNAPPY, OR LZ4, I CAN WRITE EACH BUFFER AS A QSTRING RATHER THAN A RAWDATA, KEEP TRACK OF THE COUNT OF 
-	// QSTRINGS, AND THEN WRITE THE COUNT AT THE END OF THE FILE AFTER THE HASH. WHEN READING IMAGE, I CAN SKIP TO THE END, THEN SKIP
-	// BACK THE QINT64 SIZE (8), THEN READ THE << QINT64 SO I HAVE MY LOOP OF STRINGS... THEN I DON'T NEED THE COMPRESSED SIZE...
-	// ANOTHER OPTION IS TO WRITE THE INT WITH THE COMPRESSED SIZE THEN THE QSTRING SO I CAN SIMPLY READ EACH SEGMENT AND HAVE THE END SEGMENT BE SOMETHING
-	// ELSE LIKE -1
-	
-
-        // SNAPPY WRITE COMMAND
-	//out << QString::fromStdString(outbuffer);
-	//stringcount++;
-        size_t byteswrite = out.writeRawData(outbuffer.data(), outbuffer.size());
-        totalcompressedsize += outbuffer.size();
-        
-
-	// LZ4 WRITE COMMAND
-        //size_t byteswrite = out.writeRawData(outbuf, bwrote);
-
-        // ZSTD WRITE COMMAND
-        //size_t byteswrite = out.writeRawData(outbuf, bwrote);
-
-        char* imgbuf = new char[bwrote];
-        wfi.seek(curpos - bytesread);
-        qint64 bytesread = wfi.read(imgbuf, bwrote);
-        char* dimgbuf = new char[1024];
-        size_t dsize = ZSTD_decompress(dimgbuf, 1024, imgbuf, bwrote);
-        blake3_hasher_update(&imghasher, dimgbuf, dsize);
-
-        //size_t const dSize = ZSTD_decompress(rBuff, rSize, cBuff, cSize);
-
-        ssize_t byteswrite = write(outfile, bytebuf, sectorsize);
-        if(byteswrite == -1)
-            perror("Write error, I haven't accounted for this yet so you probably want to use dc3dd instead.");
-        blake3_hasher_update(&srchash, bytebuf, bytesread);
-        ssize_t byteswrote = pread(outfile, imgbuf, sectorsize, curpos);
-        blake3_hasher_update(&imghash, imgbuf, byteswrote);
-
-        printf("Wrote %llu of %llu bytes\r", curpos, totalbytes);
-        fflush(stdout);
-        //delete[] imgbuf;
-        //delete[] dimgbuf;
-    }
-    //qDebug() << "string count:" << stringcount;
-    //out << (qint64)stringcount;
-    //delete[] bytebuf;
-    //delete[] outbuf;
-
-    qDebug() << "totalcompressed size:" << totalcompressedsize;
-
-    blake3_hasher_finalize(&blkhasher, sourcehash, BLAKE3_OUT_LEN);
-    //blake3_hasher_finalize(&imghasher, forimghash, BLAKE3_OUT_LEN);
-
-    for(size_t i=0; i < BLAKE3_OUT_LEN; i++)
-    {
-        //logout << 
-        //fprintf(filelog, "%02x", sourcehash[i]);
-        printf("%02x", sourcehash[i]);
-    }
-    printf(" - Source Device Hash\n");
-    for(size_t i=0; i < BLAKE3_OUT_LEN; i++)
-    {
-        printf("%02x", forimghash[i]);
-    }
-    printf("\n");
-
-
-    wfi.close();
-    blkdev.close();
-    log.close();
-
-    QFile verwfi(imgfile);
-    verwfi.open(QIODevice::ReadOnly);
-    QDataStream vin(&verwfi);
-    quint64 getheader;
-    uint8_t getversion;
-    quint64 getimgsize;
-    vin >> getheader >> getversion >> getimgsize;
-    qint64 compressedread = 0;
-    qDebug() << QString::number(getheader, 16) << getversion << getimgsize;
-
-    qDebug() << "totalcompressedsize / sectorsize:" << totalcompressedsize / sectorsize;
-    qDebug() << "mostly compressed size:" << (totalcompressedsize / sectorsize) * sectorsize;
-    qDebug() << "stringcount:" << stringcount;
-    QFile rawdd("test.dd");
-    rawdd.open(QIODevice::WriteOnly);
-
-    verwfi.seek(17);
-    //qDebug() << "position 17:" << verwfi.read(1).toHex();
-    //while(compressedread < ((totalcompressedsize / sectorsize) * sectorsize))
-    {
-	std::string instring = verwfi.read(sectorsize).toStdString();
-	std::string uncomp;
-	snappy::Uncompress(instring.data(), instring.size(), &uncomp);
-	int byteswrote = rawdd.write(uncomp.data(), uncomp.size());
-	blake3_hasher_update(&imghasher, uncomp.data(), uncomp.size());
-
-	compressedread += sectorsize;
-    }
-    std::string instring = verwfi.read((totalcompressedsize - ((totalcompressedsize/sectorsize) * sectorsize))).toStdString();
-    std::string uncomp;
-    snappy::Uncompress(instring.data(), instring.size(), &uncomp);
-    int bytewrote = rawdd.write(uncomp.data(), uncomp.size());
-    blake3_hasher_update(&imghasher, uncomp.data(), uncomp.size());
-    for(qint64 i=0; i < stringcount; i++)
-    {
-	QString compstring;
-	vin >> compstring;
-	std::string uncomp;
-	snappy::Uncompress(compstring.toStdString().data(), compstring.toStdString().size(), &uncomp);
-	int byteswrote = rawdd.write(uncomp.data(), uncomp.size());
-    }
-    rawdd.close();
-    char* imgbuf = new char[sectorsize];
-    while(compressedread < ((totalcompressedsize / sectorsize) * sectorsize))
-    {
-        int bread = vin.readRawData(imgbuf, sectorsize);
-        std::string uncomp;
-        snappy::Uncompress(imgbuf, bread, &uncomp);
-        //LZ4_decompress_safe(src, dst, comp_size, src_size);
-        blake3_hasher_update(&imghasher, uncomp.data(), uncomp.size());
-        compressedread += bread;
-        printf("Verifying %d of %d bytes\r", compressedread, totalcompressedsize);
-        fflush(stdout);
-    }
-    qDebug() << "compressed read:" << compressedread;
-    // MIGHT BE ABLE TO DO SKIPRAWDATA() AND SKIP BACK BY BYTESWRITE AND THEN READ THE DATA I JUST WROTE SO BYTESWRITE TO A CHAR WHICH I PUSH TO THE HASH, ASSUMING THE CURRENT SEPARATE ATTEMPT WORKS.
-    int bread = vin.readRawData(imgbuf, totalcompressedsize - ((totalcompressedsize / sectorsize) * sectorsize));
-    qDebug() << "final bread:" << bread;
-    std::string uncomp;
-    snappy::Uncompress(imgbuf, bread, &uncomp);
-    qDebug() << "uncomp.size():" << uncomp.size();
-    blake3_hasher_update(&imghasher, uncomp.data(), uncomp.size());
-    compressedread += bread;
-    qDebug() << "final compressedread:" << compressedread;
-    blake3_hasher_finalize(&imghasher, forimghash, BLAKE3_OUT_LEN);
-    for(size_t i=0; i < BLAKE3_OUT_LEN; i++)
-    {
-        printf("%02x", forimghash[i]);
-    }
-    printf(" - Forensic Image Hash\n");
-    */
-
-    //char* imgbuf = new char[sectorsize];
-    //char* dimgbuf = new char[2*sectorsize];
-
-    //snappy::Uncompress(input.data(), input.size(), &output);
-
-    //qint64 bread = vin.readRawData(imgbuf, sectorsize);
-    //quint64 rSize = ZSTD_getFrameContentSize(imgbuf, sectorsize);
-    //qDebug() << "rsize: " << rSize;
-    /*
-    while(compressedread < totalcompressedsize)
-    {
-        int bread = vin.readRawData(imgbuf, sectorsize);
-        size_t dsize = ZSTD_decompress(dimgbuf, 2*sectorsize, imgbuf, bread);
-        qDebug() << "dsize:" << dsize;
-        compressedread += bread;
-    }*/
-    /*
-    char* imgbuf = new char[sectorsize];
-    char* dimgbuf = new char[2*sectorsize];
-    wfi.open(QIODevice::ReadOnly);
-    while(curpos < wfi.size())
-    {
-        wfi.seek(curpos);
-        qint64 bread = wfi.read(imgbuf, sectorsize);
-        qDebug() << "start decompress." << curpos;
-        size_t dsize = ZSTD_decompress(dimgbuf, 2*sectorsize, imgbuf, bread);
-        qDebug() << "end decompress." << curpos;
-        //blake3_hasher_update(&imghasher, dimgbuf, dsize);
-        curpos = curpos + sectorsize;
-        
-        printf("Verifying %llu of %llu bytes\r", curpos, totalbytes);
-        fflush(stdout);
-    }
-    //delete[] imgbuf;
-    //delete[] dimgbuf;
-
-    blake3_hasher_finalize(&imghasher, forimghash, BLAKE3_OUT_LEN);
-    for(size_t i=0; i < BLAKE3_OUT_LEN; i++)
-    {
-        printf("%02x", forimghash[i]);
-    }
-    printf(" - Forensic Image Hash\n");
-    */
-
-    /*
-    char* inputstr = NULL;
-    char* outputstr = NULL;
-    char* logfilestr = NULL;
-    char* logstr = NULL;
-    if(argc == 1 || (argc == 2 && strcmp(argv[1], "-h") == 0))
-    {
-	ShowUsage(0);
-	return 1;
-    }
-    else if(argc == 2 && strcmp(argv[1], "-v") == 0)
-    {
-	ShowUsage(1);
-	return 1;
-    }
-    else if(argc == 3)
-    {
-	printf("Command called: %s %s %s\n", argv[0], argv[1], argv[2]);
-	inputstr = strstr(argv[1], "if=");
-	if(inputstr == NULL)
-	{
-	    ShowUsage(0);
-	    return 1;
-	}
-	if(strlen(inputstr) > 3)
-        {
-	    //printf("Input Device: %s\n", inputstr+3);
-        }
-	else
-	{
-	    printf("Input error.\n");
-	    return 1;
-	}
-	outputstr = strstr(argv[2], "of=");
-	if(outputstr == NULL)
-	{
-	    ShowUsage(0);
-	    return 1;
-	}
-	if(strlen(outputstr) > 3)
-	{
-	    logstr = strrchr(outputstr+3, '.');
-	    char* midname = strndup(outputstr+3, strlen(outputstr+3) - strlen(logstr));
-	    logfilestr = strcat(midname, ".log");
-
-            FILE* const fin = fopen(inputstr+3, "rb");
-            FILE* const fout = fopen(outputstr+3, "wb");
-            size_t const buffinsize = ZSTD_CStreamInSize();
-            void* const buffin = malloc(buffinsize);
-            size_t const buffoutsize = ZSTD_CStreamOutSize();
-            void* const buffout = malloc(buffoutsize);
-            ZSTD_CCtx* const cctx = ZSTD_createCCtx();
-            ZSTD_CCtx_setParameter(cctx, ZSTD_c_compressionLevel, 1);
-            ZSTD_CCtx_setParameter(cctx, ZSTD_c_checksumFlag, 1);
-            ZSTD_CCtx_setParameter(cctx, ZSTD_c_nbWorkers, 4);
-            size_t const toread = buffinsize;
-            printf("buffinsize: %d buffoutsize %d\n", buffinsize, buffoutsize);
-
-	    uint64_t totalbytes = 0;
-	    uint16_t sectorsize = 0;
-	    uint64_t curpos = 0;
-            uint64_t errorcount = 0;
-	    int infile = open(inputstr+3, O_RDONLY | O_NONBLOCK);
-	    //int outfile = open(outputstr+3, O_RDWR | O_CREAT | O_TRUNC | O_APPEND, S_IRWXU);
-	    FILE* filelog = NULL;
-	    filelog = fopen(logfilestr, "w+");
-	    if(filelog == NULL)
-	    {
-		printf("Error opening log file.\n");
-		return 1;
-	    }
-	    free(midname);
-	    if(infile >= 0)
-	    {
-		ioctl(infile, BLKGETSIZE64, &totalbytes);
-		ioctl(infile, BLKSSZGET, &sectorsize);
-		printf("Sector Size: %u Total Bytes: %u\n", sectorsize, totalbytes);
-                time_t starttime = time(NULL);
-                char buff[35];
-                fprintf(filelog, "blake3dd v0.1 Raw Forensic Image started at: %s\n", GetDateTime(buff));
-                fprintf(filelog, "\nSource Device\n");
-                fprintf(filelog, "--------------\n");
-
-		// GET UDEV DEVICE PROPERTIES FOR LOG...
-		struct udev* udev;
-		struct udev_device* dev;
-		struct udev_enumerate* enumerate;
-		struct udev_list_entry* devices;
-		struct udev_list_entry* devlistentry;
-		udev = udev_new();
-		enumerate = udev_enumerate_new(udev);
-		udev_enumerate_add_match_subsystem(enumerate, "block");
-		udev_enumerate_scan_devices(enumerate);
-		devices = udev_enumerate_get_list_entry(enumerate);
-		udev_list_entry_foreach(devlistentry, devices)
-		{
-		    const char* path;
-		    const char* tmp;
-		    path = udev_list_entry_get_name(devlistentry);
-		    dev = udev_device_new_from_syspath(udev, path);
-		    if(strncmp(udev_device_get_devtype(dev), "partition", 9) != 0 && strncmp(udev_device_get_sysname(dev), "loop", 4) != 0)
-		    {
-			tmp = udev_device_get_devnode(dev);
-			if(strcmp(tmp, inputstr+3) == 0)
-			{
-                            fprintf(filelog, "Device:");
-			    const char* devvendor = udev_device_get_property_value(dev, "ID_VENDOR");
-                            if(devvendor != NULL)
-                                fprintf(filelog, " %s", devvendor);
-			    const char* devmodel = udev_device_get_property_value(dev, "ID_MODEL");
-                            if(devmodel != NULL)
-                                fprintf(filelog, " %s", devmodel);
-			    const char* devname = udev_device_get_property_value(dev, "ID_NAME");
-                            if(devname != NULL)
-                                fprintf(filelog, " %s", devname);
-                            fprintf(filelog, "\n");
-			    tmp = udev_device_get_devnode(dev);
-                            fprintf(filelog, "Device Path: %s\n", tmp);
-			    tmp = udev_device_get_property_value(dev, "ID_SERIAL_SHORT");
-                            fprintf(filelog, "Serial Number: %s\n", tmp);
-                            fprintf(filelog, "Size: %u bytes\n", totalbytes);
-                            fprintf(filelog, "Block Size: %u bytes\n", sectorsize);
-			}
-		    }
-		    udev_device_unref(dev);
-		}
-		udev_enumerate_unref(enumerate);
-		udev_unref(udev);
-		close(infile);
-                //lseek(infile, 0, SEEK_SET);
-                //lseek(outfile, 0, SEEK_SET);
-	*/
-                /*
-                uint8_t sourcehash[BLAKE3_OUT_LEN];
-                uint8_t forimghash[BLAKE3_OUT_LEN];
-                int i;
-                blake3_hasher srchash;
-                blake3_hasher imghash;
-                blake3_hasher_init(&srchash);
-                blake3_hasher_init(&imghash);
-                */
-	/*
-                for (;;)
-                {
-                    size_t const readsize = fread(buffin, 1, toread, fin);
-                    int const lastchunk = (readsize < toread);
-                    ZSTD_EndDirective const mode = lastchunk ? ZSTD_e_end : ZSTD_e_continue;
-                    ZSTD_inBuffer input = { buffin, readsize, 0 };
-                    int finished;
-                    do
-                    {
-                        ZSTD_outBuffer output = { buffout, buffoutsize, 0 };
-                        size_t const remaining = ZSTD_compressStream2(cctx, &output, &input, mode);
-
-                        size_t const writtensize = fwrite(buffout, 1, output.pos, fout);
-                        finished = lastchunk ? (remaining == 0) : (input.pos == input.size);
-                    }
-                    while(!finished);
-
-                    if(lastchunk)
-                        break;
-                }
-
-                ZSTD_freeCCtx(cctx);
-                fclose(fout);
-                fclose(fin);
-                free(buffin);
-                free(buffout);
-                /*
-                while(curpos < totalbytes)
-                {
-                    char bytebuf[sectorsize];
-                    memset(bytebuf, 0, sizeof(bytebuf));
-                    char imgbuf[sectorsize];
-                    memset(imgbuf, 0, sizeof(imgbuf));
-                    ssize_t bytesread = read(infile, bytebuf, sectorsize);
-                    if(bytesread == -1)
-                    {
-                        memset(bytebuf, 0, sizeof(bytebuf));
-                        errorcount++;
-                        perror("Read Error, Writing zeros instead.");
-                    }
-                    ssize_t byteswrite = write(outfile, bytebuf, sectorsize);
-                    if(byteswrite == -1)
-                        perror("Write error, I haven't accounted for this yet so you probably want to use dc3dd instead.");
-                    blake3_hasher_update(&srchash, bytebuf, bytesread);
-                    ssize_t byteswrote = pread(outfile, imgbuf, sectorsize, curpos);
-                    blake3_hasher_update(&imghash, imgbuf, byteswrote);
-                    curpos = curpos + sectorsize;
-                    printf("Wrote %llu out of %llu bytes\r", curpos, totalbytes);
-                    fflush(stdout);
-                }
-                */
-
-                /*
-                blake3_hasher_finalize(&srchash, sourcehash, BLAKE3_OUT_LEN);
-                blake3_hasher_finalize(&imghash, forimghash, BLAKE3_OUT_LEN);
-                time_t endtime = time(NULL);
-                fprintf(filelog, "Wrote %llu out of %llu bytes\n", curpos, totalbytes);
-                fprintf(filelog, "%llu blocks replaced with zeroes\n", errorcount);
-                fprintf(filelog, "Forensic Image: %s\n", outputstr+3);
-                fprintf(filelog, "Forensic Image finished at: %s\n", GetDateTime(buff));
-                fprintf(filelog, "Forensic Image created in: %f seconds\n\n", difftime(endtime, starttime));
-                printf("\nForensic Image Creation Finished\n");
-                for(size_t i=0; i < BLAKE3_OUT_LEN; i++)
-                {
-                    fprintf(filelog, "%02x", sourcehash[i]);
-                    printf("%02x", sourcehash[i]);
-                }
-                fprintf(filelog, " - BLAKE3 Source Device\n");
-                printf(" - BLAKE3 Source Device\n");
-                for(size_t i=0; i < BLAKE3_OUT_LEN; i++)
-                {
-                    fprintf(filelog, "%02x", forimghash[i]);
-                    printf("%02x", forimghash[i]);
-                }
-                fprintf(filelog, " - BLAKE3 Forensic Image\n");
-                printf(" - BLAKE3 Forensic Image\n");
-                if(memcmp(sourcehash, forimghash, BLAKE3_OUT_LEN) == 0)
-                {
-                    printf("\nVerification Successful\n");
-                    fprintf(filelog, "\nVerification Successful\n");
-                }
-                else
-                {
-                    printf("\nVerification Failed\n");
-                    fprintf(filelog, "\nVerification Failed\n");
-                }
-                fprintf(filelog, "\nFinished Forensic Image Verification at: %s\n", GetDateTime(buff));
-                fprintf(filelog, "Finished Forensic Image Verification in: %f seconds\n", difftime(time(NULL), starttime));
-                */
-	/*	fclose(filelog);
-                //close(infile);
-		//close(outfile);
-	    }
-	    else
-	    {
-		printf("error opening device: %d %s\n", infile, errno);
-		return 1;
-	    }
-	}
-	else
-	{
-	    printf("Output error.\n");
-	    return 1;
-	}
-    }
-    else
-    {
-	ShowUsage(0);
-	return 1;
-    }
-    */
 
     return 0;
 }
