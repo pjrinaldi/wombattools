@@ -1,8 +1,6 @@
 #include <stdint.h>
 #include <fcntl.h>
 #include <linux/fs.h>
-#include <sys/ioctl.h>
-#include <libudev.h>
 #include <stdio.h>
 #include <unistd.h>
 #include <errno.h>
@@ -19,7 +17,6 @@
 #include <QCommandLineParser>
 #include <QDateTime>
 #include <QDebug>
-#include "../blake3.h"
 #include <lz4.h>
 #include <lz4frame.h>
 
@@ -41,10 +38,10 @@ static size_t GetBlockSize(const LZ4F_frameInfo_t* info)
 int main(int argc, char* argv[])
 {
     QCoreApplication app(argc, argv);
-    QCoreApplication::setApplicationName("wombatverify");
+    QCoreApplication::setApplicationName("wombatinfo");
     QCoreApplication::setApplicationVersion("0.1");
     QCommandLineParser parser;
-    parser.setApplicationDescription("Verify a wombat forensic image.");
+    parser.setApplicationDescription("Print Information for a wombat forensic image.");
     parser.addHelpOption();
     parser.addVersionOption();
     parser.addPositionalArgument("image", QCoreApplication::translate("main", "Wombat forensic image file name."));
@@ -63,6 +60,7 @@ int main(int argc, char* argv[])
         return 1;
     }
 
+    printf("wombatinfo v0.1\n\n");
     quint64 header;
     uint8_t version;
     quint64 totalbytes;
@@ -71,22 +69,25 @@ int main(int argc, char* argv[])
     QString examiner;
     QString description;
     in >> header >> version >> totalbytes >> casenumber >> evidnumber >> examiner >> description;
-    if(header != 0x776f6d6261746669)
+    if(header == 0x776f6d6261746669)
+        printf("File Format:\t\tWombat Forensic Image\n"); 
+    else
     {
         qDebug() << "Wrong file type, not a wombat forensic image.";
         return 1;
     }
-    if(version != 1)
+    if(version == 1)
+        printf("Format Version:\t\tVersion %u\n", version);
+    else
     {
         qDebug() << "Not the correct wombat forensic image format.";
         return 1;
     }
+    QString lz4ver = QString::number(LZ4_VERSION_NUMBER);
+    lz4ver.replace("0", ".");
+    printf("Raw Media Size:\t\t%llu\n", totalbytes);
+    printf("LZ4 Version:\t\t%s\n", lz4ver.toStdString().c_str()); 
     
-    printf("wombatverify v0.1 started at: %s\n", QDateTime::currentDateTime().toString("MM/dd/yyyy hh:mm:ss ap").toStdString().c_str());
-    uint8_t imghash[BLAKE3_OUT_LEN];
-    blake3_hasher imghasher;
-    blake3_hasher_init(&imghasher);
-
     #define IN_CHUNK_SIZE (16*1024)
 
     char* cmpbuf = new char[IN_CHUNK_SIZE];
@@ -106,71 +107,26 @@ int main(int argc, char* argv[])
     if(LZ4F_isError(framesize))
         printf("frameinfo error: %s\n", LZ4F_getErrorName(framesize));
     
-    size_t rawbufsize = GetBlockSize(&lz4frameinfo);
-    char* rawbuf = new char[rawbufsize];
-    size_t filled = bytesread - consumedsize;
-    int firstchunk = 1;
-    size_t ret = 1;
-    while(ret != 0)
-    {
-        size_t readsize = firstchunk ? filled : in.readRawData(cmpbuf, IN_CHUNK_SIZE);
-        firstchunk = 0;
-        const void* srcptr = (const char*)cmpbuf + consumedsize;
-        consumedsize = 0;
-        const void* const srcend = (const char*)srcptr + readsize;
-        while(srcptr < srcend && ret != 0)
-        {
-            size_t dstsize = rawbufsize;
-            size_t srcsize = (const char*)srcend - (const char*)srcptr;
-            ret = LZ4F_decompress(lz4dctx, rawbuf, &dstsize, srcptr, &srcsize, NULL);
-            if(LZ4F_isError(ret))
-            {
-                printf("decompression error: %s\n", LZ4F_getErrorName(ret));
-            }
-	    blake3_hasher_update(&imghasher, rawbuf, dstsize);
-            printf("Verifying %ld of %llu bytes\r", dstsize, totalbytes);
-            fflush(stdout);
-            //write here
-            //int byteswrote = cout.writeRawData(rawbuf, dstsize);
-            srcptr = (const char*)srcptr + srcsize;
-        }
-    }
-    blake3_hasher_finalize(&imghasher, imghash, BLAKE3_OUT_LEN);
+    printf("LZ4 Block Size:\t\t%ld\n", GetBlockSize(&lz4frameinfo));
+    printf("\n");
+    printf("Case Number:\t\t%s\n", casenumber.toStdString().c_str());
+    printf("Evidence Number:\t%s\n", evidnumber.toStdString().c_str());
+    printf("Examiner:\t\t%s\n", examiner.toStdString().c_str());
+    printf("Description:\t\t%s\n", description.toStdString().c_str());
 
     wfi.seek(wfi.size() - 128);
     QString readhash;
-    QString calchash;
     QByteArray tmparray = wfi.read(128);
     for(int i=1; i < 128; i++)
     {
         if(i % 2 != 0)
             readhash.append(tmparray.at(i));
     }
-    printf("%s - Forensic Image Hash\n", readhash.toStdString().c_str());
-
-    for(size_t i=0; i < BLAKE3_OUT_LEN; i++)
-    {
-        calchash.append(QString("%1").arg(imghash[i], 2, 16, QChar('0')));
-        printf("%02x", imghash[i]);
-    }
-    printf(" - Calculated Hash\n");
-
     wfi.close();
     delete[] cmpbuf;
-    delete[] rawbuf;
-
     errcode = LZ4F_freeDecompressionContext(lz4dctx);
-
-    // VERIFY HASHES HERE...
-    if(calchash == readhash)
-    {
-        printf("\nVerification Successful\n");
-    }
-    else
-    {
-        printf("\nVerification Failed\n");
-    }
-    printf("Finished Forensic Image Verification at %s\n", QDateTime::currentDateTime().toString("MM/dd/yyyy hh:mm:ss ap").toStdString().c_str());
+    
+    printf("BLAKE3 Hash:\t\t%s\n", readhash.toStdString().c_str());
 
     return 0;
 }

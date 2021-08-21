@@ -20,43 +20,8 @@
 #include <QDateTime>
 #include <QDebug>
 #include "../blake3.h"
-//#include <zstd.h>
-//#include <snappy.h>
 #include <lz4.h>
 #include <lz4frame.h>
-
-/*
-#define DTTMFMT "%F %T %z"
-#define DTTMSZ 35
-
-static char* GetDateTime(char *buff)
-{
-    time_t t = time(0);
-    strftime(buff, DTTMSZ, DTTMFMT, localtime(&t));
-    return buff;
-};
-
-// NEED TO SWITCH INPUTS FROM IF= AND OF= TO -i -o -e -n -c and -d and then capture between the qoutes some how for each switch, where -i or --input, -o or --output -e --examiner -n --evidence-number -c --case-number -d --description
-void ShowUsage(int outtype)
-{
-    if(outtype == 0)
-    {
-	printf("Usage: blake3dd if=/dev/sdX of=img.dd\n");
-        printf("Create forensic image IMG.DD, log file IMG.LOG from device /DEV/SDX, automatically generates blake3 hash and validates forensic image.\n\n");
-        printf("Flags:\n");
-        printf("-h\tPrints help information\n");
-        printf("-v\tPrints version information\n");
-    }
-    else if(outtype == 1)
-    {
-        printf("blake3dd v0.2\n");
-	printf("License CC0-1.0: Creative Commons Zero v1.0 Universal\n");
-        printf("This software is in the public domain\n");
-        printf("There is NO WARRANTY, to the extent permitted by law.\n\n");
-        printf("Written by Pasquale Rinaldi\n");
-    }
-};
-*/
 
 static size_t GetBlockSize(const LZ4F_frameInfo_t* info)
 {
@@ -99,7 +64,12 @@ int main(int argc, char* argv[])
     parser.process(app);
 
     const QStringList args = parser.positionalArguments();
+    QString casenumber = parser.value(casenumberoption);
+    QString evidencenumber = parser.value(evidencenumberoption);
+    QString examiner = parser.value(examineroption);
+    QString description = parser.value(descriptionoption);
     //QString clevel = parser.value(compressionleveloption);
+    //qDebug() << "casenumber:" << casenumber << "evidencenumber:" << evidencenumber << "examiner:" << examiner << "descrption:" << description;
     QString blockdevice = args.at(0);
     QString imgfile = args.at(1) + ".wfi";
     QString logfile = args.at(1) + ".log";
@@ -128,6 +98,10 @@ int main(int argc, char* argv[])
     close(infile);
     //qDebug() << "sector size:" << sectorsize;
     out << (quint64)totalbytes; // forensic image size (8 bytes)
+    out << (QString)casenumber;
+    out << (QString)evidencenumber;
+    out << (QString)examiner;
+    out << (QString)description;
 
     // Initialize the block device for byte reading
     QFile blkdev(blockdevice);
@@ -283,10 +257,29 @@ int main(int argc, char* argv[])
     //QFile rawdd(imgfile.split(".").first() + ".dd");
     //rawdd.open(QIODevice::WriteOnly);
     //QDataStream cout(&rawdd);
+
+    /*
     int skipbytes = cin.skipRawData(17);
     if(skipbytes == -1)
         qDebug() << "skip failed";
-    //size_t cmpbufsize = IN_CHUNK_SIZE;
+    */
+    quint64 header;
+    uint8_t version;
+    QString cnum;
+    QString evidnum;
+    QString examiner2;
+    QString description2;
+    cin >> header >> version >> totalbytes >> cnum >> evidnum >> examiner2 >> description2;
+    if(header != 0x776f6d6261746669)
+    {
+        qDebug() << "Wrong file type, not a wombat forensic image.";
+        return 1;
+    }
+    if(version != 1)
+    {
+        qDebug() << "Not the correct wombat forensic image format.";
+        return 1;
+    }
 
     int bytesread = cin.readRawData(cmpbuf, IN_CHUNK_SIZE);
     

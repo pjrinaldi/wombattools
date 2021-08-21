@@ -34,6 +34,10 @@ Makefile*
 wombatimager/.qmake.stash
 wombatimager/debug
 wombatimager/release
+wombatverify/debug
+wombatverify/release
+wombatinfo/debug
+wombatinfo/release
 
 # Qt unit tests
 target_wrapper.*
