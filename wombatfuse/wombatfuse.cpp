@@ -4,10 +4,11 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <errno.h>
-#include <stdio.h>
 #include <time.h>
 #include <string.h>
 #include <stdlib.h>
+#include <stddef.h>
+#include <assert.h>
 
 #include <iostream>
 #include <string>
@@ -19,8 +20,13 @@
 #include <QDebug>
 #include <lz4.h>
 #include <lz4frame.h>
-#include <fuse.h>
 
+#define FUSE_USE_VERSION 31
+
+#include <fuse3/fuse.h>
+
+
+/*
 static size_t GetBlockSize(const LZ4F_frameInfo_t* info)
 {
     switch (info->blockSizeID)
@@ -35,6 +41,90 @@ static size_t GetBlockSize(const LZ4F_frameInfo_t* info)
             exit(1);
     }
 }
+*/
+
+static void *wombat_init(struct fuse_conn_info *conn, struct fuse_config *cfg)
+{
+	(void) conn;
+	cfg->kernel_cache = 1;
+	return NULL;
+}
+
+static int wombat_getattr(const char *path, struct stat *stbuf, struct fuse_file_info *fi)
+{
+	(void) fi;
+	int res = 0;
+
+	memset(stbuf, 0, sizeof(struct stat));
+	if (strcmp(path, "/") == 0) {
+		stbuf->st_mode = S_IFDIR | 0755;
+		stbuf->st_nlink = 2;
+        /*
+	} else if (strcmp(path+1, options.filename) == 0) {
+		stbuf->st_mode = S_IFREG | 0444;
+		stbuf->st_nlink = 1;
+		stbuf->st_size = strlen(options.contents);*/
+	} else
+		res = -ENOENT;
+
+	return res;
+}
+
+static int wombat_readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info *fi, enum fuse_readdir_flags flags)
+{
+	(void) offset;
+	(void) fi;
+	(void) flags;
+
+	if (strcmp(path, "/") != 0)
+		return -ENOENT;
+
+	filler(buf, ".", NULL, 0, (fuse_fill_dir_flags)0);
+	filler(buf, "..", NULL, 0, (fuse_fill_dir_flags)0);
+        filler(buf, "filename.dd", NULL, 0, (fuse_fill_dir_flags)0);
+	//filler(buf, options.filename, NULL, 0, 0);
+
+	return 0;
+}
+
+static int wombat_open(const char *path, struct fuse_file_info *fi)
+{
+	//if (strcmp(path+1, options.filename) != 0)
+	//	return -ENOENT;
+
+	if ((fi->flags & O_ACCMODE) != O_RDONLY)
+		return -EACCES;
+
+	return 0;
+}
+
+static int wombat_read(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info *fi)
+{
+	size_t len;
+	(void) fi;
+//	if(strcmp(path+1, options.filename) != 0)
+//		return -ENOENT;
+
+        len = 10;
+//	len = strlen(options.contents);
+	if (offset < len) {
+		if (offset + size > len)
+			size = len - offset;
+		//memcpy(buf, options.contents + offset, size);
+	} else
+		size = 0;
+
+	return size;
+}
+
+
+static const struct fuse_operations wombat_oper = {
+	.getattr	= wombat_getattr,
+	.open		= wombat_open,
+	.read		= wombat_read,
+	.readdir	= wombat_readdir,
+	.init           = wombat_init,
+};
 
 int main(int argc, char* argv[])
 {
@@ -69,6 +159,16 @@ int main(int argc, char* argv[])
     QString mntpt = args.at(1);
 
     qDebug() << "wfiimg:" << wfimg << "mntpnt:" << mntpt;
+
+    int ret;
+    struct fuse_args fuseargs = FUSE_ARGS_INIT(argc, argv);
+    
+    ret = fuse_main(fuseargs.argc, fuseargs.argv, &wombat_oper, NULL);
+
+    fuse_opt_free_args(&fuseargs);
+    return ret;
+}
+    
     /*
     QString casenumber = parser.value(casenumberoption);
     QString evidencenumber = parser.value(evidencenumberoption);
@@ -365,6 +465,6 @@ int main(int argc, char* argv[])
     printf("Finished Forensic Image Verification at %s\n", QDateTime::currentDateTime().toString("MM/dd/yyyy hh:mm:ss ap").toStdString().c_str());
     logout << "Finished Forensic Image Verification at:" << QDateTime::currentDateTime().toString("MM/dd/yyyy hh:mm:ss ap") << Qt::endl;
     log.close();
-*/
     return 0;
 }
+*/
