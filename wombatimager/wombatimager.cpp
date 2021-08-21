@@ -263,12 +263,10 @@ int main(int argc, char* argv[])
     size_t headersize = LZ4F_headerSize(cmpbuf, sectorsize);
     if(LZ4F_isError(headersize))
         printf("headersize: %s\n", LZ4F_getErrorName(headersize));
-    /*
     headersize = LZ4F_getFrameInfo(lz4dctx, lz4frameinfo, cmpbuf, &cmpbufsize);
     if(LZ4F_isError(headersize))
         printf("frameinfo: %s\n", LZ4F_getErrorName(headersize));
     qDebug() << "cmpbufsize:" << cmpbufsize;
-    */
     decompressleft = LZ4F_decompress(lz4dctx, rawbuf, &rawbufsize, cmpbuf, &cmpbufsize, NULL);
     qDebug() << "cmpbufsize:" << cmpbufsize << "rawbufsize:" << rawbufsize;
     qDebug() << "decompressleft:" << decompressleft;
@@ -289,6 +287,7 @@ int main(int argc, char* argv[])
     delete[] cmpbuf;
     delete[] rawbuf;
 
+    errcode = LZ4F_freeDecompressionContext(lz4dctx);
 
     //LZ4FLIB_API LZ4F_errorCode_t LZ4F_createCompressionContext(LZ4F_cctx** cctxPtr, unsigned version);
     //LZ4FLIB_API LZ4F_errorCode_t LZ4F_freeCompressionContext(LZ4F_cctx* cctx);
