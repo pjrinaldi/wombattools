@@ -38,6 +38,9 @@ wombatverify/debug
 wombatverify/release
 wombatinfo/debug
 wombatinfo/release
+wombatfuse/debug
+wombatfuse/release
+wombatfuse/reference
 
 # Qt unit tests
 target_wrapper.*
