@@ -20,8 +20,8 @@
 #include <QDateTime>
 #include <QDebug>
 #include "../blake3.h"
-#include <zstd.h>
-#include <snappy.h>
+//#include <zstd.h>
+//#include <snappy.h>
 #include <lz4.h>
 #include <lz4frame.h>
 
@@ -57,6 +57,21 @@ void ShowUsage(int outtype)
     }
 };
 */
+
+static size_t GetBlockSize(const LZ4F_frameInfo_t* info)
+{
+    switch (info->blockSizeID)
+    {
+        case LZ4F_default:
+        case LZ4F_max64KB:  return 1 << 16;
+        case LZ4F_max256KB: return 1 << 18;
+        case LZ4F_max1MB:   return 1 << 20;
+        case LZ4F_max4MB:   return 1 << 22;
+        default:
+            printf("Impossible with expected frame specification (<=v1.6.1)\n");
+            exit(1);
+    }
+}
 
 int main(int argc, char* argv[])
 {
@@ -230,11 +245,13 @@ int main(int argc, char* argv[])
     wfi.close();
     log.close();
     blkdev.close();
+    #define IN_CHUNK_SIZE  (16*1024)
 
-    char* cmpbuf = new char[sectorsize];
-    char* rawbuf = new char[3*sectorsize];
+    char* cmpbuf = new char[IN_CHUNK_SIZE];
+    //char* rawbuf = new char[3*sectorsize];
+    
     LZ4F_dctx* lz4dctx;
-    LZ4F_frameInfo_t* lz4frameinfo;
+    LZ4F_frameInfo_t lz4frameinfo;
     
     errcode = LZ4F_createDecompressionContext(&lz4dctx, LZ4F_getVersion());
     if(LZ4F_isError(errcode))
@@ -253,136 +270,62 @@ int main(int argc, char* argv[])
     errcode = cin.skipRawData(17);
     if(errcode == -1)
         qDebug() << "skip failed";
-    size_t rawbufsize = 0;
-    size_t cmpbufsize = 512;
+    //size_t rawbufsize = 3*sectorsize;
+    size_t cmpbufsize = IN_CHUNK_SIZE;
 
-    int bytesread = cin.readRawData(cmpbuf, cmpbufsize);
+    int bytesread = cin.readRawData(cmpbuf, IN_CHUNK_SIZE);
     //bytesread = in.readRawData(bytebuf, sectorsize);
     
-    ssize_t decompressleft = 0;
-    size_t headersize = LZ4F_headerSize(cmpbuf, sectorsize);
+    size_t consumedsize = bytesread;
+    /*
+    size_t headersize = LZ4F_headerSize(cmpbuf, LZ4F_HEADER_SIZE_MAX);
     if(LZ4F_isError(headersize))
-        printf("headersize: %s\n", LZ4F_getErrorName(headersize));
-    headersize = LZ4F_getFrameInfo(lz4dctx, lz4frameinfo, cmpbuf, &cmpbufsize);
-    if(LZ4F_isError(headersize))
-        printf("frameinfo: %s\n", LZ4F_getErrorName(headersize));
-    qDebug() << "cmpbufsize:" << cmpbufsize;
-    decompressleft = LZ4F_decompress(lz4dctx, rawbuf, &rawbufsize, cmpbuf, &cmpbufsize, NULL);
-    qDebug() << "cmpbufsize:" << cmpbufsize << "rawbufsize:" << rawbufsize;
-    qDebug() << "decompressleft:" << decompressleft;
-    //while(decompressleft > 0)
-    while(curpos < compressedsize)
+        printf("headersize error: %s\n", LZ4F_getErrorName(headersize));
+    else
+        qDebug() << "header size:" << headersize;
+    */
+    size_t framesize = LZ4F_getFrameInfo(lz4dctx, &lz4frameinfo, cmpbuf, &consumedsize);
+    if(LZ4F_isError(framesize))
+        printf("frameinfo error: %s\n", LZ4F_getErrorName(framesize));
+    else
     {
-        bytesread = cin.readRawData(cmpbuf, cmpbufsize);
-        decompressleft = LZ4F_decompress(lz4dctx, rawbuf, &rawbufsize, cmpbuf, &cmpbufsize, NULL);
-        qDebug() << "cmpbufsize:" << cmpbufsize;
-        if(LZ4F_isError(decompressleft))
-            printf("loop decompress: %s\n", LZ4F_getErrorName(decompressleft));
-        int byteswrote = cout.writeRawData(rawbuf, rawbufsize);
-        curpos = curpos + cmpbufsize;
-        qDebug() << "decompressleft:" << decompressleft;
+        qDebug() << "framesize:" << framesize << "block size:" << GetBlockSize(&lz4frameinfo);
+        qDebug() << "frame content size:" << lz4frameinfo.contentSize;
     }
+    size_t rawbufsize = GetBlockSize(&lz4frameinfo);
+    char* rawbuf = new char[rawbufsize];
+    size_t filled = bytesread - consumedsize;
+    int firstchunk = 1;
+    size_t ret = 1;
+    while(ret != 0)
+    {
+        size_t readsize = firstchunk ? filled : cin.readRawData(cmpbuf, IN_CHUNK_SIZE);
+        firstchunk = 0;
+        const void* srcptr = (const char*)cmpbuf + consumedsize;
+        consumedsize = 0;
+        const void* const srcend = (const char*)srcptr + readsize;
+        while(srcptr < srcend && ret != 0)
+        {
+            size_t dstsize = rawbufsize;
+            size_t srcsize = (const char*)srcend - (const char*)srcptr;
+            ret = LZ4F_decompress(lz4dctx, rawbuf, &dstsize, srcptr, &srcsize, NULL);
+            if(LZ4F_isError(ret))
+            {
+                printf("decompression error: %s\n", LZ4F_getErrorName(ret));
+            }
+            //write here
+            int byteswrote = cout.writeRawData(rawbuf, dstsize);
+            srcptr = (const char*)srcptr + srcsize;
+        }
+    }
+    qDebug() << "ret should be zero:" << ret;
+
     cwfi.close();
     rawdd.close();
     delete[] cmpbuf;
     delete[] rawbuf;
 
     errcode = LZ4F_freeDecompressionContext(lz4dctx);
-
-    //LZ4FLIB_API LZ4F_errorCode_t LZ4F_createCompressionContext(LZ4F_cctx** cctxPtr, unsigned version);
-    //LZ4FLIB_API LZ4F_errorCode_t LZ4F_freeCompressionContext(LZ4F_cctx* cctx);
-    //size_t LZ4F_compressFrameBound(size_t srcSize, const LZ4F_preferences_t* preferencesPtr);
-    //LZ4FLIB_API size_t LZ4F_compressBegin(LZ4F_cctx* cctx,void* dstBuffer, size_t dstCapacity,const LZ4F_preferences_t* prefsPtr);
-    //LZ4FLIB_API size_t LZ4F_compressUpdate(LZ4F_cctx* cctx,void* dstBuffer, size_t dstCapacity,const void* srcBuffer, size_t srcSize,const LZ4F_compressOptions_t* cOptPtr);
-    //LZ4FLIB_API size_t LZ4F_flush(LZ4F_cctx* cctx,void* dstBuffer, size_t dstCapacity,const LZ4F_compressOptions_t* cOptPtr);
-    //LZ4FLIB_API size_t LZ4F_compressEnd(LZ4F_cctx* cctx,void* dstBuffer, size_t dstCapacity,const LZ4F_compressOptions_t* cOptPtr);
-    //LZ4FLIB_API size_t LZ4F_getFrameInfo(LZ4F_dctx* dctx,LZ4F_frameInfo_t* frameInfoPtr,const void* srcBuffer, size_t* srcSizePtr);
-    //LZ4FLIB_API size_t LZ4F_decompress(LZ4F_dctx* dctx,void* dstBuffer, size_t* dstSizePtr,const void* srcBuffer, size_t* srcSizePtr,const LZ4F_decompressOptions_t* dOptPtr);
-    //LZ4FLIB_API unsigned    LZ4F_isError(LZ4F_errorCode_t code);   /**< tells when a function result is an error code */
-    //LZ4FLIB_API const char* LZ4F_getErrorName(LZ4F_errorCode_t code);
-
-    /*
-     *unsigned long long filesize = 0;
-    unsigned long long compressedfilesize = 0;
-    FILE* dstFile;
-    void* const srcBuffer = ress.srcBuffer;
-    void* const dstBuffer = ress.dstBuffer;
-    const size_t dstBufferSize = ress.dstBufferSize;
-    const size_t blockSize = io_prefs->blockSize;
-    size_t readSize;
-    LZ4F_compressionContext_t ctx = ress.ctx;   //* just a pointer
-    LZ4F_preferences_t prefs;
-
-    //* Init
-    FILE* const srcFile = LZ4IO_openSrcFile(srcFileName);
-    if (srcFile == NULL) return 1;
-    dstFile = LZ4IO_openDstFile(dstFileName, io_prefs);
-    if (dstFile == NULL) { fclose(srcFile); return 1; }
-    memset(&prefs, 0, sizeof(prefs));
-
-    //* Set compression parameters 
-    prefs.autoFlush = 1;
-    prefs.compressionLevel = compressionLevel;
-    prefs.frameInfo.blockMode = (LZ4F_blockMode_t)io_prefs->blockIndependence;
-    prefs.frameInfo.blockSizeID = (LZ4F_blockSizeID_t)io_prefs->blockSizeId;
-    prefs.frameInfo.blockChecksumFlag = (LZ4F_blockChecksum_t)io_prefs->blockChecksum;
-    prefs.frameInfo.contentChecksumFlag = (LZ4F_contentChecksum_t)io_prefs->streamChecksum;
-    prefs.favorDecSpeed = io_prefs->favorDecSpeed;
-    if (io_prefs->contentSizeFlag) {
-      U64 const fileSize = UTIL_getOpenFileSize(srcFile);
-      prefs.frameInfo.contentSize = fileSize;   //* == 0 if input == stdin
-      if (fileSize==0)
-          DISPLAYLEVEL(3, "Warning : cannot determine input content size \n");
-    }
-     *
-     * //multiple-blocks file 
-    {
-        //* Write Frame Header
-        size_t const headerSize = LZ4F_compressBegin_usingCDict(ctx, dstBuffer, dstBufferSize, ress.cdict, &prefs);
-        if (LZ4F_isError(headerSize)) EXM_THROW(33, "File header generation failed : %s", LZ4F_getErrorName(headerSize));
-        if (fwrite(dstBuffer, 1, headerSize, dstFile) != headerSize)
-            EXM_THROW(34, "Write error : cannot write header");
-        compressedfilesize += headerSize;
-
-        //* Main Loop - one block at a time 
-        while (readSize>0) {
-            size_t const outSize = LZ4F_compressUpdate(ctx, dstBuffer, dstBufferSize, srcBuffer, readSize, NULL);
-            if (LZ4F_isError(outSize))
-                EXM_THROW(35, "Compression failed : %s", LZ4F_getErrorName(outSize));
-            compressedfilesize += outSize;
-            DISPLAYUPDATE(2, "\rRead : %u MB   ==> %.2f%%   ",
-                        (unsigned)(filesize>>20), (double)compressedfilesize/filesize*100);
-
-            //* Write Block 
-            if (fwrite(dstBuffer, 1, outSize, dstFile) != outSize)
-                EXM_THROW(36, "Write error : cannot write compressed block");
-
-            //* Read next block
-            readSize  = fread(srcBuffer, (size_t)1, (size_t)blockSize, srcFile);
-            filesize += readSize;
-        }
-        if (ferror(srcFile)) EXM_THROW(37, "Error reading %s ", srcFileName);
-
-        //* End of Frame mark
-        {   size_t const endSize = LZ4F_compressEnd(ctx, dstBuffer, dstBufferSize, NULL);
-            if (LZ4F_isError(endSize))
-                EXM_THROW(38, "End of frame error : %s", LZ4F_getErrorName(endSize));
-            if (fwrite(dstBuffer, 1, endSize, dstFile) != endSize)
-                EXM_THROW(39, "Write error : cannot write end of frame");
-            compressedfilesize += endSize;
-    }   }
-     */ 
-
-
-
-
-
-
-
-
-
-
-
 
     //uint64_t curpos = 0;
     //char* bytebuf = new char[sectorsize];
