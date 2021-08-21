@@ -186,45 +186,121 @@ int main(int argc, char* argv[])
     
     // ATTEMPT USING A SINGLE LZ4FRAME SIMILAR TO BLAKE3 HASHING SETUP.
     qint64 curpos = 0;
-    char* dstbuf = new char[sectorsize];
+    size_t destsize = LZ4F_compressFrameBound(sectorsize, NULL);
+    qDebug() << "destsize:" << destsize;
+    char* dstbuf = new char[destsize];
     char* srcbuf = new char[sectorsize];
     int dstbytes = 0;
 
+    int compressedsize = 0;
     LZ4F_cctx* lz4cctx;
-    LZ4F_createCompressionContext(&lz4cctx, LZ4F_getVersion());
-    dstbytes = LZ4F_compressBegin(lz4cctx, dstbuf, sectorsize, NULL);
-    qDebug() << "compressbegin dstbytes:" << dstbytes;
+    LZ4F_errorCode_t errcode;
+    errcode = LZ4F_createCompressionContext(&lz4cctx, LZ4F_getVersion());
+    if(LZ4F_isError(errcode))
+        printf("%s\n", LZ4F_getErrorName(errcode));
+    dstbytes = LZ4F_compressBegin(lz4cctx, dstbuf, destsize, NULL);
+    compressedsize += dstbytes;
+    if(LZ4F_isError(dstbytes))
+        printf("%s\n", LZ4F_getErrorName(dstbytes));
+    //qDebug() << "compressbegin dstbytes:" << dstbytes;
     size_t byteswrite = out.writeRawData(dstbuf, dstbytes);
 
     while(curpos < totalbytes)
     {
         int bytesread = in.readRawData(srcbuf, sectorsize);
-	dstbytes = LZ4F_compressUpdate(lz4cctx, dstbuf, sectorsize, srcbuf, bytesread, NULL);
-	dstbytes = LZ4F_flush(lz4cctx, dstbuf, sectorsize, NULL);
-	qDebug() << "update dstbytes:" << dstbytes;
+	dstbytes = LZ4F_compressUpdate(lz4cctx, dstbuf, destsize, srcbuf, bytesread, NULL);
+        if(LZ4F_isError(dstbytes))
+            printf("%s\n", LZ4F_getErrorName(dstbytes));
+	dstbytes = LZ4F_flush(lz4cctx, dstbuf, destsize, NULL);
+        if(LZ4F_isError(dstbytes))
+            printf("%s\n", LZ4F_getErrorName(dstbytes));
+        compressedsize += dstbytes;
+	//qDebug() << "update dstbytes:" << dstbytes;
 	byteswrite = out.writeRawData(dstbuf, dstbytes);
 	curpos = curpos + bytesread;
     }
-    dstbytes = LZ4F_compressEnd(lz4cctx, dstbuf, sectorsize, NULL);
-    qDebug() << "compressend dstbytes:" << dstbytes;
+    dstbytes = LZ4F_compressEnd(lz4cctx, dstbuf, destsize, NULL);
+    compressedsize += dstbytes;
+    qDebug() << "compressed size:" << compressedsize;
+    //qDebug() << "compressend dstbytes:" << dstbytes;
     byteswrite = out.writeRawData(dstbuf, dstbytes);
     delete[] srcbuf;
     delete[] dstbuf;
+    errcode = LZ4F_freeCompressionContext(lz4cctx);
     wfi.close();
     log.close();
     blkdev.close();
 
+    char* cmpbuf = new char[sectorsize];
+    char* rawbuf = new char[3*sectorsize];
+    LZ4F_dctx* lz4dctx;
+    LZ4F_frameInfo_t* lz4frameinfo;
+    
+    errcode = LZ4F_createDecompressionContext(&lz4dctx, LZ4F_getVersion());
+    if(LZ4F_isError(errcode))
+        printf("%s\n", LZ4F_getErrorName(errcode));
 
+    curpos = 0;
+    QFile cwfi(imgfile);
+    if(!cwfi.isOpen())
+	cwfi.open(QIODevice::ReadOnly);
+    if(cwfi.isOpen())
+	qDebug() << "wfi is open to decompress...";
+    QDataStream cin(&cwfi);
+    QFile rawdd(imgfile.split(".").first() + ".dd");
+    rawdd.open(QIODevice::WriteOnly);
+    QDataStream cout(&rawdd);
+    errcode = cin.skipRawData(17);
+    if(errcode == -1)
+        qDebug() << "skip failed";
+    size_t rawbufsize = 0;
+    size_t cmpbufsize = 512;
+
+    int bytesread = cin.readRawData(cmpbuf, cmpbufsize);
+    //bytesread = in.readRawData(bytebuf, sectorsize);
+    
+    ssize_t decompressleft = 0;
+    size_t headersize = LZ4F_headerSize(cmpbuf, sectorsize);
+    if(LZ4F_isError(headersize))
+        printf("headersize: %s\n", LZ4F_getErrorName(headersize));
+    /*
+    headersize = LZ4F_getFrameInfo(lz4dctx, lz4frameinfo, cmpbuf, &cmpbufsize);
+    if(LZ4F_isError(headersize))
+        printf("frameinfo: %s\n", LZ4F_getErrorName(headersize));
+    qDebug() << "cmpbufsize:" << cmpbufsize;
+    */
+    decompressleft = LZ4F_decompress(lz4dctx, rawbuf, &rawbufsize, cmpbuf, &cmpbufsize, NULL);
+    qDebug() << "cmpbufsize:" << cmpbufsize << "rawbufsize:" << rawbufsize;
+    qDebug() << "decompressleft:" << decompressleft;
+    //while(decompressleft > 0)
+    while(curpos < compressedsize)
+    {
+        bytesread = cin.readRawData(cmpbuf, cmpbufsize);
+        decompressleft = LZ4F_decompress(lz4dctx, rawbuf, &rawbufsize, cmpbuf, &cmpbufsize, NULL);
+        qDebug() << "cmpbufsize:" << cmpbufsize;
+        if(LZ4F_isError(decompressleft))
+            printf("loop decompress: %s\n", LZ4F_getErrorName(decompressleft));
+        int byteswrote = cout.writeRawData(rawbuf, rawbufsize);
+        curpos = curpos + cmpbufsize;
+        qDebug() << "decompressleft:" << decompressleft;
+    }
+    cwfi.close();
+    rawdd.close();
+    delete[] cmpbuf;
+    delete[] rawbuf;
 
 
     //LZ4FLIB_API LZ4F_errorCode_t LZ4F_createCompressionContext(LZ4F_cctx** cctxPtr, unsigned version);
     //LZ4FLIB_API LZ4F_errorCode_t LZ4F_freeCompressionContext(LZ4F_cctx* cctx);
+    //size_t LZ4F_compressFrameBound(size_t srcSize, const LZ4F_preferences_t* preferencesPtr);
     //LZ4FLIB_API size_t LZ4F_compressBegin(LZ4F_cctx* cctx,void* dstBuffer, size_t dstCapacity,const LZ4F_preferences_t* prefsPtr);
     //LZ4FLIB_API size_t LZ4F_compressUpdate(LZ4F_cctx* cctx,void* dstBuffer, size_t dstCapacity,const void* srcBuffer, size_t srcSize,const LZ4F_compressOptions_t* cOptPtr);
     //LZ4FLIB_API size_t LZ4F_flush(LZ4F_cctx* cctx,void* dstBuffer, size_t dstCapacity,const LZ4F_compressOptions_t* cOptPtr);
     //LZ4FLIB_API size_t LZ4F_compressEnd(LZ4F_cctx* cctx,void* dstBuffer, size_t dstCapacity,const LZ4F_compressOptions_t* cOptPtr);
     //LZ4FLIB_API size_t LZ4F_getFrameInfo(LZ4F_dctx* dctx,LZ4F_frameInfo_t* frameInfoPtr,const void* srcBuffer, size_t* srcSizePtr);
     //LZ4FLIB_API size_t LZ4F_decompress(LZ4F_dctx* dctx,void* dstBuffer, size_t* dstSizePtr,const void* srcBuffer, size_t* srcSizePtr,const LZ4F_decompressOptions_t* dOptPtr);
+    //LZ4FLIB_API unsigned    LZ4F_isError(LZ4F_errorCode_t code);   /**< tells when a function result is an error code */
+    //LZ4FLIB_API const char* LZ4F_getErrorName(LZ4F_errorCode_t code);
 
     /*
      *unsigned long long filesize = 0;
