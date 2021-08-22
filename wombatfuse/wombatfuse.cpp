@@ -29,8 +29,9 @@ static QString wfimg;
 static QString imgfile;
 static QString ifile;
 static QString mntpt;
-static const char* relativefilename;
-static const char* rawfilename;
+static const char* relativefilename = NULL;
+static const char* rawfilename = NULL;
+static qint64 totalbytes = 0;
 
 //static char* imgpath;
 
@@ -47,25 +48,6 @@ static size_t GetBlockSize(const LZ4F_frameInfo_t* info)
             printf("Impossible with expected frame specification (<=v1.6.1)\n");
             exit(1);
     }
-}
-
-static off_t GetUncompressedSize(void)
-{
-    QFile wfi(wfimg);
-    if(!wfi.isOpen())
-        wfi.open(QIODevice::ReadOnly);
-    QDataStream in(&wfi);
-    quint64 header;
-    uint8_t version;
-    quint64 totalbytes;
-    QString casenumber;
-    QString evidnumber;
-    QString examiner;
-    QString description;
-    in >> header >> version >> totalbytes >> casenumber >> evidnumber >> examiner >> description;
-    wfi.close();
-
-    return (off_t)totalbytes;
 }
 
 qint64 Uncompress(char* buf, off_t offset, size_t size)
@@ -93,7 +75,6 @@ qint64 Uncompress(char* buf, off_t offset, size_t size)
 
     quint64 header;
     uint8_t version;
-    quint64 totalbytes;
     QString cnum;
     QString evidnum;
     QString examiner2;
@@ -171,6 +152,7 @@ static int wombat_getattr(const char *path, struct stat *stbuf, struct fuse_file
 	(void) fi;
 	int res = 0;
 
+        /*
         QFile wfi(wfimg);
         if(!wfi.isOpen())
             wfi.open(QIODevice::ReadOnly);
@@ -184,6 +166,7 @@ static int wombat_getattr(const char *path, struct stat *stbuf, struct fuse_file
         QString description;
         in >> header >> version >> totalbytes >> casenumber >> evidnumber >> examiner >> description;
         wfi.close();
+        */
 
 	memset(stbuf, 0, sizeof(struct stat));
 	if (strcmp(path, "/") == 0)
@@ -198,6 +181,12 @@ static int wombat_getattr(const char *path, struct stat *stbuf, struct fuse_file
             stbuf->st_size = (off_t)totalbytes;
             //stbuf->st_size = GetUncompressedSize();
 	}
+        else if(strcmp(path, rawfilename) == 0)
+        {
+            stbuf->st_mode = S_IFREG | 0444;
+            stbuf->st_nlink = 1;
+            stbuf->st_size = (off_t)totalbytes;
+        }
         else
     	    res = -ENOENT;
 
@@ -228,6 +217,8 @@ static int wombat_open(const char *path, struct fuse_file_info *fi)
         //qDebug() << "path:" << path;
         if(strcmp(path, relativefilename) != 0)
                 return -ENOENT;
+        if(strcmp(path, rawfilename) != 0)
+            return -ENOENT;
 	//if (strcmp(path+1, options.filename) != 0)
 	//	return -ENOENT;
 
@@ -286,7 +277,6 @@ int main(int argc, char* argv[])
 
     parser.process(app);
 
-    //quint64 totalbytes = 0;
     const QStringList args = parser.positionalArguments();
 
     if(args.count() == 0)
@@ -302,6 +292,21 @@ int main(int argc, char* argv[])
     rawfilename = imgfile.toStdString().c_str();
     qDebug() << wfimg << imgfile << ifile;
 
+    QFile wfi(wfimg);
+    if(!wfi.isOpen())
+        wfi.open(QIODevice::ReadOnly);
+    QDataStream in(&wfi);
+    quint64 header;
+    uint8_t version;
+    qint64 totalbytes;
+    QString casenumber;
+    QString evidnumber;
+    QString examiner;
+    QString description;
+    in >> header >> version >> totalbytes >> casenumber >> evidnumber >> examiner >> description;
+    wfi.close();
+
+    qDebug() << "totalbytes:" << totalbytes << (off_t)totalbytes;
     char** fargv = NULL;
     fargv = (char**)calloc(2, sizeof(char*));
     int fargc = 2;
