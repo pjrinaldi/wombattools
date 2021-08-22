@@ -28,6 +28,7 @@
 
 static QString imgfile;
 static quint64 totalbytes;
+//static char* imgpath;
 /*
 static size_t GetBlockSize(const LZ4F_frameInfo_t* info)
 {
@@ -66,7 +67,8 @@ static int wombat_getattr(const char *path, struct stat *stbuf, struct fuse_file
         {
             stbuf->st_mode = S_IFREG | 0444;
             stbuf->st_nlink = 1;
-            stbuf->st_size = totalbytes;
+            stbuf->st_size = 100;
+            //stbuf->st_size = totalbytes;
         /*
 	} else if (strcmp(path+1, options.filename) == 0) {
 		stbuf->st_mode = S_IFREG | 0444;
@@ -84,6 +86,9 @@ static int wombat_readdir(const char *path, void *buf, fuse_fill_dir_t filler, o
 	(void) fi;
 	(void) flags;
 
+        //printf("path: %s\n", path); 
+        //qDebug() << "path:" << path;
+
 	if (strcmp(path, "/") != 0)
 		return -ENOENT;
 
@@ -97,6 +102,7 @@ static int wombat_readdir(const char *path, void *buf, fuse_fill_dir_t filler, o
 
 static int wombat_open(const char *path, struct fuse_file_info *fi)
 {
+        //qDebug() << "path:" << path;
         if(strcmp(path+1, imgfile.toStdString().c_str()) != 0)
                 return -ENOENT;
 	//if (strcmp(path+1, options.filename) != 0)
@@ -122,6 +128,7 @@ static int wombat_read(const char *path, char *buf, size_t size, off_t offset, s
 	if (offset < len) {
 		if (offset + size > len)
 			size = len - offset;
+                memcpy(buf, "hello", size);
 		//memcpy(buf, options.contents + offset, size);
 	} else
 		size = 0;
@@ -285,12 +292,18 @@ int main(int argc, char* argv[])
     QString mntpt = args.at(1);
     imgfile = "/" + wfimg.split("/").last().split(".").first() + ".dd";
     qDebug() << "imgfile:" << imgfile;
+    qDebug() << "imgfile:" << imgfile.toStdString().data();
 
-    qDebug() << "wfiimg:" << wfimg << "mntpnt:" << mntpt;
+    //qDebug() << "wfiimg:" << wfimg << "mntpnt:" << mntpt;
+    char** fargv = NULL;
+    fargv = (char**)calloc(2, sizeof(char*));
+    int fargc = 2;
+    fargv[0] = argv[1];
+    fargv[1] = argv[2];
+    struct fuse_args fuseargs = FUSE_ARGS_INIT(fargc, fargv);
 
     int ret;
-    struct fuse_args fuseargs = FUSE_ARGS_INIT(argc, argv);
-    qDebug() << "argc:" << argc << "argv:" << argv[0] << argv[1] << argv[2];
+    //qDebug() << "argc:" << argc << "argv:" << argv[0] << argv[1] << argv[2];
     
     QFile wfi(wfimg);
     if(!wfi.isOpen())
@@ -315,8 +328,7 @@ int main(int argc, char* argv[])
     }
 
     fuse_opt_parse(NULL, NULL, NULL, NULL);
-    qDebug() << "fuseargs count:" << fuseargs.argc << fuseargs.argv[0] << fuseargs.argv[1] << fuseargs.argv[2];
-    //ret = fuse_main(argc, argv, &wombat_oper, NULL);
+    //qDebug() << "fuseargs count:" << fuseargs.argc << fuseargs.argv[0] << fuseargs.argv[1] << fuseargs.argv[2];
     ret = fuse_main(fuseargs.argc, fuseargs.argv, &wombat_oper, NULL);
 
     fuse_opt_free_args(&fuseargs);
