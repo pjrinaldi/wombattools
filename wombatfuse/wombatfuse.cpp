@@ -13,6 +13,7 @@
 #include <iostream>
 #include <string>
 #include <QFile>
+#include <QFileInfo>
 #include <QDataStream>
 #include <QTextStream>
 #include <QCommandLineParser>
@@ -31,7 +32,10 @@ static QString ifile;
 static QString mntpt;
 static const char* relativefilename = NULL;
 static const char* rawfilename = NULL;
+static std::string lz4filename;
 static quint64 totalbytes = 0;
+static FILE* infile = NULL;
+static off_t lz4size = 0;
 
 //static char* imgpath;
 
@@ -178,7 +182,10 @@ static int wombat_getattr(const char *path, struct stat *stbuf, struct fuse_file
         {
             stbuf->st_mode = S_IFREG | 0444;
             stbuf->st_nlink = 1;
-            stbuf->st_size = (off_t)totalbytes;
+            stbuf->st_size = lz4size;
+            //stbuf->st_size = (off_t)totalbytes;
+            //QFileInfo wfi(wfimg);
+            //stbuf->st_size = (off_t)wfi.size();
             //stbuf->st_size = GetUncompressedSize();
 	}
         /*
@@ -226,6 +233,7 @@ static int wombat_open(const char *path, struct fuse_file_info *fi)
 
 	if ((fi->flags & O_ACCMODE) != O_RDONLY)
 		return -EACCES;
+
 
 	return 0;
 }
@@ -317,12 +325,17 @@ static int wombat_read(const char *path, char *buf, size_t size, off_t offset, s
     delete[] rawbuf;
 
     errcode = LZ4F_freeDecompressionContext(lz4dctx);
+    /*
     rawdd.open(QIODevice::ReadOnly);
     rawdd.seek(offset);
     int byteswritten = rawdd.read(buf, size);
     rawdd.close();
+    */
+    FILE* rawf = fopen(rawfilename,"rb");
+    fseek(rawf, offset, SEEK_SET);
+    int insize = fread(buf, 1, size, rawf);
 
-    return byteswritten;
+    return insize;
 
 
 //	if(strcmp(path+1, options.filename) != 0)
@@ -345,6 +358,11 @@ static int wombat_read(const char *path, char *buf, size_t size, off_t offset, s
          * */
 }
 
+static void wombat_destroy(void* param)
+{
+    fclose(infile);
+    return;
+}
 
 static const struct fuse_operations wombat_oper = {
 	.getattr	= wombat_getattr,
@@ -352,6 +370,7 @@ static const struct fuse_operations wombat_oper = {
 	.read		= wombat_read,
 	.readdir	= wombat_readdir,
 	.init           = wombat_init,
+        .destroy        = wombat_destroy,
 };
 
 int main(int argc, char* argv[])
@@ -383,6 +402,18 @@ int main(int argc, char* argv[])
     rawfilename = imgfile.toStdString().c_str();
     qDebug() << wfimg << imgfile << ifile;
 
+    lz4filename = wfimg.toStdString();
+    printf("lz4filename: %s\n", lz4filename.c_str());
+    infile = fopen(lz4filename.c_str(), "rb");
+    if(infile != NULL)
+    {
+        fseek(infile, 0, SEEK_END);
+        lz4size = ftell(infile);
+    }
+    else
+        printf("file failed to open\n");
+
+    printf("infile size: %ld\n", lz4size);
     QFile wfi(wfimg);
     if(!wfi.isOpen())
         wfi.open(QIODevice::ReadOnly);
