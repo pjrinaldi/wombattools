@@ -25,11 +25,13 @@
 
 #include <fuse3/fuse.h>
 
-
+static QString wfimg;
 static QString imgfile;
-static quint64 totalbytes;
+static QString ifile;
+static QString mntpt;
+
 //static char* imgpath;
-/*
+
 static size_t GetBlockSize(const LZ4F_frameInfo_t* info)
 {
     switch (info->blockSizeID)
@@ -44,127 +46,52 @@ static size_t GetBlockSize(const LZ4F_frameInfo_t* info)
             exit(1);
     }
 }
-*/
 
-static void *wombat_init(struct fuse_conn_info *conn, struct fuse_config *cfg)
+static off_t GetUncompressedSize(void)
 {
-	(void) conn;
-	cfg->kernel_cache = 1;
-	return NULL;
+    QFile wfi(wfimg);
+    if(!wfi.isOpen())
+        wfi.open(QIODevice::ReadOnly);
+    QDataStream in(&wfi);
+    quint64 header;
+    uint8_t version;
+    quint64 totalbytes;
+    QString casenumber;
+    QString evidnumber;
+    QString examiner;
+    QString description;
+    in >> header >> version >> totalbytes >> casenumber >> evidnumber >> examiner >> description;
+    wfi.close();
+
+    return (off_t)totalbytes;
 }
 
-static int wombat_getattr(const char *path, struct stat *stbuf, struct fuse_file_info *fi)
+qint64 Uncompress(char* buf, off_t offset, size_t size)
 {
-	(void) fi;
-	int res = 0;
-
-	memset(stbuf, 0, sizeof(struct stat));
-	if (strcmp(path, "/") == 0) {
-		stbuf->st_mode = S_IFDIR | 0755;
-		stbuf->st_nlink = 2;
-        }
-        else if(strcmp(path+1, imgfile.toStdString().c_str()) == 0)
-        {
-            stbuf->st_mode = S_IFREG | 0444;
-            stbuf->st_nlink = 1;
-            stbuf->st_size = 100;
-            //stbuf->st_size = totalbytes;
-        /*
-	} else if (strcmp(path+1, options.filename) == 0) {
-		stbuf->st_mode = S_IFREG | 0444;
-		stbuf->st_nlink = 1;
-		stbuf->st_size = strlen(options.contents);*/
-	} else
-		res = -ENOENT;
-
-	return res;
-}
-
-static int wombat_readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info *fi, enum fuse_readdir_flags flags)
-{
-	(void) offset;
-	(void) fi;
-	(void) flags;
-
-        //printf("path: %s\n", path); 
-        //qDebug() << "path:" << path;
-
-	if (strcmp(path, "/") != 0)
-		return -ENOENT;
-
-	filler(buf, ".", NULL, 0, (fuse_fill_dir_flags)0);
-	filler(buf, "..", NULL, 0, (fuse_fill_dir_flags)0);
-        filler(buf, imgfile.toStdString().c_str(), NULL, 0, (fuse_fill_dir_flags)0);
-	//filler(buf, options.filename, NULL, 0, 0);
-
-	return 0;
-}
-
-static int wombat_open(const char *path, struct fuse_file_info *fi)
-{
-        //qDebug() << "path:" << path;
-        if(strcmp(path+1, imgfile.toStdString().c_str()) != 0)
-                return -ENOENT;
-	//if (strcmp(path+1, options.filename) != 0)
-	//	return -ENOENT;
-
-	if ((fi->flags & O_ACCMODE) != O_RDONLY)
-		return -EACCES;
-
-	return 0;
-}
-
-static int wombat_read(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info *fi)
-{
-	size_t len;
-	(void) fi;
-        if(strcmp(path+1, imgfile.toStdString().c_str()) != 0)
-            return -ENOENT;
-//	if(strcmp(path+1, options.filename) != 0)
-//		return -ENOENT;
-
-        len = 10;
-//	len = strlen(options.contents);
-	if (offset < len) {
-		if (offset + size > len)
-			size = len - offset;
-                memcpy(buf, "hello", size);
-		//memcpy(buf, options.contents + offset, size);
-	} else
-		size = 0;
-
-	return size;
-        /*
     #define IN_CHUNK_SIZE  (16*1024)
 
-    uint8_t forimghash[BLAKE3_OUT_LEN];
-    blake3_hasher imghasher;
-    blake3_hasher_init(&imghasher);
     char* cmpbuf = new char[IN_CHUNK_SIZE];
     
     LZ4F_dctx* lz4dctx;
     LZ4F_frameInfo_t lz4frameinfo;
+    LZ4F_errorCode_t errcode;
     
     errcode = LZ4F_createDecompressionContext(&lz4dctx, LZ4F_getVersion());
     if(LZ4F_isError(errcode))
         printf("%s\n", LZ4F_getErrorName(errcode));
 
-    curpos = 0;
-    QFile cwfi(imgfile);
+    quint64 curpos = 0;
+    QFile cwfi(wfimg);
     if(!cwfi.isOpen())
 	cwfi.open(QIODevice::ReadOnly);
     QDataStream cin(&cwfi);
-    //QFile rawdd(imgfile.split(".").first() + ".dd");
-    //rawdd.open(QIODevice::WriteOnly);
-    //QDataStream cout(&rawdd);
-*/
-    /*
-    int skipbytes = cin.skipRawData(17);
-    if(skipbytes == -1)
-        qDebug() << "skip failed";
-    */
-/*    quint64 header;
+    QFile rawdd(imgfile);
+    rawdd.open(QIODevice::WriteOnly);
+    QDataStream cout(&rawdd);
+
+    quint64 header;
     uint8_t version;
+    quint64 totalbytes;
     QString cnum;
     QString evidnum;
     QString examiner2;
@@ -173,12 +100,12 @@ static int wombat_read(const char *path, char *buf, size_t size, off_t offset, s
     if(header != 0x776f6d6261746669)
     {
         qDebug() << "Wrong file type, not a wombat forensic image.";
-        return 1;
+        return -EIO;
     }
     if(version != 1)
     {
         qDebug() << "Not the correct wombat forensic image format.";
-        return 1;
+        return -EIO;
     }
 
     int bytesread = cin.readRawData(cmpbuf, IN_CHUNK_SIZE);
@@ -209,57 +136,126 @@ static int wombat_read(const char *path, char *buf, size_t size, off_t offset, s
             {
                 printf("decompression error: %s\n", LZ4F_getErrorName(ret));
             }
-	    blake3_hasher_update(&imghasher, rawbuf, dstsize);
-            printf("Verifying %ld of %llu bytes\r", dstsize, totalbytes);
-            fflush(stdout);
             //write here
-            //int byteswrote = cout.writeRawData(rawbuf, dstsize);
+            int byteswrote = cout.writeRawData(rawbuf, dstsize);
             srcptr = (const char*)srcptr + srcsize;
         }
     }
     //qDebug() << "ret should be zero:" << ret;
-    blake3_hasher_finalize(&imghasher, forimghash, BLAKE3_OUT_LEN);
-    for(size_t i=0; i < BLAKE3_OUT_LEN; i++)
-    {
-        printf("%02x", forimghash[i]);
-        logout << QString("%1").arg(forimghash[i], 2, 16, QChar('0'));
-    }
-    printf(" - Forensic Image Hash\n");
-    logout << " - Forensic Image Hash" << Qt::endl;
 
-    /* HOW TO GET HASH OUT OF THE IMAGE FOR THE WOMBATVERIFY FUNCTION...
-    cwfi.seek(cwfi.size() - 128);
-    QString readhash;
-    QByteArray tmparray = cwfi.read(128);
-    for(int i=1; i < 128; i++)
-    {
-        if(i % 2 != 0)
-            readhash.append(tmparray.at(i));
-    }
-    qDebug() << "readhash:" << readhash;
-    */
-/*    cwfi.close();
-    //rawdd.close();
+    cwfi.close();
+    rawdd.close();
     delete[] cmpbuf;
     delete[] rawbuf;
 
     errcode = LZ4F_freeDecompressionContext(lz4dctx);
+    rawdd.open(QIODevice::ReadOnly);
+    rawdd.seek(offset);
+    int byteswritten = rawdd.read(buf, size);
+    rawdd.close();
 
-    // VERIFY HASHES HERE...
-    if(memcmp(sourcehash, forimghash, BLAKE3_OUT_LEN) == 0)
-    {
-        printf("\nVerification Successful\n");
-        logout << "Verification Successful" << Qt::endl;
-    }
-    else
-    {
-        printf("\nVerification Failed\n");
-        logout << "Verification Failed" << Qt::endl;
-    }
-    printf("Finished Forensic Image Verification at %s\n", QDateTime::currentDateTime().toString("MM/dd/yyyy hh:mm:ss ap").toStdString().c_str());
-    logout << "Finished Forensic Image Verification at:" << QDateTime::currentDateTime().toString("MM/dd/yyyy hh:mm:ss ap") << Qt::endl;
-    log.close();
-         */ 
+    return size;
+}
+
+static void *wombat_init(struct fuse_conn_info *conn, struct fuse_config *cfg)
+{
+	(void) conn;
+	cfg->kernel_cache = 1;
+	return NULL;
+}
+
+static int wombat_getattr(const char *path, struct stat *stbuf, struct fuse_file_info *fi)
+{
+	(void) fi;
+	int res = 0;
+
+	memset(stbuf, 0, sizeof(struct stat));
+	if (strcmp(path, "/") == 0) {
+		stbuf->st_mode = S_IFDIR | 0755;
+		stbuf->st_nlink = 2;
+        }
+        else if(strcmp(path, ifile.toStdString().c_str()) == 0)
+        {
+            stbuf->st_mode = S_IFREG | 0444;
+            stbuf->st_nlink = 1;
+            QFile wfi(wfimg);
+            if(!wfi.isOpen())
+                wfi.open(QIODevice::ReadOnly);
+            QDataStream in(&wfi);
+            quint64 header;
+            uint8_t version;
+            qint64 totalbytes;
+            QString casenumber;
+            QString evidnumber;
+            QString examiner;
+            QString description;
+            in >> header >> version >> totalbytes >> casenumber >> evidnumber >> examiner >> description;
+            wfi.close();
+            stbuf->st_size = (off_t)totalbytes;
+            //stbuf->st_size = GetUncompressedSize();
+	} else
+		res = -ENOENT;
+
+	return res;
+}
+
+static int wombat_readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info *fi, enum fuse_readdir_flags flags)
+{
+	(void) offset;
+	(void) fi;
+	(void) flags;
+
+        //printf("path: %s\n", path); 
+        //qDebug() << "path:" << path;
+
+	if (strcmp(path, "/") != 0)
+		return -ENOENT;
+
+	filler(buf, ".", NULL, 0, (fuse_fill_dir_flags)0);
+	filler(buf, "..", NULL, 0, (fuse_fill_dir_flags)0);
+        filler(buf, imgfile.toStdString().c_str(), NULL, 0, (fuse_fill_dir_flags)0);
+
+	return 0;
+}
+
+static int wombat_open(const char *path, struct fuse_file_info *fi)
+{
+        //qDebug() << "path:" << path;
+        if(strcmp(path, ifile.toStdString().c_str()) != 0)
+                return -ENOENT;
+	//if (strcmp(path+1, options.filename) != 0)
+	//	return -ENOENT;
+
+	if ((fi->flags & O_ACCMODE) != O_RDONLY)
+		return -EACCES;
+
+	return 0;
+}
+
+static int wombat_read(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info *fi)
+{
+	size_t len;
+	(void) fi;
+        if(strcmp(path, ifile.toStdString().c_str()) != 0)
+            return -ENOENT;
+//	if(strcmp(path+1, options.filename) != 0)
+//		return -ENOENT;
+
+        return Uncompress(buf, offset, size);
+        //len = 10;
+//	len = strlen(options.contents);
+	/*
+	if (offset < len) {
+		if (offset + size > len)
+			size = len - offset;
+                memcpy(buf, "hello", size);
+		//memcpy(buf, options.contents + offset, size);
+	} else
+		size = 0;
+        */
+	//return size;
+        /*
+         * */
 }
 
 
@@ -288,11 +284,17 @@ int main(int argc, char* argv[])
     quint64 totalbytes = 0;
     const QStringList args = parser.positionalArguments();
 
-    QString wfimg = args.at(0);
-    QString mntpt = args.at(1);
-    imgfile = "/" + wfimg.split("/").last().split(".").first() + ".dd";
-    qDebug() << "imgfile:" << imgfile;
-    qDebug() << "imgfile:" << imgfile.toStdString().data();
+    if(args.count() == 0)
+    {
+        printf("Usage: wombatfuse imagefile mountpoint.\n");
+        return 1;
+    }
+    wfimg = args.at(0);
+    mntpt = args.at(1);
+    imgfile = wfimg.split("/").last().split(".").first() + ".dd";
+    ifile = "/" + imgfile;
+    //qDebug() << "imgfile:" << imgfile;
+    //qDebug() << "imgfile:" << imgfile.toStdString().data();
 
     //qDebug() << "wfiimg:" << wfimg << "mntpnt:" << mntpt;
     char** fargv = NULL;
@@ -305,27 +307,6 @@ int main(int argc, char* argv[])
     int ret;
     //qDebug() << "argc:" << argc << "argv:" << argv[0] << argv[1] << argv[2];
     
-    QFile wfi(wfimg);
-    if(!wfi.isOpen())
-        wfi.open(QIODevice::ReadOnly);
-    QDataStream in(&wfi);
-    if(in.version() != QDataStream::Qt_5_15)
-    {
-        qDebug() << "Wrong Qt Data Stream version:" << in.version();
-        return 1;
-    }
-    quint64 header;
-    uint8_t version;
-    QString casenumber;
-    QString evidnumber;
-    QString examiner;
-    QString description;
-    in >> header >> version >> totalbytes >> casenumber >> evidnumber >> examiner >> description;
-    if(header != 0x776f6d6261746669)
-    {
-        printf("Not a valid wombat forensic iamge.\n"); 
-        return 1;
-    }
 
     fuse_opt_parse(NULL, NULL, NULL, NULL);
     //qDebug() << "fuseargs count:" << fuseargs.argc << fuseargs.argv[0] << fuseargs.argv[1] << fuseargs.argv[2];
