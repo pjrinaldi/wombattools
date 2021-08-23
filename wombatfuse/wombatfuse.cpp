@@ -196,8 +196,8 @@ static int wombat_open(const char *path, struct fuse_file_info *fi)
 {
         if(strcmp(path, relativefilename) != 0)
                 return -ENOENT;
-        if(strcmp(path, rawfilename) != 0)
-            return -ENOENT;
+        //if(strcmp(path, rawfilename) != 0)
+        //    return -ENOENT;
 
 	if ((fi->flags & O_ACCMODE) != O_RDONLY)
 		return -EACCES;
