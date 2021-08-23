@@ -231,6 +231,7 @@ static int wombat_read(const char *path, char *buf, size_t size, off_t offset, s
     //rawdd.open(QIODevice::WriteOnly);
     //QDataStream cout(&rawdd);
 
+    off_t curoffset = 0;
     quint64 header;
     uint8_t version;
     QString cnum;
@@ -239,6 +240,7 @@ static int wombat_read(const char *path, char *buf, size_t size, off_t offset, s
     QString examiner2;
     QString description2;
     cin >> header >> version >> totalbytes >> cnum >> evidnum >> examiner2 >> description2;
+    curoffset += 17 + cnum.size() + evidnum.size() + examiner2.size() + description2.size();
     if(header != 0x776f6d6261746669)
     {
         qDebug() << "Wrong file type, not a wombat forensic image.";
@@ -274,12 +276,13 @@ static int wombat_read(const char *path, char *buf, size_t size, off_t offset, s
             size_t dstsize = rawbufsize;
             size_t srcsize = (const char*)srcend - (const char*)srcptr;
             ret = LZ4F_decompress(lz4dctx, rawbuf, &dstsize, srcptr, &srcsize, NULL);
+
             if(LZ4F_isError(ret))
             {
                 printf("decompression error: %s\n", LZ4F_getErrorName(ret));
             }
             //write here
-            int byteswrote = cout.writeRawData(rawbuf, dstsize);
+            //int byteswrote = cout.writeRawData(rawbuf, dstsize);
             srcptr = (const char*)srcptr + srcsize;
         }
     }
@@ -299,7 +302,7 @@ static int wombat_read(const char *path, char *buf, size_t size, off_t offset, s
     //int insize = fread(buf, 1, size, infile);
     //printf("insize: %d\n", insize);
 
-    return insize;
+    return size;
 }
 
 static void wombat_destroy(void* param)
