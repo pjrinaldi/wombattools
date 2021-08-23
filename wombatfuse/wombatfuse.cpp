@@ -33,11 +33,10 @@ static QString mntpt;
 static const char* relativefilename = NULL;
 static const char* rawfilename = NULL;
 static std::string lz4filename;
-static quint64 totalbytes = 0;
+//static quint64 totalbytes = 0;
 static FILE* infile = NULL;
 static off_t lz4size = 0;
-
-//static char* imgpath;
+static off_t rawsize = 0;
 
 /*
 static size_t GetBlockSize(const LZ4F_frameInfo_t* info)
@@ -148,61 +147,61 @@ qint64 Uncompress(char* buf, off_t offset, size_t size)
 
 static void *wombat_init(struct fuse_conn_info *conn, struct fuse_config *cfg)
 {
-	(void) conn;
-	cfg->kernel_cache = 1;
-	return NULL;
+    (void) conn;
+    cfg->kernel_cache = 1;
+    return NULL;
 }
 
 static int wombat_getattr(const char *path, struct stat *stbuf, struct fuse_file_info *fi)
 {
-	(void) fi;
-	int res = 0;
 
-	memset(stbuf, 0, sizeof(struct stat));
-	if (strcmp(path, "/") == 0)
-        {
-	    stbuf->st_mode = S_IFDIR | 0755;
-	    stbuf->st_nlink = 2;
-        }
-        else if(strcmp(path, relativefilename) == 0)
-        {
-            stbuf->st_mode = S_IFREG | 0444;
-            stbuf->st_nlink = 1;
-            stbuf->st_size = lz4size;
-	}
-        else
-    	    res = -ENOENT;
+    (void) fi;
+    int res = 0;
 
-	return res;
+    memset(stbuf, 0, sizeof(struct stat));
+    if (strcmp(path, "/") == 0)
+    {
+        stbuf->st_mode = S_IFDIR | 0755;
+        stbuf->st_nlink = 2;
+    }
+    else if(strcmp(path, relativefilename) == 0)
+    {
+        stbuf->st_mode = S_IFREG | 0444;
+        stbuf->st_nlink = 1;
+        //stbuf->st_size = lz4size;
+        stbuf->st_size = rawsize;
+    }
+    else
+        res = -ENOENT;
+
+    return res;
 }
 
 static int wombat_readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info *fi, enum fuse_readdir_flags flags)
 {
-	(void) offset;
-	(void) fi;
-	(void) flags;
+    (void) offset;
+    (void) fi;
+    (void) flags;
 
-	if (strcmp(path, "/") != 0)
-		return -ENOENT;
+    if (strcmp(path, "/") != 0)
+            return -ENOENT;
 
-	filler(buf, ".", NULL, 0, (fuse_fill_dir_flags)0);
-	filler(buf, "..", NULL, 0, (fuse_fill_dir_flags)0);
-        filler(buf, rawfilename, NULL, 0, (fuse_fill_dir_flags)0);
+    filler(buf, ".", NULL, 0, (fuse_fill_dir_flags)0);
+    filler(buf, "..", NULL, 0, (fuse_fill_dir_flags)0);
+    filler(buf, rawfilename, NULL, 0, (fuse_fill_dir_flags)0);
 
-	return 0;
+    return 0;
 }
 
 static int wombat_open(const char *path, struct fuse_file_info *fi)
 {
-        if(strcmp(path, relativefilename) != 0)
-                return -ENOENT;
-        //if(strcmp(path, rawfilename) != 0)
-        //    return -ENOENT;
+    if(strcmp(path, relativefilename) != 0)
+            return -ENOENT;
 
-	if ((fi->flags & O_ACCMODE) != O_RDONLY)
-		return -EACCES;
+    if ((fi->flags & O_ACCMODE) != O_RDONLY)
+            return -EACCES;
 
-	return 0;
+    return 0;
 }
 
 static int wombat_read(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info *fi)
@@ -216,25 +215,6 @@ static int wombat_read(const char *path, char *buf, size_t size, off_t offset, s
     printf("insize: %d\n", insize);
 
     return insize;
-
-
-//	if(strcmp(path+1, options.filename) != 0)
-//		return -ENOENT;
-
-        //len = 10;
-//	len = strlen(options.contents);
-	/*
-	if (offset < len) {
-		if (offset + size > len)
-			size = len - offset;
-                memcpy(buf, "hello", size);
-		//memcpy(buf, options.contents + offset, size);
-	} else
-		size = 0;
-        */
-	//return size;
-        /*
-         * */
 }
 
 static void wombat_destroy(void* param)
@@ -294,6 +274,20 @@ int main(int argc, char* argv[])
     fseek(infile, 0, SEEK_SET);
 
     printf("infile size: %ld\n", lz4size);
+
+    QFile cwfile(wfimg);
+    cwfile.open(QIODevice::ReadOnly);
+    QDataStream cin(&cwfile);
+    qint64 header;
+    uint8_t version;
+    qint64 totalbytes;
+    QString cnum;
+    QString evidnum;
+    QString examiner;
+    QString description;
+    cin >> header >> version >> totalbytes >> cnum >> evidnum >> examiner >> description;
+    rawsize = (off_t)totalbytes;
+    cwfile.close();
 
     char** fargv = NULL;
     fargv = (char**)calloc(2, sizeof(char*));
