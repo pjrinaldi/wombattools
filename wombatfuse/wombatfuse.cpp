@@ -275,7 +275,27 @@ static int wombat_read(const char *path, char *buf, size_t size, off_t offset, s
         {
             size_t dstsize = rawbufsize;
             size_t srcsize = (const char*)srcend - (const char*)srcptr;
+            if(curoffset == offset)
+            {
+                if(size <= dstsize)
+                    memcpy(buf, rawbuf, size);
+                //else need to add to a buffer
+            }
+            else if(curoffset > offset)
+            {
+                int newoff = curoffset - offset;
+                memcpy(buf, rawbuf+newoff, size);
+            }
+            /*
+            if(curoffset >= offset && size <= dstsize)
+            {
+                if(curoffset == offset)
+                    memcpy(buf, rawbuf, size);
+                //buf 
+            }
+            */
             ret = LZ4F_decompress(lz4dctx, rawbuf, &dstsize, srcptr, &srcsize, NULL);
+            curoffset += dstsize;
 
             if(LZ4F_isError(ret))
             {
@@ -298,6 +318,7 @@ static int wombat_read(const char *path, char *buf, size_t size, off_t offset, s
     //rawdd.seek(offset);
     //int byteswritten = rawdd.read(buf, size);
     //rawdd.close();
+
     //fseek(infile, offset, SEEK_SET);
     //int insize = fread(buf, 1, size, infile);
     //printf("insize: %d\n", insize);
