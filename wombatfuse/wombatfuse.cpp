@@ -38,7 +38,7 @@ static FILE* infile = NULL;
 static off_t lz4size = 0;
 static off_t rawsize = 0;
 static off_t curoffset = 0;
-static char* curbuffer = NULL;
+//static char* curbuffer = NULL;
 
 static size_t GetBlockSize(const LZ4F_frameInfo_t* info)
 {
@@ -215,7 +215,7 @@ static int wombat_read(const char *path, char *buf, size_t size, off_t offset, s
     #define IN_CHUNK_SIZE  (16*1024)
 
     char* cmpbuf = new char[IN_CHUNK_SIZE];
-    curbuffer = new char[size];
+    //curbuffer = new char[size];
     
     LZ4F_dctx* lz4dctx;
     LZ4F_frameInfo_t lz4frameinfo;
@@ -225,10 +225,16 @@ static int wombat_read(const char *path, char *buf, size_t size, off_t offset, s
     if(LZ4F_isError(errcode))
         printf("%s\n", LZ4F_getErrorName(errcode));
 
-    fseek(infile, curoffset, SEEK_SET);
+    fseek(infile, curoffset + offset, SEEK_SET);
     //fseek(infile, offset, SEEK_SET);
     //int insize = fread(buf, 1, size, infile);
+    int bytesread = fread(cmpbuf, 1, IN_CHUNK_SIZE, infile);
+    if(offset < bytesread)
+    {
+	// decompress here...
+    }
 
+    /*
     off_t curoff = 0;
     int bytesread = fread(cmpbuf, 1, IN_CHUNK_SIZE, infile);
     
@@ -253,35 +259,14 @@ static int wombat_read(const char *path, char *buf, size_t size, off_t offset, s
         {
             size_t dstsize = rawbufsize;
             size_t srcsize = (const char*)srcend - (const char*)srcptr;
-	    /*
-            if(curoffset == offset)
-            {
-                if(size <= dstsize)
-                    memcpy(buf, rawbuf, size);
-                //else need to add to a buffer
-            }
-            else if(curoffset > offset)
-            {
-                int newoff = curoffset - offset;
-                memcpy(buf, rawbuf+newoff, size);
-            }
-            if(curoffset >= offset && size <= dstsize)
-            {
-                if(curoffset == offset)
-                    memcpy(buf, rawbuf, size);
-                //buf 
-            }
-	    */
             ret = LZ4F_decompress(lz4dctx, rawbuf, &dstsize, srcptr, &srcsize, NULL);
 	    curoff += dstsize;
-	    //if(curoff >= offset)
-		//memcpy(curbuffer, rawbuf, size);
 
             if(LZ4F_isError(ret))
             {
                 printf("decompression error: %s\n", LZ4F_getErrorName(ret));
             }
-	    memcpy(buf, rawbuf, sizeof(rawbuf));
+	    //memcpy(buf, rawbuf, sizeof(rawbuf));
             //write here
             //int byteswrote = cout.writeRawData(rawbuf, dstsize);
             srcptr = (const char*)srcptr + srcsize;
@@ -290,13 +275,11 @@ static int wombat_read(const char *path, char *buf, size_t size, off_t offset, s
     //qDebug() << "ret should be zero:" << ret;
 
     delete[] cmpbuf;
+    delete[] rawbuf;
 
     errcode = LZ4F_freeDecompressionContext(lz4dctx);
+    */
     //memcpy(buf, curbuffer, sizeof(curbuffer));
-
-    //fseek(infile, offset, SEEK_SET);
-    //int insize = fread(buf, 1, size, infile);
-    //printf("insize: %d\n", insize);
 
     return size;
 }
@@ -304,7 +287,7 @@ static int wombat_read(const char *path, char *buf, size_t size, off_t offset, s
 static void wombat_destroy(void* param)
 {
     fclose(infile);
-    delete[] curbuffer;
+    //delete[] curbuffer;
     return;
 }
 
