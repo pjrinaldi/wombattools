@@ -37,6 +37,8 @@ static std::string lz4filename;
 static FILE* infile = NULL;
 static off_t lz4size = 0;
 static off_t rawsize = 0;
+static off_t curoffset = 0;
+static char* curbuffer = NULL;
 
 static size_t GetBlockSize(const LZ4F_frameInfo_t* info)
 {
@@ -213,6 +215,7 @@ static int wombat_read(const char *path, char *buf, size_t size, off_t offset, s
     #define IN_CHUNK_SIZE  (16*1024)
 
     char* cmpbuf = new char[IN_CHUNK_SIZE];
+    curbuffer = new char[size];
     
     LZ4F_dctx* lz4dctx;
     LZ4F_frameInfo_t lz4frameinfo;
@@ -222,37 +225,12 @@ static int wombat_read(const char *path, char *buf, size_t size, off_t offset, s
     if(LZ4F_isError(errcode))
         printf("%s\n", LZ4F_getErrorName(errcode));
 
-    quint64 curpos = 0;
-    QFile cwfi(wfimg);
-    if(!cwfi.isOpen())
-	cwfi.open(QIODevice::ReadOnly);
-    QDataStream cin(&cwfi);
-    //QFile rawdd(imgfile);
-    //rawdd.open(QIODevice::WriteOnly);
-    //QDataStream cout(&rawdd);
+    fseek(infile, curoffset, SEEK_SET);
+    //fseek(infile, offset, SEEK_SET);
+    //int insize = fread(buf, 1, size, infile);
 
-    off_t curoffset = 0;
-    quint64 header;
-    uint8_t version;
-    QString cnum;
-    qint64 totalbytes;
-    QString evidnum;
-    QString examiner2;
-    QString description2;
-    cin >> header >> version >> totalbytes >> cnum >> evidnum >> examiner2 >> description2;
-    curoffset += 17 + cnum.size() + evidnum.size() + examiner2.size() + description2.size();
-    if(header != 0x776f6d6261746669)
-    {
-        qDebug() << "Wrong file type, not a wombat forensic image.";
-        return -EIO;
-    }
-    if(version != 1)
-    {
-        qDebug() << "Not the correct wombat forensic image format.";
-        return -EIO;
-    }
-
-    int bytesread = cin.readRawData(cmpbuf, IN_CHUNK_SIZE);
+    off_t curoff = 0;
+    int bytesread = fread(cmpbuf, 1, IN_CHUNK_SIZE, infile);
     
     size_t consumedsize = bytesread;
     size_t framesize = LZ4F_getFrameInfo(lz4dctx, &lz4frameinfo, cmpbuf, &consumedsize);
@@ -266,7 +244,7 @@ static int wombat_read(const char *path, char *buf, size_t size, off_t offset, s
     size_t ret = 1;
     while(ret != 0)
     {
-        size_t readsize = firstchunk ? filled : cin.readRawData(cmpbuf, IN_CHUNK_SIZE);
+	size_t readsize = firstchunk ? filled : fread(cmpbuf, 1, IN_CHUNK_SIZE, infile);
         firstchunk = 0;
         const void* srcptr = (const char*)cmpbuf + consumedsize;
         consumedsize = 0;
@@ -275,6 +253,7 @@ static int wombat_read(const char *path, char *buf, size_t size, off_t offset, s
         {
             size_t dstsize = rawbufsize;
             size_t srcsize = (const char*)srcend - (const char*)srcptr;
+	    /*
             if(curoffset == offset)
             {
                 if(size <= dstsize)
@@ -286,21 +265,23 @@ static int wombat_read(const char *path, char *buf, size_t size, off_t offset, s
                 int newoff = curoffset - offset;
                 memcpy(buf, rawbuf+newoff, size);
             }
-            /*
             if(curoffset >= offset && size <= dstsize)
             {
                 if(curoffset == offset)
                     memcpy(buf, rawbuf, size);
                 //buf 
             }
-            */
+	    */
             ret = LZ4F_decompress(lz4dctx, rawbuf, &dstsize, srcptr, &srcsize, NULL);
-            curoffset += dstsize;
+	    curoff += dstsize;
+	    //if(curoff >= offset)
+		//memcpy(curbuffer, rawbuf, size);
 
             if(LZ4F_isError(ret))
             {
                 printf("decompression error: %s\n", LZ4F_getErrorName(ret));
             }
+	    memcpy(buf, rawbuf, sizeof(rawbuf));
             //write here
             //int byteswrote = cout.writeRawData(rawbuf, dstsize);
             srcptr = (const char*)srcptr + srcsize;
@@ -308,16 +289,10 @@ static int wombat_read(const char *path, char *buf, size_t size, off_t offset, s
     }
     //qDebug() << "ret should be zero:" << ret;
 
-    cwfi.close();
-    //rawdd.close();
     delete[] cmpbuf;
-    delete[] rawbuf;
 
     errcode = LZ4F_freeDecompressionContext(lz4dctx);
-    //rawdd.open(QIODevice::ReadOnly);
-    //rawdd.seek(offset);
-    //int byteswritten = rawdd.read(buf, size);
-    //rawdd.close();
+    //memcpy(buf, curbuffer, sizeof(curbuffer));
 
     //fseek(infile, offset, SEEK_SET);
     //int insize = fread(buf, 1, size, infile);
@@ -329,6 +304,7 @@ static int wombat_read(const char *path, char *buf, size_t size, off_t offset, s
 static void wombat_destroy(void* param)
 {
     fclose(infile);
+    delete[] curbuffer;
     return;
 }
 
@@ -394,6 +370,7 @@ int main(int argc, char* argv[])
     QString examiner;
     QString description;
     cin >> header >> version >> totalbytes >> cnum >> evidnum >> examiner >> description;
+    curoffset += 17 + cnum.size() + evidnum.size() + examiner.size() + description.size();
     rawsize = (off_t)totalbytes;
     cwfile.close();
 
