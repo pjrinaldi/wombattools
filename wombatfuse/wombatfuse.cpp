@@ -215,6 +215,7 @@ static int wombat_read(const char *path, char *buf, size_t size, off_t offset, s
     #define IN_CHUNK_SIZE  (16*1024)
 
     char* cmpbuf = new char[IN_CHUNK_SIZE];
+    size_t cmpbufsize = IN_CHUNK_SIZE;
     //curbuffer = new char[size];
     
     LZ4F_dctx* lz4dctx;
@@ -226,44 +227,10 @@ static int wombat_read(const char *path, char *buf, size_t size, off_t offset, s
         printf("%s\n", LZ4F_getErrorName(errcode));
 
     fseek(infile, curoffset, SEEK_SET); // seeks to the start of the compressed content
-    int insize = fread(buf, 1, size, infile); // reads the compressed content into buf
-    fseek(infile, curoffset, SEEK_SET);
-    
-    /*
-    int bytesread = fread(cmpbuf, 1, IN_CHUNK_SIZE, infile);
+    int bytesread = fread(cmpbuf, 1, IN_CHUNK_SIZE, infile); // reads the compressed content into buf
     size_t consumedsize = bytesread;
-    size_t cmpbufsize = IN_CHUNK_SIZE;
-    int firstchunk = 1;
+
     size_t framesize = LZ4F_getFrameInfo(lz4dctx, &lz4frameinfo, cmpbuf, &consumedsize);
-    size_t rawbufsize = GetBlockSize(&lz4frameinfo);
-    char* rawbuf = new char[rawbufsize];
-    size_t filled = bytesread - consumedsize;
-    size_t readsize = firstchunk ? filled : fread(cmpbuf, 1, IN_CHUNK_SIZE, infile);
-    bytesread = LZ4F_decompress(lz4dctx, rawbuf, &rawbufsize, cmpbuf, &cmpbufsize, NULL);
-    //memcpy(buf, rawbuf, size);
-    delete[] rawbuf;
-    errcode = LZ4F_freeDecompressionContext(lz4dctx);
-    */
-
-    delete[] cmpbuf;
-
-    //int bytesread = fread(cmpbuf, 1, IN_CHUNK_SIZE, infile);
-    /*
-    if(offset < bytesread)
-    {
-	// decompress here...
-    }
-    */
-
-    /*
-    off_t curoff = 0;
-    int bytesread = fread(cmpbuf, 1, IN_CHUNK_SIZE, infile);
-    
-    size_t consumedsize = bytesread;
-    size_t framesize = LZ4F_getFrameInfo(lz4dctx, &lz4frameinfo, cmpbuf, &consumedsize);
-    if(LZ4F_isError(framesize))
-        printf("frameinfo error: %s\n", LZ4F_getErrorName(framesize));
-    
     size_t rawbufsize = GetBlockSize(&lz4frameinfo);
     char* rawbuf = new char[rawbufsize];
     size_t filled = bytesread - consumedsize;
@@ -281,7 +248,7 @@ static int wombat_read(const char *path, char *buf, size_t size, off_t offset, s
             size_t dstsize = rawbufsize;
             size_t srcsize = (const char*)srcend - (const char*)srcptr;
             ret = LZ4F_decompress(lz4dctx, rawbuf, &dstsize, srcptr, &srcsize, NULL);
-	    curoff += dstsize;
+	    //curoff += dstsize;
 
             if(LZ4F_isError(ret))
             {
@@ -290,6 +257,7 @@ static int wombat_read(const char *path, char *buf, size_t size, off_t offset, s
 	    //memcpy(buf, rawbuf, sizeof(rawbuf));
             //write here
             //int byteswrote = cout.writeRawData(rawbuf, dstsize);
+            memcpy(buf, rawbuf, size);
             srcptr = (const char*)srcptr + srcsize;
         }
     }
@@ -297,9 +265,14 @@ static int wombat_read(const char *path, char *buf, size_t size, off_t offset, s
 
     delete[] cmpbuf;
     delete[] rawbuf;
+    /**/
+    /*
+    int bytesread = LZ4F_decompress(lz4dctx, rawbuf, &rawbufsize, cmpbuf, &cmpbufsize, NULL);
+    if(offset == 0)
+        memcpy(buf, rawbuf, size);
+    else
+        memcpy(buf, rawbuf+offset, size);
     */
-
-    //memcpy(buf, curbuffer, sizeof(curbuffer));
 
     return size;
 }
@@ -373,8 +346,18 @@ int main(int argc, char* argv[])
     QString examiner;
     QString description;
     cin >> header >> version >> totalbytes >> cnum >> evidnum >> examiner >> description;
-    curoffset += 17 + cnum.size() + evidnum.size() + examiner.size() + description.size();
+    curoffset = 17;
+    if(!cnum.isEmpty())
+        curoffset += 2*cnum.length() + 4;
+    if(!evidnum.isEmpty())
+        curoffset += 2*evidnum.length() + 4;
+    if(!examiner.isEmpty())
+        curoffset += 2*examiner.length() + 4;
+    if(!description.isEmpty())
+        curoffset += 2*description.length() + 4;
+    //curoffset += 17 + 2*(cnum.length() + evidnum.length() + examiner.length() + description.length()) + 16;
     rawsize = (off_t)totalbytes;
+    //printf("curoffset: %ld\n", curoffset);
     cwfile.close();
 
     char** fargv = NULL;
