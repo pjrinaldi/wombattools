@@ -225,14 +225,35 @@ static int wombat_read(const char *path, char *buf, size_t size, off_t offset, s
     if(LZ4F_isError(errcode))
         printf("%s\n", LZ4F_getErrorName(errcode));
 
-    fseek(infile, curoffset + offset, SEEK_SET);
-    //fseek(infile, offset, SEEK_SET);
-    //int insize = fread(buf, 1, size, infile);
+    fseek(infile, curoffset, SEEK_SET); // seeks to the start of the compressed content
+    int insize = fread(buf, 1, size, infile); // reads the compressed content into buf
+    fseek(infile, curoffset, SEEK_SET);
+    
+    /*
     int bytesread = fread(cmpbuf, 1, IN_CHUNK_SIZE, infile);
+    size_t consumedsize = bytesread;
+    size_t cmpbufsize = IN_CHUNK_SIZE;
+    int firstchunk = 1;
+    size_t framesize = LZ4F_getFrameInfo(lz4dctx, &lz4frameinfo, cmpbuf, &consumedsize);
+    size_t rawbufsize = GetBlockSize(&lz4frameinfo);
+    char* rawbuf = new char[rawbufsize];
+    size_t filled = bytesread - consumedsize;
+    size_t readsize = firstchunk ? filled : fread(cmpbuf, 1, IN_CHUNK_SIZE, infile);
+    bytesread = LZ4F_decompress(lz4dctx, rawbuf, &rawbufsize, cmpbuf, &cmpbufsize, NULL);
+    //memcpy(buf, rawbuf, size);
+    delete[] rawbuf;
+    errcode = LZ4F_freeDecompressionContext(lz4dctx);
+    */
+
+    delete[] cmpbuf;
+
+    //int bytesread = fread(cmpbuf, 1, IN_CHUNK_SIZE, infile);
+    /*
     if(offset < bytesread)
     {
 	// decompress here...
     }
+    */
 
     /*
     off_t curoff = 0;
@@ -276,9 +297,8 @@ static int wombat_read(const char *path, char *buf, size_t size, off_t offset, s
 
     delete[] cmpbuf;
     delete[] rawbuf;
-
-    errcode = LZ4F_freeDecompressionContext(lz4dctx);
     */
+
     //memcpy(buf, curbuffer, sizeof(curbuffer));
 
     return size;
