@@ -177,6 +177,11 @@ int main(int argc, char* argv[])
     int dstbytes = 0;
 
     int compressedsize = 0;
+    //qDebug() << "frameoffset:" << compressedsize;
+    QVector<quint64> framevectors;
+    framevectors.clear();
+    LZ4F_frameInfo_t lz4frameinfo = LZ4F_INIT_FRAMEINFO;
+    lz4frameinfo.blockMode = LZ4F_blockIndependent;
     LZ4F_cctx* lz4cctx;
     LZ4F_errorCode_t errcode;
     errcode = LZ4F_createCompressionContext(&lz4cctx, LZ4F_getVersion());
@@ -184,6 +189,8 @@ int main(int argc, char* argv[])
         printf("%s\n", LZ4F_getErrorName(errcode));
     while(curpos < totalbytes)
     {
+        //qDebug() << "compress begin frameoffset:" << compressedsize;
+        framevectors.append(compressedsize);
         dstbytes = LZ4F_compressBegin(lz4cctx, dstbuf, destsize, NULL);
         compressedsize += dstbytes;
         if(LZ4F_isError(dstbytes))
@@ -198,18 +205,23 @@ int main(int argc, char* argv[])
         if(LZ4F_isError(dstbytes))
             printf("%s\n", LZ4F_getErrorName(dstbytes));
         compressedsize += dstbytes;
+        //qDebug() << " compress frameoffset:" << compressedsize;
         out.writeRawData(dstbuf, dstbytes);
         curpos = curpos + bytesread;
         dstbytes = LZ4F_compressEnd(lz4cctx, dstbuf, destsize, NULL);
         compressedsize += dstbytes;
+        //qDebug() << "frameoffset:" << compressedsize;
         out.writeRawData(dstbuf, dstbytes);
     }
 
     delete[] srcbuf;
     delete[] dstbuf;
     errcode = LZ4F_freeCompressionContext(lz4cctx);
+    out << framevectors;
     wfi.close();
     blkdev.close();
+    qDebug() << "framevectors:" << framevectors;
+    qDebug() << "framevector count:" << framevectors.count();
 
     /*
     quint64 curpos = 0;
