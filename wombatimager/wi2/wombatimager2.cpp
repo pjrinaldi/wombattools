@@ -73,6 +73,7 @@ int main(int argc, char* argv[])
     QString blockdevice = args.at(0);
     QString imgfile = args.at(1) + ".wfi";
     QString logfile = args.at(1) + ".log";
+    QString ndxfile = args.at(1) + ".ndx";
     //int compressionlevel = 3;
     //if(clevel.toInt() > 0)
     //    compressionlevel = clevel.toInt();
@@ -97,6 +98,7 @@ int main(int argc, char* argv[])
     ioctl(infile, BLKSSZGET, &sectorsize);
     close(infile);
     //qDebug() << "sector size:" << sectorsize;
+    out << (quint16)sectorsize; // forensic image sector size (2 bytes)
     out << (quint64)totalbytes; // forensic image size (8 bytes)
     out << (QString)casenumber;
     out << (QString)evidencenumber;
@@ -112,6 +114,12 @@ int main(int argc, char* argv[])
     QFile log(logfile);
     log.open(QIODevice::WriteOnly | QIODevice::Text);
     QTextStream logout(&log);
+
+    // Initialize the index file
+    QFile indx(ndxfile);
+    indx.open(QIODevice::WriteOnly);
+    QDataStream ndxout(&indx);
+    out.setVersion(QDataStream::Qt_5_15);
     
     logout << "wombatimager v0.1 Forensic Imager started at: " << QDateTime::currentDateTime().toString("MM/dd/yyyy hh:mm:ss ap") << Qt::endl;
     logout << "Source Device" << Qt::endl;
@@ -178,8 +186,8 @@ int main(int argc, char* argv[])
 
     int compressedsize = 0;
     //qDebug() << "frameoffset:" << compressedsize;
-    QVector<quint64> framevectors;
-    framevectors.clear();
+    //QVector<quint64> framevectors;
+    //framevectors.clear();
     LZ4F_frameInfo_t lz4frameinfo = LZ4F_INIT_FRAMEINFO;
     lz4frameinfo.blockMode = LZ4F_blockIndependent;
     LZ4F_cctx* lz4cctx;
@@ -190,14 +198,15 @@ int main(int argc, char* argv[])
     while(curpos < totalbytes)
     {
         //qDebug() << "compress begin frameoffset:" << compressedsize;
-        framevectors.append(compressedsize);
+        //framevectors.append(compressedsize);
+        ndxout << (quint64)compressedsize;
         dstbytes = LZ4F_compressBegin(lz4cctx, dstbuf, destsize, NULL);
         compressedsize += dstbytes;
         if(LZ4F_isError(dstbytes))
             printf("%s\n", LZ4F_getErrorName(dstbytes));
         out.writeRawData(dstbuf, dstbytes);
         int bytesread = in.readRawData(srcbuf, sectorsize);
-        //blake3_hasher_update(&blkhasher, srcbuf, bytesread);
+        blake3_hasher_update(&blkhasher, srcbuf, bytesread);
         dstbytes = LZ4F_compressUpdate(lz4cctx, dstbuf, destsize, srcbuf, bytesread, NULL);
         if(LZ4F_isError(dstbytes))
             printf("%s\n", LZ4F_getErrorName(dstbytes));
@@ -217,11 +226,11 @@ int main(int argc, char* argv[])
     delete[] srcbuf;
     delete[] dstbuf;
     errcode = LZ4F_freeCompressionContext(lz4cctx);
-    out << framevectors;
-    wfi.close();
+    //out << framevectors;
     blkdev.close();
-    qDebug() << "framevectors:" << framevectors;
-    qDebug() << "framevector count:" << framevectors.count();
+    indx.close();
+    //qDebug() << "framevectors:" << framevectors;
+    //qDebug() << "framevector count:" << framevectors.count();
 
     /*
     quint64 curpos = 0;
@@ -263,6 +272,7 @@ int main(int argc, char* argv[])
         printf("Wrote %llu of %llu bytes\r", curpos, totalbytes);
         fflush(stdout);
     }
+    */
     blake3_hasher_finalize(&blkhasher, sourcehash, BLAKE3_OUT_LEN);
     QString srchash = "";
     for(size_t i=0; i < BLAKE3_OUT_LEN; i++)
@@ -274,6 +284,9 @@ int main(int argc, char* argv[])
         printf("%02x", sourcehash[i]);
     }
     printf(" - Source Device Hash\n");
+    out << srchash;
+    wfi.close();
+    /*
     //QString srchash = QString::fromUtf8(sourcehash);
     //qDebug() << "srchash as string:" << srchash;
     dstbytes = LZ4F_compressEnd(lz4cctx, dstbuf, destsize, NULL);
