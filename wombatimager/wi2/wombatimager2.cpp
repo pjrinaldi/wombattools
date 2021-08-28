@@ -19,6 +19,7 @@
 #include <QCommandLineParser>
 #include <QDateTime>
 #include <QDebug>
+#include <QtEndian>
 #include "../../blake3.h"
 #include <lz4.h>
 #include <lz4frame.h>
@@ -325,7 +326,7 @@ int main(int argc, char* argv[])
     QFile ndx(ndxfile);
     if(!ndx.isOpen())
         ndx.open(QIODevice::ReadOnly);
-    QDataStream nin(&ndx);
+    //QDataStream nin(&ndx);
 
     /*
     int skipbytes = cin.skipRawData(19);
@@ -335,7 +336,7 @@ int main(int argc, char* argv[])
     
     quint64 header;
     uint8_t version;
-    quint64 sectorsize2;
+    quint16 sectorsize2;
     quint64 totalbytes2;
     QString cnum;
     QString evidnum;
@@ -359,8 +360,32 @@ int main(int argc, char* argv[])
     //rawdd.open(QIODevice::WriteOnly);
     //QDataStream cout(&rawdd);
 
-    for(int i=0; i < totalbytes / sectorsize; i++)
+    //for(int i=0; i < totalbytes / sectorsize; i++)
+    QByteArray framearray;
+    framearray.clear();
+    quint64 frameoffset = 0;
+    quint64 framesize = 0;
+    qDebug() << "current position before for loop:" << cwfi.pos();
+    for(int i=0; i < 3; i++)
     {
+        //ndx.seek(i*8);
+        frameoffset = qFromBigEndian<quint64>(ndx.read(8));
+        //nin >> frameoffset;
+        if(i == 2)
+            framesize = totalbytes - frameoffset;
+        else
+        {
+            framesize = qFromBigEndian<quint64>(ndx.peek(8))- frameoffset;
+        }
+        //int bytesread = cin.readRawData(frameoffset, 2*sectorsize);
+        qDebug() << "frame offset:" << frameoffset << "frame size:" << framesize;
+        //cin.readRawData(cmpbuf, 
+        //size_t consumedsize = sectorsize*2;
+        //size_t framesize = LZ4F_getFrameInfo(lz4dctx, &lz4frameInfo, cmpbuf, &consumedsize);
+        //if(LZ4F_isError(framesize))
+        //    printf("frameinfo error: %s\n", LZ4F_getErrorName(framesize));
+        //char* rawbuf = new char[sectorsize];
+        //nin >> rawbufsize;
     }
 
     /*
