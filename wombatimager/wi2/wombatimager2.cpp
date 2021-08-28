@@ -304,17 +304,14 @@ int main(int argc, char* argv[])
     */
 
 
-    /*
-    #define IN_CHUNK_SIZE  (16*1024)
-
     uint8_t forimghash[BLAKE3_OUT_LEN];
     blake3_hasher imghasher;
     blake3_hasher_init(&imghasher);
-    char* cmpbuf = new char[IN_CHUNK_SIZE];
+    char* cmpbuf = new char[2*sectorsize];
     
     LZ4F_dctx* lz4dctx;
-    LZ4F_frameInfo_t lz4frameinfo;
-    
+    //LZ4F_frameInfo_t lz4frameinfo;
+
     errcode = LZ4F_createDecompressionContext(&lz4dctx, LZ4F_getVersion());
     if(LZ4F_isError(errcode))
         printf("%s\n", LZ4F_getErrorName(errcode));
@@ -324,23 +321,27 @@ int main(int argc, char* argv[])
     if(!cwfi.isOpen())
 	cwfi.open(QIODevice::ReadOnly);
     QDataStream cin(&cwfi);
-    //QFile rawdd(imgfile.split(".").first() + ".dd");
-    //rawdd.open(QIODevice::WriteOnly);
-    //QDataStream cout(&rawdd);
-    */
+
+    QFile ndx(ndxfile);
+    if(!ndx.isOpen())
+        ndx.open(QIODevice::ReadOnly);
+    QDataStream nin(&ndx);
+
     /*
-    int skipbytes = cin.skipRawData(17);
+    int skipbytes = cin.skipRawData(19);
     if(skipbytes == -1)
         qDebug() << "skip failed";
     */
-    /*
+    
     quint64 header;
     uint8_t version;
+    quint64 sectorsize2;
+    quint64 totalbytes2;
     QString cnum;
     QString evidnum;
     QString examiner2;
     QString description2;
-    cin >> header >> version >> totalbytes >> cnum >> evidnum >> examiner2 >> description2;
+    cin >> header >> version >> sectorsize2 >> totalbytes2 >> cnum >> evidnum >> examiner2 >> description2;
     if(header != 0x776f6d6261746669)
     {
         qDebug() << "Wrong file type, not a wombat forensic image.";
@@ -351,6 +352,18 @@ int main(int argc, char* argv[])
         qDebug() << "Not the correct wombat forensic image format.";
         return 1;
     }
+
+    //qDebug() << "ndx count:" << totalbytes / sectorsize;
+
+    //QFile rawdd(imgfile.split(".").first() + ".dd");
+    //rawdd.open(QIODevice::WriteOnly);
+    //QDataStream cout(&rawdd);
+
+    for(int i=0; i < totalbytes / sectorsize; i++)
+    {
+    }
+
+    /*
 
     int bytesread = cin.readRawData(cmpbuf, IN_CHUNK_SIZE);
     
