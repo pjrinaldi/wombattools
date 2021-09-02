@@ -165,9 +165,17 @@ static int wombat_read(const char *path, char *buf, size_t size, off_t offset, s
         memcpy(buf, rawbuf, size);
     }
     */
-    QFile wfi(QString::fromStdString(lz4filename));
+    QString lz4str = QString::fromStdString(lz4filename);
+    QString ndxstr = lz4str.split(".").first() + ".ndx";
+    QFile wfi(lz4str);
+    QFile ndx(ndxstr);
     if(!wfi.isOpen())
         wfi.open(QIODevice::ReadOnly);
+    if(!ndx.isOpen())
+	ndx.open(QIODevice::ReadOnly);
+    LZ4F_dctx* lz4dctx;
+    LZ4F_errorCode_t errcode;
+
     //QDataStream in(&wfi);
 
     wfi.seek(offset);
