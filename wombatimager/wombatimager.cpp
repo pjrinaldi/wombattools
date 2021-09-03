@@ -108,11 +108,13 @@ int main(int argc, char* argv[])
     out << (QString)evidencenumber;
     out << (QString)examiner;
     out << (QString)description;
+    /*
     if(totalbytes % 131072 == 0)
         blocksize = 131072;
     else if(totalbytes % 65536 == 0)
         blocksize = 65536;
-    else if(totalbytes % 32768 == 0)
+    */
+    if(totalbytes % 32768 == 0)
         blocksize = 32768;
     else if(totalbytes % 16384 == 0)
         blocksize = 16384;
