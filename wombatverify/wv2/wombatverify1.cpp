@@ -19,8 +19,7 @@
 #include <QCommandLineParser>
 #include <QDateTime>
 #include <QDebug>
-#include <QtEndian>
-#include "../../blake3.h"
+#include "../blake3.h"
 #include <lz4.h>
 #include <lz4frame.h>
 
@@ -54,8 +53,6 @@ int main(int argc, char* argv[])
 
     const QStringList args = parser.positionalArguments();
     QString imgfile = args.at(0);
-    QString ndxfile = args.at(0).split(".").first() + ".ndx";
-    //qDebug() << "ndxfile:" << ndxfile;
     QFile wfi(imgfile);
     if(!wfi.isOpen())
         wfi.open(QIODevice::ReadOnly);
@@ -68,13 +65,12 @@ int main(int argc, char* argv[])
 
     quint64 header;
     uint8_t version;
-    quint16 sectorsize;
     quint64 totalbytes;
     QString casenumber;
     QString evidnumber;
     QString examiner;
     QString description;
-    in >> header >> version >> sectorsize >> totalbytes >> casenumber >> evidnumber >> examiner >> description;
+    in >> header >> version >> totalbytes >> casenumber >> evidnumber >> examiner >> description;
     if(header != 0x776f6d6261746669)
     {
         qDebug() << "Wrong file type, not a wombat forensic image.";
@@ -90,84 +86,7 @@ int main(int argc, char* argv[])
     uint8_t imghash[BLAKE3_OUT_LEN];
     blake3_hasher imghasher;
     blake3_hasher_init(&imghasher);
-    QFile ndx(ndxfile);
-    if(!ndx.isOpen())
-        ndx.open(QIODevice::ReadOnly);
 
-    LZ4F_dctx* lz4dctx;
-    LZ4F_errorCode_t errcode;
-    errcode = LZ4F_createDecompressionContext(&lz4dctx, LZ4F_getVersion());
-    if(LZ4F_isError(errcode))
-        printf("%s\n", LZ4F_getErrorName(errcode));
-    char* cmpbuf = new char[2*sectorsize];
-    QByteArray framearray;
-    framearray.clear();
-    quint64 frameoffset = 0;
-    quint64 framesize = 0;
-    qDebug() << "current position before for loop:" << wfi.pos();
-    size_t ret = 1;
-    size_t bread = 0;
-    for(int i=0; i < (totalbytes / sectorsize); i++)
-    {
-        //ndx.seek(i*8);
-        frameoffset = qFromBigEndian<quint64>(ndx.read(8));
-        //nin >> frameoffset;
-        if(i == ((totalbytes / sectorsize) - 1))
-            framesize = totalbytes - frameoffset;
-        else
-        {
-            framesize = qFromBigEndian<quint64>(ndx.peek(8))- frameoffset;
-        }
-        //int bytesread = cin.readRawData(frameoffset, 2*sectorsize);
-        //qDebug() << "frame offset:" << frameoffset << "frame size:" << framesize;
-        int bytesread = in.readRawData(cmpbuf, framesize);
-        bread = bytesread;
-        size_t rawbufsize = sectorsize;
-        char* rawbuf = new char[rawbufsize];
-        size_t dstsize = rawbufsize;
-        ret = LZ4F_decompress(lz4dctx, rawbuf, &dstsize, cmpbuf, &bread, NULL);
-        if(LZ4F_isError(ret))
-            printf("decompress error %s\n", LZ4F_getErrorName(ret));
-        blake3_hasher_update(&imghasher, rawbuf, dstsize);
-        printf("Verifying %ld of %llu bytes\r", dstsize, totalbytes);
-        fflush(stdout);
-        //size_t framesize = LZ4F_getFrameInfo(lz4dctx, &lz4frameInfo, cmpbuf, &consumedsize);
-        //if(LZ4F_isError(framesize))
-        //    printf("frameinfo error: %s\n", LZ4F_getErrorName(framesize));
-        //char* rawbuf = new char[sectorsize];
-        //nin >> rawbufsize;
-    }
-    blake3_hasher_finalize(&imghasher, imghash, BLAKE3_OUT_LEN);
-    QString calchash = "";
-    for(size_t i=0; i < BLAKE3_OUT_LEN; i++)
-    {
-        printf("%02x", imghash[i]);
-        calchash.append(QString("%1").arg(imghash[i], 2, 16, QChar('0')));
-        //logout << QString("%1").arg(forimghash[i], 2, 16, QChar('0'));
-    }
-    printf(" - Forensic Image Hash\n");
-    //logout << " - Forensic Image Hash" << Qt::endl;
-    ndx.close();
-    /**/
-
-    //HOW TO GET HASH OUT OF THE IMAGE FOR THE WOMBATVERIFY FUNCTION...
-    wfi.seek(wfi.size() - 128);
-    QString readhash;
-    QByteArray tmparray = wfi.read(128);
-    for(int i=1; i < 128; i++)
-    {
-        if(i % 2 != 0)
-            readhash.append(tmparray.at(i));
-    }
-    //qDebug() << "readhash:" << readhash;
-    wfi.close();
-    //rawdd.close();
-    delete[] cmpbuf;
-    //delete[] rawbuf;
-
-    //errcode = LZ4F_freeDecompressionContext(lz4dctx);
-
-    /*
     #define IN_CHUNK_SIZE (16*1024)
 
     char* cmpbuf = new char[IN_CHUNK_SIZE];
@@ -240,7 +159,6 @@ int main(int argc, char* argv[])
     delete[] cmpbuf;
     delete[] rawbuf;
 
-*/
     errcode = LZ4F_freeDecompressionContext(lz4dctx);
 
     // VERIFY HASHES HERE...
@@ -253,5 +171,6 @@ int main(int argc, char* argv[])
         printf("\nVerification Failed\n");
     }
     printf("Finished Forensic Image Verification at %s\n", QDateTime::currentDateTime().toString("MM/dd/yyyy hh:mm:ss ap").toStdString().c_str());
+
     return 0;
 }

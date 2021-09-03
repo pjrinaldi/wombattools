@@ -63,13 +63,12 @@ int main(int argc, char* argv[])
     printf("wombatinfo v0.1\n\n");
     quint64 header;
     uint8_t version;
-    quint16 sectorsize;
     quint64 totalbytes;
     QString casenumber;
     QString evidnumber;
     QString examiner;
     QString description;
-    in >> header >> version >> sectorsize >> totalbytes >> casenumber >> evidnumber >> examiner >> description;
+    in >> header >> version >> totalbytes >> casenumber >> evidnumber >> examiner >> description;
     if(header == 0x776f6d6261746669)
         printf("File Format:\t\tWombat Forensic Image\n"); 
     else
@@ -89,7 +88,6 @@ int main(int argc, char* argv[])
     printf("Raw Media Size:\t\t%llu\n", totalbytes);
     printf("LZ4 Version:\t\t%s\n", lz4ver.toStdString().c_str()); 
     
-    /*
     #define IN_CHUNK_SIZE (16*1024)
 
     char* cmpbuf = new char[IN_CHUNK_SIZE];
@@ -111,7 +109,6 @@ int main(int argc, char* argv[])
     
     printf("LZ4 Block Size:\t\t%ld\n", GetBlockSize(&lz4frameinfo));
     printf("\n");
-    */
     printf("Case Number:\t\t%s\n", casenumber.toStdString().c_str());
     printf("Evidence Number:\t%s\n", evidnumber.toStdString().c_str());
     printf("Examiner:\t\t%s\n", examiner.toStdString().c_str());
@@ -126,8 +123,8 @@ int main(int argc, char* argv[])
             readhash.append(tmparray.at(i));
     }
     wfi.close();
-    //delete[] cmpbuf;
-    //errcode = LZ4F_freeDecompressionContext(lz4dctx);
+    delete[] cmpbuf;
+    errcode = LZ4F_freeDecompressionContext(lz4dctx);
     
     printf("BLAKE3 Hash:\t\t%s\n", readhash.toStdString().c_str());
 

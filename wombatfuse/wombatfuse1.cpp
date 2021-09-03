@@ -18,7 +18,6 @@
 #include <QTextStream>
 #include <QCommandLineParser>
 #include <QDateTime>
-#include <QtEndian>
 #include <QDebug>
 #include <lz4.h>
 #include <lz4frame.h>
@@ -30,20 +29,15 @@
 static QString wfimg;
 static QString imgfile;
 static QString ifile;
-static QString ndxstr;
 static QString mntpt;
 static const char* relativefilename = NULL;
 static const char* rawfilename = NULL;
 static std::string lz4filename;
-static std::string ndxfilename;
 //static quint64 totalbytes = 0;
 static FILE* infile = NULL;
-static FILE* ndxfile = NULL;
 static off_t lz4size = 0;
 static off_t rawsize = 0;
-static size_t framecnt = 0;
 static off_t curoffset = 0;
-static off_t blocksize = 0;
 //static char* curbuffer = NULL;
 
 static size_t GetBlockSize(const LZ4F_frameInfo_t* info)
@@ -62,6 +56,95 @@ static size_t GetBlockSize(const LZ4F_frameInfo_t* info)
 }
 
 /*
+qint64 Uncompress(char* buf, off_t offset, size_t size)
+{
+    #define IN_CHUNK_SIZE  (16*1024)
+
+    char* cmpbuf = new char[IN_CHUNK_SIZE];
+    
+    LZ4F_dctx* lz4dctx;
+    LZ4F_frameInfo_t lz4frameinfo;
+    LZ4F_errorCode_t errcode;
+    
+    errcode = LZ4F_createDecompressionContext(&lz4dctx, LZ4F_getVersion());
+    if(LZ4F_isError(errcode))
+        printf("%s\n", LZ4F_getErrorName(errcode));
+
+    quint64 curpos = 0;
+    QFile cwfi(wfimg);
+    if(!cwfi.isOpen())
+	cwfi.open(QIODevice::ReadOnly);
+    QDataStream cin(&cwfi);
+    QFile rawdd(imgfile);
+    rawdd.open(QIODevice::WriteOnly);
+    QDataStream cout(&rawdd);
+
+    quint64 header;
+    uint8_t version;
+    QString cnum;
+    QString evidnum;
+    QString examiner2;
+    QString description2;
+    cin >> header >> version >> totalbytes >> cnum >> evidnum >> examiner2 >> description2;
+    if(header != 0x776f6d6261746669)
+    {
+        qDebug() << "Wrong file type, not a wombat forensic image.";
+        return -EIO;
+    }
+    if(version != 1)
+    {
+        qDebug() << "Not the correct wombat forensic image format.";
+        return -EIO;
+    }
+
+    int bytesread = cin.readRawData(cmpbuf, IN_CHUNK_SIZE);
+    
+    size_t consumedsize = bytesread;
+    size_t framesize = LZ4F_getFrameInfo(lz4dctx, &lz4frameinfo, cmpbuf, &consumedsize);
+    if(LZ4F_isError(framesize))
+        printf("frameinfo error: %s\n", LZ4F_getErrorName(framesize));
+    
+    size_t rawbufsize = GetBlockSize(&lz4frameinfo);
+    char* rawbuf = new char[rawbufsize];
+    size_t filled = bytesread - consumedsize;
+    int firstchunk = 1;
+    size_t ret = 1;
+    while(ret != 0)
+    {
+        size_t readsize = firstchunk ? filled : cin.readRawData(cmpbuf, IN_CHUNK_SIZE);
+        firstchunk = 0;
+        const void* srcptr = (const char*)cmpbuf + consumedsize;
+        consumedsize = 0;
+        const void* const srcend = (const char*)srcptr + readsize;
+        while(srcptr < srcend && ret != 0)
+        {
+            size_t dstsize = rawbufsize;
+            size_t srcsize = (const char*)srcend - (const char*)srcptr;
+            ret = LZ4F_decompress(lz4dctx, rawbuf, &dstsize, srcptr, &srcsize, NULL);
+            if(LZ4F_isError(ret))
+            {
+                printf("decompression error: %s\n", LZ4F_getErrorName(ret));
+            }
+            //write here
+            int byteswrote = cout.writeRawData(rawbuf, dstsize);
+            srcptr = (const char*)srcptr + srcsize;
+        }
+    }
+    //qDebug() << "ret should be zero:" << ret;
+
+    cwfi.close();
+    rawdd.close();
+    delete[] cmpbuf;
+    delete[] rawbuf;
+
+    errcode = LZ4F_freeDecompressionContext(lz4dctx);
+    rawdd.open(QIODevice::ReadOnly);
+    rawdd.seek(offset);
+    int byteswritten = rawdd.read(buf, size);
+    rawdd.close();
+
+    return size;
+}
 */
 
 static void *wombat_init(struct fuse_conn_info *conn, struct fuse_config *cfg)
@@ -129,66 +212,67 @@ static int wombat_read(const char *path, char *buf, size_t size, off_t offset, s
     if(strcmp(path, relativefilename) != 0)
         return -ENOENT;
 
-    QString lz4str = QString::fromStdString(lz4filename);
-    QString ndxstr = lz4str.split(".").first() + ".ndx";
-    QFile wfi(lz4str);
-    QFile ndx(ndxstr);
-    if(!wfi.isOpen())
-        wfi.open(QIODevice::ReadOnly);
-    QDataStream in(&wfi);
-    if(!ndx.isOpen())
-	ndx.open(QIODevice::ReadOnly);
+    #define IN_CHUNK_SIZE  (16*1024)
+
+    char* cmpbuf = new char[IN_CHUNK_SIZE];
+    size_t cmpbufsize = IN_CHUNK_SIZE;
+    //curbuffer = new char[size];
+    
     LZ4F_dctx* lz4dctx;
+    LZ4F_frameInfo_t lz4frameinfo;
     LZ4F_errorCode_t errcode;
+    
     errcode = LZ4F_createDecompressionContext(&lz4dctx, LZ4F_getVersion());
-    char* cmpbuf = new char[2*blocksize];
-    QByteArray framearray;
-    framearray.clear();
-    quint64 frameoffset = 0;
-    quint64 nextoffset = 0;
-    quint64 framesize = 0;
-    size_t ret = 1;
-    size_t bread = 0;
-    size_t rawbufsize = blocksize;
-    size_t dstsize = rawbufsize;
+    if(LZ4F_isError(errcode))
+        printf("%s\n", LZ4F_getErrorName(errcode));
+
+    fseek(infile, curoffset, SEEK_SET); // seeks to the start of the compressed content
+    int bytesread = fread(cmpbuf, 1, IN_CHUNK_SIZE, infile); // reads the compressed content into buf
+    size_t consumedsize = bytesread;
+
+    size_t framesize = LZ4F_getFrameInfo(lz4dctx, &lz4frameinfo, cmpbuf, &consumedsize);
+    size_t rawbufsize = GetBlockSize(&lz4frameinfo);
     char* rawbuf = new char[rawbufsize];
-    qint64 indxstart = offset / blocksize;
-    qint8 posodd = offset % blocksize;
-    qint64 relpos = offset - (indxstart * blocksize);
-    qint64 indxcnt = rawsize / blocksize;
-    if(indxcnt == 0)
-	indxcnt = 1;
-    if(posodd != 0 && (relpos + size) > blocksize)
-	indxcnt++;
-    qint64 indxend = indxstart + indxcnt;
-    //if(indxend > rawsize / blocksize)
-	//return -ENOENT;
-    for(int i=indxstart; i < indxend; i++)
+    size_t filled = bytesread - consumedsize;
+    int firstchunk = 1;
+    size_t ret = 1;
+    while(ret != 0)
     {
-	ndx.seek(i*8);
-	frameoffset = qFromBigEndian<quint64>(ndx.read(8));
-	if(i == ((rawsize / blocksize) - 1))
-	    framesize = rawsize - frameoffset;
-	else
-	    framesize = qFromBigEndian<quint64>(ndx.peek(8)) - frameoffset;
-	wfi.seek(curoffset + frameoffset);
-	int bytesread = in.readRawData(cmpbuf, framesize);
-	bread = bytesread;
-	ret = LZ4F_decompress(lz4dctx, rawbuf, &dstsize, cmpbuf, &bread, NULL);
-	QByteArray blockarray(rawbuf, dstsize);
-	framearray.append(blockarray);
+	size_t readsize = firstchunk ? filled : fread(cmpbuf, 1, IN_CHUNK_SIZE, infile);
+        firstchunk = 0;
+        const void* srcptr = (const char*)cmpbuf + consumedsize;
+        consumedsize = 0;
+        const void* const srcend = (const char*)srcptr + readsize;
+        while(srcptr < srcend && ret != 0)
+        {
+            size_t dstsize = rawbufsize;
+            size_t srcsize = (const char*)srcend - (const char*)srcptr;
+            ret = LZ4F_decompress(lz4dctx, rawbuf, &dstsize, srcptr, &srcsize, NULL);
+	    //curoff += dstsize;
+
+            if(LZ4F_isError(ret))
+            {
+                printf("decompression error: %s\n", LZ4F_getErrorName(ret));
+            }
+	    //memcpy(buf, rawbuf, sizeof(rawbuf));
+            //write here
+            //int byteswrote = cout.writeRawData(rawbuf, dstsize);
+            memcpy(buf, rawbuf, size);
+            srcptr = (const char*)srcptr + srcsize;
+        }
     }
-    errcode = LZ4F_freeDecompressionContext(lz4dctx);
+    //qDebug() << "ret should be zero:" << ret;
+
     delete[] cmpbuf;
     delete[] rawbuf;
-    ndx.close();
-    wfi.close();
-    if(posodd == 0)
-	memcpy(buf, framearray.mid(0, size).data(), size);
+    /**/
+    /*
+    int bytesread = LZ4F_decompress(lz4dctx, rawbuf, &rawbufsize, cmpbuf, &cmpbufsize, NULL);
+    if(offset == 0)
+        memcpy(buf, rawbuf, size);
     else
-	memcpy(buf, framearray.mid(relpos, size).data(), size);
-
-    framearray.clear();
+        memcpy(buf, rawbuf+offset, size);
+    */
 
     return size;
 }
@@ -196,7 +280,6 @@ static int wombat_read(const char *path, char *buf, size_t size, off_t offset, s
 static void wombat_destroy(void* param)
 {
     fclose(infile);
-    fclose(ndxfile);
     //delete[] curbuffer;
     return;
 }
@@ -234,13 +317,11 @@ int main(int argc, char* argv[])
     wfimg = args.at(0);
     mntpt = args.at(1);
     imgfile = wfimg.split("/").last().split(".").first() + ".dd";
-    ndxstr = wfimg.split(".").first() + ".ndx";
     ifile = "/" + imgfile;
     relativefilename = ifile.toStdString().c_str();
     rawfilename = imgfile.toStdString().c_str();
 
     lz4filename = wfimg.toStdString();
-    ndxfilename = ndxstr.toStdString();
     //printf("lz4filename: %s\n", lz4filename.c_str());
     infile = fopen(lz4filename.c_str(), "rb");
     if(infile != NULL)
@@ -252,12 +333,6 @@ int main(int argc, char* argv[])
         printf("file failed to open\n");
     fseek(infile, 0, SEEK_SET);
 
-    ndxfile = fopen(ndxfilename.c_str(), "rb");
-    if(ndxfile == NULL)
-    {
-        printf("index file failed to open\n");
-    }
-
     //printf("infile size: %ld\n", lz4size);
 
     QFile cwfile(wfimg);
@@ -265,17 +340,12 @@ int main(int argc, char* argv[])
     QDataStream cin(&cwfile);
     qint64 header;
     uint8_t version;
-    quint16 sectorsize;
     qint64 totalbytes;
     QString cnum;
     QString evidnum;
     QString examiner;
     QString description;
-    cin >> header >> version >> sectorsize >> totalbytes >> cnum >> evidnum >> examiner >> description;
-    qDebug() << "current position before for loop:" << cwfile.pos();
-    curoffset = cwfile.pos();
-    framecnt = totalbytes / sectorsize;
-    /*
+    cin >> header >> version >> totalbytes >> cnum >> evidnum >> examiner >> description;
     curoffset = 17;
     if(!cnum.isEmpty())
         curoffset += 2*cnum.length() + 4;
@@ -286,12 +356,9 @@ int main(int argc, char* argv[])
     if(!description.isEmpty())
         curoffset += 2*description.length() + 4;
     //curoffset += 17 + 2*(cnum.length() + evidnum.length() + examiner.length() + description.length()) + 16;
-    */
     rawsize = (off_t)totalbytes;
-    blocksize = (size_t)sectorsize;
     //printf("curoffset: %ld\n", curoffset);
     cwfile.close();
-    printf("rawsize: %ld\n", rawsize);
 
     char** fargv = NULL;
     fargv = (char**)calloc(2, sizeof(char*));
