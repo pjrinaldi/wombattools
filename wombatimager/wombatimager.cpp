@@ -20,10 +20,11 @@
 #include <QDateTime>
 #include <QDebug>
 #include <QtEndian>
-#include "../../blake3.h"
+#include "../blake3.h"
 #include <lz4.h>
 #include <lz4frame.h>
 
+/*
 static size_t GetBlockSize(const LZ4F_frameInfo_t* info)
 {
     switch (info->blockSizeID)
@@ -38,6 +39,7 @@ static size_t GetBlockSize(const LZ4F_frameInfo_t* info)
             exit(1);
     }
 }
+*/
 
 int main(int argc, char* argv[])
 {
@@ -74,7 +76,7 @@ int main(int argc, char* argv[])
     QString blockdevice = args.at(0);
     QString imgfile = args.at(1) + ".wfi";
     QString logfile = args.at(1) + ".log";
-    QString ndxfile = args.at(1) + ".ndx";
+    //QString ndxfile = args.at(1) + ".ndx";
     //int compressionlevel = 3;
     //if(clevel.toInt() > 0)
     //    compressionlevel = clevel.toInt();
@@ -95,6 +97,7 @@ int main(int argc, char* argv[])
     // Get Basic Device Information
     quint64 totalbytes = 0;
     uint16_t sectorsize = 0;
+    uint32_t blocksize = 0;
     ioctl(infile, BLKGETSIZE64, &totalbytes);
     ioctl(infile, BLKSSZGET, &sectorsize);
     close(infile);
@@ -105,7 +108,25 @@ int main(int argc, char* argv[])
     out << (QString)evidencenumber;
     out << (QString)examiner;
     out << (QString)description;
-
+    if(totalbytes % 131072 == 0)
+        blocksize = 131072;
+    else if(totalbytes % 65536 == 0)
+        blocksize = 65536;
+    else if(totalbytes % 32768 == 0)
+        blocksize = 32768;
+    else if(totalbytes % 16384 == 0)
+        blocksize = 16384;
+    else if(totalbytes % 8192 == 0)
+        blocksize = 8192;
+    else if(totalbytes % 4096 == 0)
+        blocksize = 4096;
+    else if(totalbytes % 2048 == 0)
+        blocksize = 2048;
+    else if(totalbytes % 1024 == 0)
+        blocksize = 1024;
+    else if(totalbytes % 512 == 0)
+        blocksize = 512;
+    qDebug() << "blocksize:" << blocksize;
     // Initialize the block device for byte reading
     QFile blkdev(blockdevice);
     blkdev.open(QIODevice::ReadOnly);
@@ -116,11 +137,16 @@ int main(int argc, char* argv[])
     log.open(QIODevice::WriteOnly | QIODevice::Text);
     QTextStream logout(&log);
 
+    // Initialize the index vector
+    QVector<quint64> indx;
+    indx.clear();
+    /*
     // Initialize the index file
     QFile indx(ndxfile);
     indx.open(QIODevice::WriteOnly);
     QDataStream ndxout(&indx);
     out.setVersion(QDataStream::Qt_5_15);
+    */
     
     logout << "wombatimager v0.1 Forensic Imager started at: " << QDateTime::currentDateTime().toString("MM/dd/yyyy hh:mm:ss ap") << Qt::endl;
     logout << "Source Device" << Qt::endl;
@@ -169,7 +195,8 @@ int main(int argc, char* argv[])
                 tmp = udev_device_get_property_value(dev, "ID_SERIAL_SHORT");
                 logout << "Serial Number: " << tmp << Qt::endl;
                 logout << "Size: " << totalbytes << " bytes" << Qt::endl;
-                logout << "Block Size: " << sectorsize << " bytes" << Qt::endl;
+                logout << "Sector Size: " << sectorsize << " bytes" << Qt::endl;
+                logout << "Block Size: " << blocksize << " bytes" << Qt::endl;
             }
         }
         udev_device_unref(dev);
@@ -179,10 +206,12 @@ int main(int argc, char* argv[])
     
     // ATTEMPT USING A LZ4FRAME PER BLOCK.
     quint64 curpos = 0;
-    size_t destsize = LZ4F_compressFrameBound(sectorsize, NULL);
+    size_t destsize = LZ4F_compressFrameBound(blocksize, NULL);
+    //size_t destsize = LZ4F_compressFrameBound(sectorsize, NULL);
     qDebug() << "destsize:" << destsize;
     char* dstbuf = new char[destsize];
-    char* srcbuf = new char[sectorsize];
+    char* srcbuf = new char[blocksize];
+    //char* srcbuf = new char[sectorsize];
     int dstbytes = 0;
 
     int compressedsize = 0;
@@ -200,13 +229,15 @@ int main(int argc, char* argv[])
     {
         //qDebug() << "compress begin frameoffset:" << compressedsize;
         //framevectors.append(compressedsize);
-        ndxout << (quint64)compressedsize;
+        //ndxout << (quint64)compressedsize;
+        indx.append((quint64)compressedsize);
         dstbytes = LZ4F_compressBegin(lz4cctx, dstbuf, destsize, NULL);
         compressedsize += dstbytes;
         if(LZ4F_isError(dstbytes))
             printf("%s\n", LZ4F_getErrorName(dstbytes));
         out.writeRawData(dstbuf, dstbytes);
-        int bytesread = in.readRawData(srcbuf, sectorsize);
+        int bytesread = in.readRawData(srcbuf, blocksize);
+        //int bytesread = in.readRawData(srcbuf, sectorsize);
         blake3_hasher_update(&blkhasher, srcbuf, bytesread);
         dstbytes = LZ4F_compressUpdate(lz4cctx, dstbuf, destsize, srcbuf, bytesread, NULL);
         if(LZ4F_isError(dstbytes))
@@ -227,9 +258,11 @@ int main(int argc, char* argv[])
     delete[] srcbuf;
     delete[] dstbuf;
     errcode = LZ4F_freeCompressionContext(lz4cctx);
+    qDebug() << "indx list:" << indx;
+    qDebug() << "indx count:" << indx.count();
     //out << framevectors;
     blkdev.close();
-    indx.close();
+    //indx.close();
     //qDebug() << "framevectors:" << framevectors;
     //qDebug() << "framevector count:" << framevectors.count();
 
@@ -304,6 +337,7 @@ int main(int argc, char* argv[])
     blkdev.close();
     */
 
+    /*
 
     uint8_t forimghash[BLAKE3_OUT_LEN];
     blake3_hasher imghasher;
@@ -323,17 +357,19 @@ int main(int argc, char* argv[])
 	cwfi.open(QIODevice::ReadOnly);
     QDataStream cin(&cwfi);
 
+    /*
     QFile ndx(ndxfile);
     if(!ndx.isOpen())
         ndx.open(QIODevice::ReadOnly);
     //QDataStream nin(&ndx);
+    */
 
     /*
     int skipbytes = cin.skipRawData(19);
     if(skipbytes == -1)
         qDebug() << "skip failed";
     */
-    
+/*    
     quint64 header;
     uint8_t version;
     quint16 sectorsize2;
@@ -371,13 +407,13 @@ int main(int argc, char* argv[])
     for(int i=0; i < (totalbytes / sectorsize); i++)
     {
         //ndx.seek(i*8);
-        frameoffset = qFromBigEndian<quint64>(ndx.read(8));
+        //frameoffset = qFromBigEndian<quint64>(ndx.read(8));
         //nin >> frameoffset;
         if(i == ((totalbytes / sectorsize) - 1))
             framesize = totalbytes - frameoffset;
         else
         {
-            framesize = qFromBigEndian<quint64>(ndx.peek(8))- frameoffset;
+            //framesize = qFromBigEndian<quint64>(ndx.peek(8))- frameoffset;
         }
         //int bytesread = cin.readRawData(frameoffset, 2*sectorsize);
         //qDebug() << "frame offset:" << frameoffset << "frame size:" << framesize;
@@ -419,7 +455,7 @@ int main(int argc, char* argv[])
     }
     qDebug() << "readhash:" << readhash;
     */
-    cwfi.close();
+/*    cwfi.close();
     //rawdd.close();
     delete[] cmpbuf;
     //delete[] rawbuf;
@@ -439,7 +475,7 @@ int main(int argc, char* argv[])
     }
     printf("Finished Forensic Image Verification at %s\n", QDateTime::currentDateTime().toString("MM/dd/yyyy hh:mm:ss ap").toStdString().c_str());
     logout << "Finished Forensic Image Verification at:" << QDateTime::currentDateTime().toString("MM/dd/yyyy hh:mm:ss ap") << Qt::endl;
-
+*/
     log.close();
     return 0;
 }
