@@ -30,39 +30,19 @@
 static QString wfimg;
 static QString imgfile;
 static QString ifile;
-static QString ndxstr;
+//static QString ndxstr;
 static QString mntpt;
 static const char* relativefilename = NULL;
 static const char* rawfilename = NULL;
 static std::string lz4filename;
-static std::string ndxfilename;
-//static quint64 totalbytes = 0;
+//static std::string ndxfilename;
 static FILE* infile = NULL;
-static FILE* ndxfile = NULL;
+//static FILE* ndxfile = NULL;
 static off_t lz4size = 0;
 static off_t rawsize = 0;
 static size_t framecnt = 0;
 static off_t curoffset = 0;
 static off_t blocksize = 0;
-//static char* curbuffer = NULL;
-
-static size_t GetBlockSize(const LZ4F_frameInfo_t* info)
-{
-    switch (info->blockSizeID)
-    {
-        case LZ4F_default:
-        case LZ4F_max64KB:  return 1 << 16;
-        case LZ4F_max256KB: return 1 << 18;
-        case LZ4F_max1MB:   return 1 << 20;
-        case LZ4F_max4MB:   return 1 << 22;
-        default:
-            printf("Impossible with expected frame specification (<=v1.6.1)\n");
-            exit(1);
-    }
-}
-
-/*
-*/
 
 static void *wombat_init(struct fuse_conn_info *conn, struct fuse_config *cfg)
 {
@@ -129,6 +109,7 @@ static int wombat_read(const char *path, char *buf, size_t size, off_t offset, s
     if(strcmp(path, relativefilename) != 0)
         return -ENOENT;
 
+    /*
     QString lz4str = QString::fromStdString(lz4filename);
     QString ndxstr = lz4str.split(".").first() + ".ndx";
     QFile wfi(lz4str);
@@ -189,14 +170,14 @@ static int wombat_read(const char *path, char *buf, size_t size, off_t offset, s
 	memcpy(buf, framearray.mid(relpos, size).data(), size);
 
     framearray.clear();
-
+    */
     return size;
 }
 
 static void wombat_destroy(void* param)
 {
     fclose(infile);
-    fclose(ndxfile);
+    //fclose(ndxfile);
     //delete[] curbuffer;
     return;
 }
@@ -234,14 +215,15 @@ int main(int argc, char* argv[])
     wfimg = args.at(0);
     mntpt = args.at(1);
     imgfile = wfimg.split("/").last().split(".").first() + ".dd";
-    ndxstr = wfimg.split(".").first() + ".ndx";
+    //ndxstr = wfimg.split(".").first() + ".ndx";
     ifile = "/" + imgfile;
     relativefilename = ifile.toStdString().c_str();
     rawfilename = imgfile.toStdString().c_str();
 
     lz4filename = wfimg.toStdString();
-    ndxfilename = ndxstr.toStdString();
+    //ndxfilename = ndxstr.toStdString();
     //printf("lz4filename: %s\n", lz4filename.c_str());
+    /*
     infile = fopen(lz4filename.c_str(), "rb");
     if(infile != NULL)
     {
@@ -252,12 +234,13 @@ int main(int argc, char* argv[])
         printf("file failed to open\n");
     fseek(infile, 0, SEEK_SET);
 
+    /*
     ndxfile = fopen(ndxfilename.c_str(), "rb");
     if(ndxfile == NULL)
     {
         printf("index file failed to open\n");
     }
-
+    */
     //printf("infile size: %ld\n", lz4size);
 
     QFile cwfile(wfimg);
