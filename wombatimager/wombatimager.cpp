@@ -221,7 +221,7 @@ int main(int argc, char* argv[])
         compressedsize += dstbytes;
         //qDebug() << "frameoffset:" << compressedsize;
         out.writeRawData(dstbuf, dstbytes);
-        printf("Writing %ld of %llu bytes\r", curpos, totalbytes);
+        printf("Writing %llu of %llu bytes\r", curpos, totalbytes);
         fflush(stdout);
     }
 
@@ -325,7 +325,7 @@ int main(int argc, char* argv[])
             printf("decompress error %s\n", LZ4F_getErrorName(ret));
         blake3_hasher_update(&imghasher, rawbuf, dstsize);
         curread = curread + dstsize;
-        printf("Verifying %ld of %llu bytes\r", curread, totalbytes);
+        printf("Verifying %llu of %llu bytes\r", curread, totalbytes);
         fflush(stdout);
     }
     blake3_hasher_finalize(&imghasher, forimghash, BLAKE3_OUT_LEN);

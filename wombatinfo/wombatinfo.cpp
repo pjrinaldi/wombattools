@@ -20,6 +20,7 @@
 #include <lz4.h>
 #include <lz4frame.h>
 
+/*
 static size_t GetBlockSize(const LZ4F_frameInfo_t* info)
 {
     switch (info->blockSizeID)
@@ -34,6 +35,7 @@ static size_t GetBlockSize(const LZ4F_frameInfo_t* info)
             exit(1);
     }
 }
+*/
 
 int main(int argc, char* argv[])
 {
@@ -64,12 +66,13 @@ int main(int argc, char* argv[])
     quint64 header;
     uint8_t version;
     quint16 sectorsize;
+    quint32 blocksize;
     quint64 totalbytes;
     QString casenumber;
     QString evidnumber;
     QString examiner;
     QString description;
-    in >> header >> version >> sectorsize >> totalbytes >> casenumber >> evidnumber >> examiner >> description;
+    in >> header >> version >> sectorsize >> blocksize >> totalbytes >> casenumber >> evidnumber >> examiner >> description;
     if(header == 0x776f6d6261746669)
         printf("File Format:\t\tWombat Forensic Image\n"); 
     else
@@ -88,6 +91,7 @@ int main(int argc, char* argv[])
     lz4ver.replace("0", ".");
     printf("Raw Media Size:\t\t%llu\n", totalbytes);
     printf("LZ4 Version:\t\t%s\n", lz4ver.toStdString().c_str()); 
+    printf("LZ4 Block Size:\t\t%u\n", blocksize);
     
     /*
     #define IN_CHUNK_SIZE (16*1024)
