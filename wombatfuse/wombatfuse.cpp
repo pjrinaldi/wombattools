@@ -110,37 +110,6 @@ static int wombat_read(const char *path, char *buf, size_t size, off_t offset, s
     if(strcmp(path, relativefilename) != 0)
         return -ENOENT;
 
-    /*
-    QByteArray framearray;
-    framearray.clear();
-    quint64 frameoffset = 0;
-    quint64 framesize = 0;
-    //qDebug() << "current position before for loop:" << cwfi.pos();
-    size_t ret = 1;
-    size_t bread = 0;
-    quint64 curread = 0;
-    QStringList indxlist = indxstr.split(",", Qt::SkipEmptyParts);
-    for(int i=0; i < (totalbytes / blocksize); i++)
-    {
-        frameoffset = indxlist.at(i).toULongLong();
-        if(i == ((totalbytes / blocksize) - 1))
-            framesize = totalbytes - frameoffset;
-        else
-            framesize = indxlist.at(i+1).toULongLong() - frameoffset;
-        int bytesread = cin.readRawData(cmpbuf, framesize);
-        bread = bytesread;
-        size_t rawbufsize = blocksize;
-        char* rawbuf = new char[rawbufsize];
-        size_t dstsize = rawbufsize;
-        ret = LZ4F_decompress(lz4dctx, rawbuf, &dstsize, cmpbuf, &bread, NULL);
-        if(LZ4F_isError(ret))
-            printf("decompress error %s\n", LZ4F_getErrorName(ret));
-        blake3_hasher_update(&imghasher, rawbuf, dstsize);
-        curread = curread + dstsize;
-        printf("Verifying %llu of %llu bytes\r", curread, totalbytes);
-        fflush(stdout);
-    }
-     */ 
     QFile wfi(wfimg);
     if(!wfi.isOpen())
         wfi.open(QIODevice::ReadOnly);
