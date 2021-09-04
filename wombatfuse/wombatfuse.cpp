@@ -18,6 +18,7 @@
 #include <QDataStream>
 #include <QTextStream>
 #include <QCommandLineParser>
+#include <QStringList>
 #include <QDateTime>
 #include <QtEndian>
 #include <QDebug>
@@ -33,6 +34,7 @@ static QString imgfile;
 static QString ifile;
 //static QString ndxstr;
 static QString mntpt;
+static QStringList indxlist;
 static const char* relativefilename = NULL;
 static const char* rawfilename = NULL;
 //static std::string lz4filename;
@@ -111,22 +113,8 @@ static int wombat_read(const char *path, char *buf, size_t size, off_t offset, s
         return -ENOENT;
 
     QFile wfi(wfimg);
-    if(!wfi.isOpen())
-        wfi.open(QIODevice::ReadOnly);
+    wfi.open(QIODevice::ReadOnly);
     QDataStream in(&wfi);
-    
-    // METHOD TO GET THE SKIPPABLE FRAME INDX CONTENT !!!!!
-    wfi.seek(wfi.size() - 128 - 10000);
-    QByteArray skiparray = wfi.read(10000);
-    int isskiphead = skiparray.lastIndexOf("_*M");
-    QString getindx = "";
-    if(qFromBigEndian<quint32>(skiparray.mid(isskiphead, 4)) == 0x5f2a4d18)
-    {
-        wfi.seek(wfi.size() - 128 - 10000 + isskiphead + 8);
-        in >> getindx;
-    }
-    wfi.seek(0);
-    skiparray.clear();
 
     LZ4F_dctx* lz4dctx;
     LZ4F_errorCode_t errcode;
@@ -138,26 +126,6 @@ static int wombat_read(const char *path, char *buf, size_t size, off_t offset, s
     quint64 nextoffset = 0;
     quint64 framesize = 0;
 
-    /*
-    QString lz4str = QString::fromStdString(lz4filename);
-    QString ndxstr = lz4str.split(".").first() + ".ndx";
-    QFile wfi(lz4str);
-    QFile ndx(ndxstr);
-    if(!wfi.isOpen())
-        wfi.open(QIODevice::ReadOnly);
-    QDataStream in(&wfi);
-    if(!ndx.isOpen())
-	ndx.open(QIODevice::ReadOnly);
-    LZ4F_dctx* lz4dctx;
-    LZ4F_errorCode_t errcode;
-    errcode = LZ4F_createDecompressionContext(&lz4dctx, LZ4F_getVersion());
-    char* cmpbuf = new char[2*blocksize];
-    QByteArray framearray;
-    framearray.clear();
-    quint64 frameoffset = 0;
-    quint64 nextoffset = 0;
-    quint64 framesize = 0;
-    */
     size_t ret = 1;
     size_t bread = 0;
     size_t rawbufsize = blocksize;
@@ -166,15 +134,40 @@ static int wombat_read(const char *path, char *buf, size_t size, off_t offset, s
     qint64 indxstart = offset / blocksize;
     qint8 posodd = offset % blocksize;
     qint64 relpos = offset - (indxstart * blocksize);
-    qint64 indxcnt = rawsize / blocksize;
+    qint64 indxcnt = size / blocksize;
+    //qint64 indxcnt = framecnt;
     if(indxcnt == 0)
-	indxcnt = 1;
+        indxcnt = 1;
+    if(posodd != 0 && (relpos + size) > blocksize)
+        indxcnt++;
+    wfi.seek(curoffset);
+    for(int i=indxstart; i < indxstart + indxcnt; i++)
+    {
+        frameoffset = indxlist.at(i).toULongLong();
+        if(i == (framecnt - 1))
+            framesize = rawsize - frameoffset;
+        else
+            framesize = indxlist.at(i+1).toULongLong() - frameoffset;
+        wfi.seek(curoffset + frameoffset);
+        int bytesread = in.readRawData(cmpbuf, framesize);
+        bread = bytesread;
+        ret = LZ4F_decompress(lz4dctx, rawbuf, &dstsize, cmpbuf, &bread, NULL);
+        QByteArray blockarray(rawbuf, dstsize);
+        framearray.append(blockarray);
+    }
+
+    /*
+    //qint64 indxcnt = rawsize / blocksize;
+    qint64 indxcnt = framecnt - indxstart;
+    //qint64 indxcnt = framecnt;
+    //if(indxcnt == 0)
+	//indxcnt = 1;
     if(posodd != 0 && (relpos + size) > blocksize)
 	indxcnt++;
     qint64 indxend = indxstart + indxcnt;
     //if(indxend > rawsize / blocksize)
 	//return -ENOENT;
-    QStringList indxlist = getindx.split(",", Qt::SkipEmptyParts);
+    //QStringList indxlist = getindx.split(",", Qt::SkipEmptyParts);
     wfi.seek(curoffset);
     for(int i=indxstart; i < indxend; i++)
     {
@@ -193,8 +186,8 @@ static int wombat_read(const char *path, char *buf, size_t size, off_t offset, s
 	QByteArray blockarray(rawbuf, dstsize);
 	framearray.append(blockarray);
     }
+    */
     errcode = LZ4F_freeDecompressionContext(lz4dctx);
-    //ndx.close();
     wfi.close();
     if(posodd == 0)
 	memcpy(buf, framearray.mid(0, size).data(), size);
@@ -280,19 +273,43 @@ int main(int argc, char* argv[])
     QFile cwfile(wfimg);
     cwfile.open(QIODevice::ReadOnly);
     QDataStream cin(&cwfile);
+    
+    //curpos = 0;
+    // METHOD TO GET THE SKIPPABLE FRAME INDX CONTENT !!!!!
+    cwfile.seek(cwfile.size() - 128 - 10000);
+    QByteArray skiparray = cwfile.read(10000);
+    //int isskiphead = skiparray.lastIndexOf(QString::number(0x5f2a4d18, 16).toStdString().c_str());
+    int isskiphead = skiparray.lastIndexOf("_*M");
+    qDebug() << "isskiphead:" << isskiphead << skiparray.mid(isskiphead, 4).toHex();
+    QString getindx = "";
+    if(qFromBigEndian<quint32>(skiparray.mid(isskiphead, 4)) == 0x5f2a4d18)
+    {
+        qDebug() << "skippable frame containing the index...";
+        cwfile.seek(cwfile.size() - 128 - 10000 + isskiphead + 8);
+        cin >> getindx;
+    }
+    //qDebug() << "getindx:" << getindx;
+    indxlist.clear();
+    indxlist = getindx.split(",", Qt::SkipEmptyParts);
+    qDebug() << "indxlist:" << indxlist;
+    qDebug() << "indxlist count:" << indxlist.count();
+    cwfile.seek(0);
+
+
     qint64 header;
     uint8_t version;
     quint16 sectorsize;
-    quint32 blocksize;
+    quint32 blksize;
     qint64 totalbytes;
     QString cnum;
     QString evidnum;
     QString examiner;
     QString description;
-    cin >> header >> version >> sectorsize >> blocksize >> totalbytes >> cnum >> evidnum >> examiner >> description;
+    cin >> header >> version >> sectorsize >> blksize >> totalbytes >> cnum >> evidnum >> examiner >> description;
     qDebug() << "current position before for loop:" << cwfile.pos();
     curoffset = cwfile.pos();
-    framecnt = totalbytes / blocksize;
+    framecnt = totalbytes / blksize;
+    qDebug() << "framecnt:" << framecnt;
     //framecnt = totalbytes / sectorsize;
     /*
     curoffset = 17;
@@ -307,7 +324,8 @@ int main(int argc, char* argv[])
     //curoffset += 17 + 2*(cnum.length() + evidnum.length() + examiner.length() + description.length()) + 16;
     */
     rawsize = (off_t)totalbytes;
-    blocksize = (size_t)blocksize;
+    blocksize = (size_t)blksize;
+    //qDebug() << "blocksize:" << blocksize << "framecnt:" << framecnt;
     //blocksize = (size_t)sectorsize;
     //printf("curoffset: %ld\n", curoffset);
     cwfile.close();
