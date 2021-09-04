@@ -20,23 +20,6 @@
 #include <lz4.h>
 #include <lz4frame.h>
 
-/*
-static size_t GetBlockSize(const LZ4F_frameInfo_t* info)
-{
-    switch (info->blockSizeID)
-    {
-        case LZ4F_default:
-        case LZ4F_max64KB:  return 1 << 16;
-        case LZ4F_max256KB: return 1 << 18;
-        case LZ4F_max1MB:   return 1 << 20;
-        case LZ4F_max4MB:   return 1 << 22;
-        default:
-            printf("Impossible with expected frame specification (<=v1.6.1)\n");
-            exit(1);
-    }
-}
-*/
-
 int main(int argc, char* argv[])
 {
     QCoreApplication app(argc, argv);
@@ -93,29 +76,6 @@ int main(int argc, char* argv[])
     printf("LZ4 Version:\t\t%s\n", lz4ver.toStdString().c_str()); 
     printf("LZ4 Block Size:\t\t%u\n", blocksize);
     
-    /*
-    #define IN_CHUNK_SIZE (16*1024)
-
-    char* cmpbuf = new char[IN_CHUNK_SIZE];
-
-    LZ4F_dctx* lz4dctx;
-    LZ4F_frameInfo_t lz4frameinfo;
-    LZ4F_errorCode_t errcode;
-
-    errcode = LZ4F_createDecompressionContext(&lz4dctx, LZ4F_getVersion());
-    if(LZ4F_isError(errcode))
-        printf("%s\n", LZ4F_getErrorName(errcode));
-    
-    int bytesread = in.readRawData(cmpbuf, IN_CHUNK_SIZE);
-
-    size_t consumedsize = bytesread;
-    size_t framesize = LZ4F_getFrameInfo(lz4dctx, &lz4frameinfo, cmpbuf, &consumedsize);
-    if(LZ4F_isError(framesize))
-        printf("frameinfo error: %s\n", LZ4F_getErrorName(framesize));
-    
-    printf("LZ4 Block Size:\t\t%ld\n", GetBlockSize(&lz4frameinfo));
-    printf("\n");
-    */
     printf("Case Number:\t\t%s\n", casenumber.toStdString().c_str());
     printf("Evidence Number:\t%s\n", evidnumber.toStdString().c_str());
     printf("Examiner:\t\t%s\n", examiner.toStdString().c_str());
@@ -130,8 +90,6 @@ int main(int argc, char* argv[])
             readhash.append(tmparray.at(i));
     }
     wfi.close();
-    //delete[] cmpbuf;
-    //errcode = LZ4F_freeDecompressionContext(lz4dctx);
     
     printf("BLAKE3 Hash:\t\t%s\n", readhash.toStdString().c_str());
 

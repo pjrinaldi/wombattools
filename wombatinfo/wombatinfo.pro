@@ -5,7 +5,6 @@ INCLUDEPATH += /usr/local/lib/
 INCLUDEPATH += /usr/local/include/
 VPATH += /usr/local/lib/
 VPATH += /usr/local/include/
-#HEADERS = ../../blake3.h
 SOURCES = wombatinfo.cpp
 release: DESTDIR = release
 debug: DESTDIR = debug
