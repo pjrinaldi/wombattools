@@ -115,6 +115,98 @@ static int wombat_read(const char *path, char *buf, size_t size, off_t offset, s
     QFile wfi(wfimg);
     wfi.open(QIODevice::ReadOnly);
     QDataStream in(&wfi);
+    qint64 lz4start = curoffset;
+    LZ4F_dctx* lz4dctx;
+    LZ4F_errorCode_t errcode;
+    errcode = LZ4F_createDecompressionContext(&lz4dctx, LZ4F_getVersion());
+    char* cmpbuf = new char[2*blocksize];
+    QByteArray framearray;
+    framearray.clear();
+    quint64 frameoffset = 0;
+    quint64 framesize = 0;
+    size_t ret = 1;
+    size_t bread = 0;
+    size_t rawbufsize = blocksize;
+    size_t dstsize = rawbufsize;
+    char* rawbuf = new char[rawbufsize];
+
+    qint64 indxstart = offset / blocksize;
+    qint8 posodd = offset % blocksize;
+    qint64 relpos = offset - (indxstart * blocksize);
+    qint64 indxcnt = size / blocksize;
+    if(indxcnt == 0)
+        indxcnt = 1;
+    if(posodd != 0 && (relpos + size) > blocksize)
+        indxcnt++;
+    qint64 indxend = indxstart + indxcnt;
+    //if(indxend > rawsize / blocksize)
+    for(int i=indxstart; i < indxend; i++)
+    {
+        frameoffset = indxlist.at(i).toULongLong();
+        if(i == ((rawsize / blocksize) - 1))
+            framesize = rawsize - frameoffset;
+        else
+            framesize = indxlist.at(i+1).toULongLong() - frameoffset;
+        wfi.seek(lz4start + frameoffset);
+        int bytesread = in.readRawData(cmpbuf, framesize);
+        bread = bytesread;
+        ret = LZ4F_decompress(lz4dctx, rawbuf, &dstsize, cmpbuf, &bread, NULL);
+        QByteArray blockarray(rawbuf, dstsize);
+        framearray.append(blockarray);
+    }
+    if(posodd == 0)
+	memcpy(buf, framearray.mid(0, size).data(), size);
+    else
+	memcpy(buf, framearray.mid(relpos, size).data(), size);
+    
+    //wfi.seek(offset);
+    //qint64 bytesread = wfi.read(buf, size);
+    wfi.close();
+    delete[] cmpbuf;
+    delete[] rawbuf;
+    framearray.clear();
+    /*
+	for(int i=indxstart; i < indxstart + indxcnt; i++)
+	{
+            frameoffset = indxlist.at(i).toULongLong();
+	    if(i == ((totalbytes / sectorsize) - 1))
+		framesize = totalbytes - frameoffset;
+	    else
+                framesize = indxlist.at(i+1).toULongLong() - frameoffset;
+	    wfi.seek(lz4start + frameoffset);
+	    int bytesread = in.readRawData(cmpbuf, framesize);
+	    bread = bytesread;
+	    ret = LZ4F_decompress(lz4dctx, rawbuf, &dstsize, cmpbuf, &bread, NULL);
+	    QByteArray blockarray(rawbuf, dstsize);
+	    framearray.append(blockarray);
+	}
+        /*
+	qDebug() << "framearray size:" << framearray.size();
+	if(posodd == 0)
+	    qDebug() << "framearray zero:" << framearray.mid(0, size).toHex();
+	else
+	    qDebug() << "framearray rel:" << framearray.mid(relpos, size).toHex();
+        */
+
+	//qDebug() << "size requested:" << size << "size read:" << dstsize;
+/*        errcode = LZ4F_freeDecompressionContext(lz4dctx);
+        delete[] cmpbuf;
+        delete[] rawbuf;
+        wfi.close();
+	tmparray.clear();
+	if(posodd == 0)
+            tmparray = framearray.mid(0, size);
+	else
+            tmparray = framearray.mid(relpos, size);
+	//qDebug() << "tmparray:" << tmparray.toHex();
+    }
+
+     */ 
+
+    /*
+    QFile wfi(wfimg);
+    wfi.open(QIODevice::ReadOnly);
+    QDataStream in(&wfi);
 
     LZ4F_dctx* lz4dctx;
     LZ4F_errorCode_t errcode;
@@ -187,7 +279,7 @@ static int wombat_read(const char *path, char *buf, size_t size, off_t offset, s
 	framearray.append(blockarray);
     }
     */
-    errcode = LZ4F_freeDecompressionContext(lz4dctx);
+ /*   errcode = LZ4F_freeDecompressionContext(lz4dctx);
     wfi.close();
     if(posodd == 0)
 	memcpy(buf, framearray.mid(0, size).data(), size);
@@ -197,6 +289,7 @@ static int wombat_read(const char *path, char *buf, size_t size, off_t offset, s
     delete[] cmpbuf;
     delete[] rawbuf;
     framearray.clear();
+*/
 
     return size;
 }
@@ -242,33 +335,11 @@ int main(int argc, char* argv[])
     wfimg = args.at(0);
     mntpt = args.at(1);
     imgfile = wfimg.split("/").last().split(".").first() + ".dd";
-    //ndxstr = wfimg.split(".").first() + ".ndx";
     ifile = "/" + imgfile;
     relativefilename = ifile.toStdString().c_str();
     rawfilename = imgfile.toStdString().c_str();
 
     //lz4filename = wfimg.toStdString();
-    //ndxfilename = ndxstr.toStdString();
-    //printf("lz4filename: %s\n", lz4filename.c_str());
-    /*
-    infile = fopen(lz4filename.c_str(), "rb");
-    if(infile != NULL)
-    {
-        fseek(infile, 0, SEEK_END);
-        lz4size = ftell(infile);
-    }
-    else
-        printf("file failed to open\n");
-    fseek(infile, 0, SEEK_SET);
-
-    /*
-    ndxfile = fopen(ndxfilename.c_str(), "rb");
-    if(ndxfile == NULL)
-    {
-        printf("index file failed to open\n");
-    }
-    */
-    //printf("infile size: %ld\n", lz4size);
 
     QFile cwfile(wfimg);
     cwfile.open(QIODevice::ReadOnly);
@@ -278,7 +349,6 @@ int main(int argc, char* argv[])
     // METHOD TO GET THE SKIPPABLE FRAME INDX CONTENT !!!!!
     cwfile.seek(cwfile.size() - 128 - 10000);
     QByteArray skiparray = cwfile.read(10000);
-    //int isskiphead = skiparray.lastIndexOf(QString::number(0x5f2a4d18, 16).toStdString().c_str());
     int isskiphead = skiparray.lastIndexOf("_*M");
     qDebug() << "isskiphead:" << isskiphead << skiparray.mid(isskiphead, 4).toHex();
     QString getindx = "";
@@ -291,7 +361,7 @@ int main(int argc, char* argv[])
     //qDebug() << "getindx:" << getindx;
     indxlist.clear();
     indxlist = getindx.split(",", Qt::SkipEmptyParts);
-    qDebug() << "indxlist:" << indxlist;
+    //qDebug() << "indxlist:" << indxlist;
     qDebug() << "indxlist count:" << indxlist.count();
     cwfile.seek(0);
 
