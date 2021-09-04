@@ -143,10 +143,12 @@ static int wombat_read(const char *path, char *buf, size_t size, off_t offset, s
     for(int i=indxstart; i < framecnt; i++)
     {
         frameoffset = indxlist.at(i).toULongLong();
+        //framesize = indxlist.at(i+1).toULongLong() - frameoffset;
         if(i == (framecnt - 1))
             framesize = rawsize - frameoffset;
         else
             framesize = indxlist.at(i+1).toULongLong() - frameoffset;
+
         wfi.seek(lz4start + frameoffset);
         int bytesread = in.readRawData(cmpbuf, framesize);
         bread = bytesread;
