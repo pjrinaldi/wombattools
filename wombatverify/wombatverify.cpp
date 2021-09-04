@@ -39,8 +39,6 @@ int main(int argc, char* argv[])
 
     const QStringList args = parser.positionalArguments();
     QString imgfile = args.at(0);
-    QString ndxfile = args.at(0).split(".").first() + ".ndx";
-    //qDebug() << "ndxfile:" << ndxfile;
     QFile wfi(imgfile);
     if(!wfi.isOpen())
         wfi.open(QIODevice::ReadOnly);
@@ -50,6 +48,18 @@ int main(int argc, char* argv[])
         qDebug() << "Wrong Qt Data Stream version:" << in.version();
         return 1;
     }
+
+    // METHOD TO GET THE SKIPPABLE FRAME INDX CONTENT !!!!!
+    wfi.seek(wfi.size() - 128 - 10000);
+    QByteArray skiparray = wfi.read(10000);
+    int isskiphead = skiparray.lastIndexOf("_*M");
+    QString getindx = "";
+    if(qFromBigEndian<quint32>(skiparray.mid(isskiphead, 4)) == 0x5f2a4d18)
+    {
+        wfi.seek(wfi.size() - 128 - 10000 + isskiphead + 8);
+        in >> getindx;
+    }
+    wfi.seek(0);
 
     quint64 header;
     uint8_t version;
@@ -76,37 +86,31 @@ int main(int argc, char* argv[])
     uint8_t imghash[BLAKE3_OUT_LEN];
     blake3_hasher imghasher;
     blake3_hasher_init(&imghasher);
-    /*
-    QFile ndx(ndxfile);
-    if(!ndx.isOpen())
-        ndx.open(QIODevice::ReadOnly);
-    */
     LZ4F_dctx* lz4dctx;
     LZ4F_errorCode_t errcode;
     errcode = LZ4F_createDecompressionContext(&lz4dctx, LZ4F_getVersion());
     if(LZ4F_isError(errcode))
         printf("%s\n", LZ4F_getErrorName(errcode));
-    //char* cmpbuf = new char[2*sectorsize];
-    QByteArray framearray;
-    framearray.clear();
+    char* cmpbuf = new char[2*blocksize];
     quint64 frameoffset = 0;
     quint64 framesize = 0;
     quint64 curpos = 0;
-    qDebug() << "current position before for loop:" << wfi.pos();
+    QStringList indxlist = getindx.split(",", Qt::SkipEmptyParts);
+    //qDebug() << "current position before for loop:" << wfi.pos();
     size_t ret = 1;
     size_t bread = 0;
-    for(int i=0; i < (totalbytes / sectorsize); i++)
+    for(int i=0; i < (totalbytes / blocksize); i++)
     {
-        //frameoffset = qFromBigEndian<quint64>(ndx.read(8));
-        if(i == ((totalbytes / sectorsize) - 1))
+        frameoffset = indxlist.at(i).toULongLong();
+        if(i == ((totalbytes / blocksize) - 1))
             framesize = totalbytes - frameoffset;
         else
         {
-            //framesize = qFromBigEndian<quint64>(ndx.peek(8))- frameoffset;
+            framesize = indxlist.at(i+1).toULongLong() - frameoffset;
         }
         int bytesread = in.readRawData(cmpbuf, framesize);
         bread = bytesread;
-        //size_t rawbufsize = sectorsize;
+        size_t rawbufsize = blocksize;
         char* rawbuf = new char[rawbufsize];
         size_t dstsize = rawbufsize;
         ret = LZ4F_decompress(lz4dctx, rawbuf, &dstsize, cmpbuf, &bread, NULL);
@@ -125,8 +129,6 @@ int main(int argc, char* argv[])
         calchash.append(QString("%1").arg(imghash[i], 2, 16, QChar('0')));
     }
     printf(" - Forensic Image Hash\n");
-    //ndx.close();
-    /**/
 
     //HOW TO GET HASH OUT OF THE IMAGE FOR THE WOMBATVERIFY FUNCTION...
     wfi.seek(wfi.size() - 128);
