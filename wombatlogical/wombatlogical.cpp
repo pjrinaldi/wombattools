@@ -1,9 +1,8 @@
 #include <stdint.h>
 #include <fcntl.h>
-#include <linux/fs.h>
-#include <sys/ioctl.h>
-#include <libudev.h>
-#include <stdio.h>
+//#include <linux/fs.h>
+//#include <sys/ioctl.h>
+//#include <libudev.h>
 #include <unistd.h>
 #include <errno.h>
 #include <stdio.h>
@@ -12,31 +11,17 @@
 #include <stdlib.h>
 
 #include <iostream>
-#include <string>
 #include <QFile>
+#include <QFileInfo>
 #include <QDataStream>
 #include <QTextStream>
 #include <QCommandLineParser>
 #include <QDateTime>
 #include <QDebug>
+#include <QtEndian>
 #include "../blake3.h"
 #include <lz4.h>
 #include <lz4frame.h>
-
-static size_t GetBlockSize(const LZ4F_frameInfo_t* info)
-{
-    switch (info->blockSizeID)
-    {
-        case LZ4F_default:
-        case LZ4F_max64KB:  return 1 << 16;
-        case LZ4F_max256KB: return 1 << 18;
-        case LZ4F_max1MB:   return 1 << 20;
-        case LZ4F_max4MB:   return 1 << 22;
-        default:
-            printf("Impossible with expected frame specification (<=v1.6.1)\n");
-            exit(1);
-    }
-}
 
 int main(int argc, char* argv[])
 {
@@ -44,20 +29,22 @@ int main(int argc, char* argv[])
     QCoreApplication::setApplicationName("wombatlogical");
     QCoreApplication::setApplicationVersion("0.1");
     QCommandLineParser parser;
-    parser.setApplicationDescription("Create a wombat logical image from files/folders");
+    parser.setApplicationDescription("Create a wombat logical forensic image from files and directories");
     parser.addHelpOption();
     parser.addVersionOption();
-    parser.addPositionalArgument("source", QCoreApplication::translate("main", "Block device to copy."));
-    parser.addPositionalArgument("image", QCoreApplication::translate("main", "Desination forensic image file name w/o extension."));
+    parser.addPositionalArgument("image", QCoreApplication::translate("main", "Desination logical forensic image file name w/o extension."));
+    parser.addPositionalArgument("source", QCoreApplication::translate("main", "Multitple files and directories to copy to the forensic image."));
 
+    // ADD OPTIONS TO HASH, CATEGORY/SIGNATURE ANALYSIS FOR IMPORTING INTO WOMBAT...
+    
     //QCommandLineOption compressionleveloption(QStringList() << "l" << "compress-level", QCoreApplication::translate("main", "Set compression level, default=3."), QCoreApplication::translate("main", "clevel"));
     QCommandLineOption casenumberoption(QStringList() << "c" << "case-number", QCoreApplication::translate("main", "List the case number."), QCoreApplication::translate("main", "casenum"));
-    QCommandLineOption evidencenumberoption(QStringList() << "e" << "evidence-number", QCoreApplication::translate("main", "List the evidence number."), QCoreApplication::translate("main", "evidnum"));
+    //QCommandLineOption evidencenumberoption(QStringList() << "e" << "evidence-number", QCoreApplication::translate("main", "List the evidence number."), QCoreApplication::translate("main", "evidnum"));
     QCommandLineOption examineroption(QStringList() << "x" << "examiner", QCoreApplication::translate("main", "Examiner creating forensic image."), QCoreApplication::translate("main", "examiner"));
     QCommandLineOption descriptionoption(QStringList() << "d" << "description", QCoreApplication::translate("main", "Enter description of evidence to be imaged."), QCoreApplication::translate("main", "desciption"));
     //parser.addOption(compressionleveloption);
     parser.addOption(casenumberoption);
-    parser.addOption(evidencenumberoption);
+    //parser.addOption(evidencenumberoption);
     parser.addOption(examineroption);
     parser.addOption(descriptionoption);
 
@@ -65,54 +52,65 @@ int main(int argc, char* argv[])
 
     const QStringList args = parser.positionalArguments();
     QString casenumber = parser.value(casenumberoption);
-    QString evidencenumber = parser.value(evidencenumberoption);
+    //QString evidencenumber = parser.value(evidencenumberoption);
     QString examiner = parser.value(examineroption);
     QString description = parser.value(descriptionoption);
     //QString clevel = parser.value(compressionleveloption);
     //qDebug() << "casenumber:" << casenumber << "evidencenumber:" << evidencenumber << "examiner:" << examiner << "descrption:" << description;
-    QString blockdevice = args.at(0);
-    QString imgfile = args.at(1) + ".wfi";
-    QString logfile = args.at(1) + ".log";
-    //int compressionlevel = 3;
-    //if(clevel.toInt() > 0)
-    //    compressionlevel = clevel.toInt();
-    //qDebug() << "compression level:" << compressionlevel;
+    QString imgfile = args.at(0) + ".wli";
+    QString logfile = args.at(0) + ".log";
+    QStringList filelist;
+    filelist.clear();
+    for(int i=1; i < args.count(); i++)
+        filelist.append(args.at(i));
 
     // Initialize the datastream and header for the custom forensic image
-    QFile wfi(imgfile);
-    if(!wfi.isOpen())
-	wfi.open(QIODevice::WriteOnly);
-    QDataStream out(&wfi);
+    QFile wli(imgfile);
+    if(!wli.isOpen())
+        wli.open(QIODevice::WriteOnly);
+    QDataStream out(&wli);
     out.setVersion(QDataStream::Qt_5_15);
-    //out << (quint64)0x776f6d6261746669; // wombatfi - wombat forensic image signature (8 bytes)
     out << (quint64)0x776f6d6261746c69; // wombatli - wombat logical image signature (8 bytes)
-    out << (uint8_t)0x01; // version 1 (1 byte)
-
-    // Initialize the block device file for ioctl
-    int infile = open(blockdevice.toStdString().c_str(), O_RDONLY | O_NONBLOCK);
-    // Get Basic Device Information
-    quint64 totalbytes = 0;
-    uint16_t sectorsize = 0;
-    ioctl(infile, BLKGETSIZE64, &totalbytes);
-    ioctl(infile, BLKSSZGET, &sectorsize);
-    close(infile);
-    //qDebug() << "sector size:" << sectorsize;
-    out << (quint64)totalbytes; // forensic image size (8 bytes)
+    out << (quint8)0x01; // version 1 (1 byte)
     out << (QString)casenumber;
-    out << (QString)evidencenumber;
+    //out << (QString)evidencenumber;
     out << (QString)examiner;
     out << (QString)description;
-
-    // Initialize the block device for byte reading
-    QFile blkdev(blockdevice);
-    blkdev.open(QIODevice::ReadOnly);
-    QDataStream in(&blkdev);
 
     // Initialize the log file
     QFile log(logfile);
     log.open(QIODevice::WriteOnly | QIODevice::Text);
     QTextStream logout(&log);
-    
+
+    // IF I KEEP AN INDEX OF THE STARTING OFFSET OF EACH FILE, I CAN GENERATE A LISTING WITH THE WOMBATINFO FUNCTION TO LIST THE CONTENTS OF THE FILES WITHIN THE IMAGE SUCH AS WHAT ZIP WOULD DO...
+
+    // Initiate the Loop over all source files to write their info the logical image file...
+    for(int i=0; i < filelist.count(); i++)
+    {
+        QFileInfo tmpstat(filelist.at(i));
+        if(tmpstat.isDir()) // its a directory, need to read its contents..
+        {
+        }
+        else if(tmpstat.isFile()) // its a file, so read the info i need...
+        {
+            // name << path << size << created << accessed << modified << status changed << b3 hash << category << signature
+            // other info to gleam such as groupid, userid, permission, 
+            qDebug() << tmpstat.fileName() << tmpstat.absolutePath() << tmpstat.size() << tmpstat.birthTime().toSecsSinceEpoch() << tmpstat.lastRead().toSecsSinceEpoch() << tmpstat.lastModified().toSecsSinceEpoch() << tmpstat.metadataChangeTime().toSecsSinceEpoch();
+        }
+
+        // Get FileInfo to write to the logical image...
+        // Get the File Content and compress it using lz4 as a single frame ???
+    }
+
+    wli.close();
+    // NEED TO REPOPEN THE WLI FILE AS READONLY AND THEN HASH THE CONTENTS TO SPIT OUT A HASH... TO VERIFY THE IMAGE
+    log.close();
+    /*
+    // Initialize the block device for byte reading
+    QFile blkdev(blockdevice);
+    blkdev.open(QIODevice::ReadOnly);
+    QDataStream in(&blkdev);
+
     logout << "wombatimager v0.1 Forensic Imager started at: " << QDateTime::currentDateTime().toString("MM/dd/yyyy hh:mm:ss ap") << Qt::endl;
     logout << "Source Device" << Qt::endl;
     logout << "-------------" << Qt::endl;
@@ -160,7 +158,8 @@ int main(int argc, char* argv[])
                 tmp = udev_device_get_property_value(dev, "ID_SERIAL_SHORT");
                 logout << "Serial Number: " << tmp << Qt::endl;
                 logout << "Size: " << totalbytes << " bytes" << Qt::endl;
-                logout << "Block Size: " << sectorsize << " bytes" << Qt::endl;
+                logout << "Sector Size: " << sectorsize << " bytes" << Qt::endl;
+                logout << "Block Size: " << blocksize << " bytes" << Qt::endl;
             }
         }
         udev_device_unref(dev);
@@ -168,12 +167,17 @@ int main(int argc, char* argv[])
     udev_enumerate_unref(enumerate);
     udev_unref(udev);
     
-    // ATTEMPT USING A SINGLE LZ4FRAME SIMILAR TO BLAKE3 HASHING SETUP.
+    // ATTEMPT USING A LZ4FRAME PER BLOCK.
+    LZ4F_frameInfo_t lz4frameinfo = LZ4F_INIT_FRAMEINFO;
+    LZ4F_preferences_t lz4prefs = LZ4F_INIT_PREFERENCES;
+    lz4frameinfo.blockMode = LZ4F_blockIndependent;
+    lz4frameinfo.blockSizeID = LZ4F_max256KB;
+    lz4prefs.frameInfo = lz4frameinfo;
     quint64 curpos = 0;
-    size_t destsize = LZ4F_compressFrameBound(sectorsize, NULL);
+    size_t destsize = LZ4F_compressFrameBound(blocksize, &lz4prefs);
     //qDebug() << "destsize:" << destsize;
     char* dstbuf = new char[destsize];
-    char* srcbuf = new char[sectorsize];
+    char* srcbuf = new char[blocksize];
     int dstbytes = 0;
 
     int compressedsize = 0;
@@ -182,69 +186,61 @@ int main(int argc, char* argv[])
     errcode = LZ4F_createCompressionContext(&lz4cctx, LZ4F_getVersion());
     if(LZ4F_isError(errcode))
         printf("%s\n", LZ4F_getErrorName(errcode));
-    dstbytes = LZ4F_compressBegin(lz4cctx, dstbuf, destsize, NULL);
-    compressedsize += dstbytes;
-    if(LZ4F_isError(dstbytes))
-        printf("%s\n", LZ4F_getErrorName(dstbytes));
-    //qDebug() << "compressbegin dstbytes:" << dstbytes;
-    out.writeRawData(dstbuf, dstbytes);
-    //size_t byteswrite = out.writeRawData(dstbuf, dstbytes);
-
     while(curpos < totalbytes)
     {
-        int bytesread = in.readRawData(srcbuf, sectorsize);
-	blake3_hasher_update(&blkhasher, srcbuf, bytesread);
-	dstbytes = LZ4F_compressUpdate(lz4cctx, dstbuf, destsize, srcbuf, bytesread, NULL);
+        //qDebug() << "compress begin frameoffset:" << compressedsize;
+        indxstr += QString::number(compressedsize) + ",";
+        dstbytes = LZ4F_compressBegin(lz4cctx, dstbuf, destsize, &lz4prefs);
+        compressedsize += dstbytes;
         if(LZ4F_isError(dstbytes))
             printf("%s\n", LZ4F_getErrorName(dstbytes));
-	dstbytes = LZ4F_flush(lz4cctx, dstbuf, destsize, NULL);
+        out.writeRawData(dstbuf, dstbytes);
+        int bytesread = in.readRawData(srcbuf, blocksize);
+        blake3_hasher_update(&blkhasher, srcbuf, bytesread);
+        dstbytes = LZ4F_compressUpdate(lz4cctx, dstbuf, destsize, srcbuf, bytesread, NULL);
+        if(LZ4F_isError(dstbytes))
+            printf("%s\n", LZ4F_getErrorName(dstbytes));
+        dstbytes = LZ4F_flush(lz4cctx, dstbuf, destsize, NULL);
         if(LZ4F_isError(dstbytes))
             printf("%s\n", LZ4F_getErrorName(dstbytes));
         compressedsize += dstbytes;
-	//qDebug() << "update dstbytes:" << dstbytes;
-	out.writeRawData(dstbuf, dstbytes);
-	//byteswrite = out.writeRawData(dstbuf, dstbytes);
-	curpos = curpos + bytesread;
-        printf("Wrote %llu of %llu bytes\r", curpos, totalbytes);
+        //qDebug() << " compress frameoffset:" << compressedsize;
+        out.writeRawData(dstbuf, dstbytes);
+        curpos = curpos + bytesread;
+        dstbytes = LZ4F_compressEnd(lz4cctx, dstbuf, destsize, NULL);
+        compressedsize += dstbytes;
+        //qDebug() << "frameoffset:" << compressedsize;
+        out.writeRawData(dstbuf, dstbytes);
+        printf("Writing %llu of %llu bytes\r", curpos, totalbytes);
         fflush(stdout);
     }
+
+    delete[] srcbuf;
+    delete[] dstbuf;
+    errcode = LZ4F_freeCompressionContext(lz4cctx);
+    blkdev.close();
+    // SKIPPABLE FRAME WITH INDEX STRING
+    out << (quint32)0x5F2A4D18 << (quint32)indxstr.size() << (QString)indxstr;
+
     blake3_hasher_finalize(&blkhasher, sourcehash, BLAKE3_OUT_LEN);
     QString srchash = "";
     for(size_t i=0; i < BLAKE3_OUT_LEN; i++)
     {
-        //logout << 
-        //fprintf(filelog, "%02x", sourcehash[i]);
-        //logout << QString("%1").arg(forimghash[i], 2, 16, QChar('0'));
         srchash.append(QString("%1").arg(sourcehash[i], 2, 16, QChar('0')));
         printf("%02x", sourcehash[i]);
     }
     printf(" - Source Device Hash\n");
-    //QString srchash = QString::fromUtf8(sourcehash);
-    //qDebug() << "srchash as string:" << srchash;
-    dstbytes = LZ4F_compressEnd(lz4cctx, dstbuf, destsize, NULL);
-    compressedsize += dstbytes;
-    //qDebug() << "compressed size:" << compressedsize;
-    //qDebug() << "compressend dstbytes:" << dstbytes;
-    out.writeRawData(dstbuf, dstbytes);
     out << srchash;
-    //byteswrite = out.writeRawData(dstbuf, dstbytes);
-    delete[] srcbuf;
-    delete[] dstbuf;
-    errcode = LZ4F_freeCompressionContext(lz4cctx);
     wfi.close();
-    blkdev.close();
-
-
-    #define IN_CHUNK_SIZE  (16*1024)
 
     uint8_t forimghash[BLAKE3_OUT_LEN];
     blake3_hasher imghasher;
     blake3_hasher_init(&imghasher);
-    char* cmpbuf = new char[IN_CHUNK_SIZE];
+    char* cmpbuf = new char[2*blocksize];
     
     LZ4F_dctx* lz4dctx;
-    LZ4F_frameInfo_t lz4frameinfo;
-    
+    //LZ4F_frameInfo_t lz4frameinfo;
+
     errcode = LZ4F_createDecompressionContext(&lz4dctx, LZ4F_getVersion());
     if(LZ4F_isError(errcode))
         printf("%s\n", LZ4F_getErrorName(errcode));
@@ -254,22 +250,34 @@ int main(int argc, char* argv[])
     if(!cwfi.isOpen())
 	cwfi.open(QIODevice::ReadOnly);
     QDataStream cin(&cwfi);
-    //QFile rawdd(imgfile.split(".").first() + ".dd");
-    //rawdd.open(QIODevice::WriteOnly);
-    //QDataStream cout(&rawdd);
 
-    /*
-    int skipbytes = cin.skipRawData(17);
-    if(skipbytes == -1)
-        qDebug() << "skip failed";
+    /* METHOD TO GET THE SKIPPABLE FRAME INDX CONTENT !!!!!
+    cwfi.seek(cwfi.size() - 128 - 10000);
+    QByteArray skiparray = cwfi.read(10000);
+    //int isskiphead = skiparray.lastIndexOf(QString::number(0x5f2a4d18, 16).toStdString().c_str());
+    int isskiphead = skiparray.lastIndexOf("_*M");
+    qDebug() << "isskiphead:" << isskiphead << skiparray.mid(isskiphead, 4).toHex();
+    QString getindx = "";
+    if(qFromBigEndian<quint32>(skiparray.mid(isskiphead, 4)) == 0x5f2a4d18)
+    {
+        qDebug() << "skippable frame containing the index...";
+        cwfi.seek(cwfi.size() - 128 - 10000 + isskiphead + 8);
+        cin >> getindx;
+    }
+    qDebug() << "getindx:" << getindx;
+    cwfi.seek(0);
     */
+/*
     quint64 header;
     uint8_t version;
+    quint16 sectorsize2;
+    quint32 blocksize2;
+    quint64 totalbytes2;
     QString cnum;
     QString evidnum;
     QString examiner2;
     QString description2;
-    cin >> header >> version >> totalbytes >> cnum >> evidnum >> examiner2 >> description2;
+    cin >> header >> version >> sectorsize2 >> blocksize2 >> totalbytes2 >> cnum >> evidnum >> examiner2 >> description2;
     if(header != 0x776f6d6261746669)
     {
         qDebug() << "Wrong file type, not a wombat forensic image.";
@@ -281,43 +289,35 @@ int main(int argc, char* argv[])
         return 1;
     }
 
-    int bytesread = cin.readRawData(cmpbuf, IN_CHUNK_SIZE);
-    
-    size_t consumedsize = bytesread;
-    size_t framesize = LZ4F_getFrameInfo(lz4dctx, &lz4frameinfo, cmpbuf, &consumedsize);
-    if(LZ4F_isError(framesize))
-        printf("frameinfo error: %s\n", LZ4F_getErrorName(framesize));
-    
-    size_t rawbufsize = GetBlockSize(&lz4frameinfo);
-    char* rawbuf = new char[rawbufsize];
-    size_t filled = bytesread - consumedsize;
-    int firstchunk = 1;
+    QByteArray framearray;
+    framearray.clear();
+    quint64 frameoffset = 0;
+    quint64 framesize = 0;
+    //qDebug() << "current position before for loop:" << cwfi.pos();
     size_t ret = 1;
-    while(ret != 0)
+    size_t bread = 0;
+    quint64 curread = 0;
+    QStringList indxlist = indxstr.split(",", Qt::SkipEmptyParts);
+    for(int i=0; i < (totalbytes / blocksize); i++)
     {
-        size_t readsize = firstchunk ? filled : cin.readRawData(cmpbuf, IN_CHUNK_SIZE);
-        firstchunk = 0;
-        const void* srcptr = (const char*)cmpbuf + consumedsize;
-        consumedsize = 0;
-        const void* const srcend = (const char*)srcptr + readsize;
-        while(srcptr < srcend && ret != 0)
-        {
-            size_t dstsize = rawbufsize;
-            size_t srcsize = (const char*)srcend - (const char*)srcptr;
-            ret = LZ4F_decompress(lz4dctx, rawbuf, &dstsize, srcptr, &srcsize, NULL);
-            if(LZ4F_isError(ret))
-            {
-                printf("decompression error: %s\n", LZ4F_getErrorName(ret));
-            }
-	    blake3_hasher_update(&imghasher, rawbuf, dstsize);
-            printf("Verifying %ld of %llu bytes\r", dstsize, totalbytes);
-            fflush(stdout);
-            //write here
-            //int byteswrote = cout.writeRawData(rawbuf, dstsize);
-            srcptr = (const char*)srcptr + srcsize;
-        }
+        frameoffset = indxlist.at(i).toULongLong();
+        if(i == ((totalbytes / blocksize) - 1))
+            framesize = totalbytes - frameoffset;
+        else
+            framesize = indxlist.at(i+1).toULongLong() - frameoffset;
+        int bytesread = cin.readRawData(cmpbuf, framesize);
+        bread = bytesread;
+        size_t rawbufsize = blocksize;
+        char* rawbuf = new char[rawbufsize];
+        size_t dstsize = rawbufsize;
+        ret = LZ4F_decompress(lz4dctx, rawbuf, &dstsize, cmpbuf, &bread, NULL);
+        if(LZ4F_isError(ret))
+            printf("decompress error %s\n", LZ4F_getErrorName(ret));
+        blake3_hasher_update(&imghasher, rawbuf, dstsize);
+        curread = curread + dstsize;
+        printf("Verifying %llu of %llu bytes\r", curread, totalbytes);
+        fflush(stdout);
     }
-    //qDebug() << "ret should be zero:" << ret;
     blake3_hasher_finalize(&imghasher, forimghash, BLAKE3_OUT_LEN);
     for(size_t i=0; i < BLAKE3_OUT_LEN; i++)
     {
@@ -327,7 +327,8 @@ int main(int argc, char* argv[])
     printf(" - Forensic Image Hash\n");
     logout << " - Forensic Image Hash" << Qt::endl;
 
-    /* HOW TO GET HASH OUT OF THE IMAGE FOR THE WOMBATVERIFY FUNCTION...
+    /*
+    //HOW TO GET HASH OUT OF THE IMAGE FOR THE WOMBATVERIFY FUNCTION...
     cwfi.seek(cwfi.size() - 128);
     QString readhash;
     QByteArray tmparray = cwfi.read(128);
@@ -338,11 +339,9 @@ int main(int argc, char* argv[])
     }
     qDebug() << "readhash:" << readhash;
     */
+/*
     cwfi.close();
-    //rawdd.close();
     delete[] cmpbuf;
-    delete[] rawbuf;
-
     errcode = LZ4F_freeDecompressionContext(lz4dctx);
 
     // VERIFY HASHES HERE...
@@ -358,7 +357,8 @@ int main(int argc, char* argv[])
     }
     printf("Finished Forensic Image Verification at %s\n", QDateTime::currentDateTime().toString("MM/dd/yyyy hh:mm:ss ap").toStdString().c_str());
     logout << "Finished Forensic Image Verification at:" << QDateTime::currentDateTime().toString("MM/dd/yyyy hh:mm:ss ap") << Qt::endl;
-    log.close();
 
+    log.close();
+*/
     return 0;
 }
