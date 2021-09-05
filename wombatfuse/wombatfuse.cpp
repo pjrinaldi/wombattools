@@ -128,7 +128,7 @@ static int wombat_read(const char *path, char *buf, size_t size, off_t offset, s
     qint64 indxstart = offset / blocksize;
     qint8 posodd = offset % blocksize;
     qint64 relpos = offset - (indxstart * blocksize);
-    qint64 indxcnt = rawsize / blocksize;
+    qint64 indxcnt = size / blocksize;
     if(indxcnt == 0)
         indxcnt = 1;
     if(posodd != 0 && (relpos + size) > blocksize)
@@ -136,7 +136,7 @@ static int wombat_read(const char *path, char *buf, size_t size, off_t offset, s
     qint64 indxend = indxstart + indxcnt;
     //if(indxend > rawsize / blocksize)
     //for(int i=indxstart; i < framecnt; i++)
-    for(int i=indxstart; i < framecnt; i++)
+    for(qint64 i=indxstart; i < framecnt; i++)
     {
         frameoffset = indxlist.at(i).toULongLong();
         if(i == (framecnt - 1))
