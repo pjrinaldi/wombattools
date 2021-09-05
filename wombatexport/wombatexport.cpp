@@ -82,6 +82,7 @@ int main(int argc, char* argv[])
     // ADD OPTIONS TO HASH, CATEGORY/SIGNATURE ANALYSIS FOR IMPORTING INTO WOMBAT...
     
     // MAYBE SET AN OPTION TO ORIGINAL FILE PATH, OR HERE, AND THEN AN OPTION FOR LIST FILES ONLY
+
     //QCommandLineOption blake3option(QStringList() << "b" << "compute-hash", QCoreApplication::translate("main", "Compute the Blake3 Hash for the file."), QCoreApplication::translate("main", "blake3"));
     //QCommandLineOption signatureoption(QStringList() << "s" << "cat-sig", QCoreApplication::translate("main", "Compute the category/signature for the file."), QCoreApplication::translate("main", "catsig"));
     //QCommandLineOption compressionleveloption(QStringList() << "l" << "compress-level", QCoreApplication::translate("main", "Set compression level, default=3."), QCoreApplication::translate("main", "clevel"));
