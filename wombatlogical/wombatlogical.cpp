@@ -1,8 +1,5 @@
 #include <stdint.h>
 #include <fcntl.h>
-//#include <linux/fs.h>
-//#include <sys/ioctl.h>
-//#include <libudev.h>
 #include <unistd.h>
 #include <errno.h>
 #include <stdio.h>
@@ -23,6 +20,7 @@
 #include "../blake3.h"
 #include <lz4.h>
 #include <lz4frame.h>
+#include <magic.h>
 
 void PopulateFile(QFileInfo* tmpfileinfo, bool blake3bool, bool catsigbool, QDataStream* out, QTextStream* logout)
 {
@@ -52,18 +50,73 @@ void PopulateFile(QFileInfo* tmpfileinfo, bool blake3bool, bool catsigbool, QDat
         *out << (qint64)tmpfileinfo->lastRead().toSecsSinceEpoch(); // ACCESSED (8 bytes)
         *out << (qint64)tmpfileinfo->lastModified().toSecsSinceEpoch(); // MODIFIED (8 bytes)
         *out << (qint64)tmpfileinfo->metadataChangeTime().toSecsSinceEpoch(); // STATUS CHANGED (8 bytes)
-        *logout << "Processed:" << tmpfileinfo->absoluteFilePath() << Qt::endl;
-        qDebug() << "Processed: " << tmpfileinfo->fileName();
+        QFile tmpfile(tmpfileinfo->absoluteFilePath());
+        if(!tmpfile.isOpen())
+            tmpfile.open(QIODevice::ReadOnly);
+        // Initialize Blake3 Hasher for block device and forensic image
+        uint8_t sourcehash[BLAKE3_OUT_LEN];
+        blake3_hasher blkhasher;
+        blake3_hasher_init(&blkhasher);
+        while(!tmpfile.atEnd())
+        {
+            QByteArray tmparray = tmpfile.read(2048);
+            if(blake3bool)
+                blake3_hasher_update(&blkhasher, tmparray.data(), tmparray.count());
+        }
         if(blake3bool)
         {
-            //qDebug() << "calculate blake3 hash for contents here...";
+            blake3_hasher_finalize(&blkhasher, sourcehash, BLAKE3_OUT_LEN);
+            QString srchash = "";
+            for(size_t i=0; i < BLAKE3_OUT_LEN; i++)
+            {
+                srchash.append(QString("%1").arg(sourcehash[i], 2, 16, QChar('0')));
+                printf("%02x", sourcehash[i]);
+            }
+            printf(" - Source Device Hash\n");
+            qDebug() << tmpfileinfo->fileName() << srchash;
         }
         if(catsigbool)
         {
+            /*
+             *  QString mimestr = "";
+                if(filename.startsWith("$UPCASE_TABLE"))
+                    mimestr = "System File/Up-case Table";
+                else if(filename.startsWith("$ALLOC_BITMAP"))
+                    mimestr = "System File/Allocation Bitmap";
+                else if(filename.startsWith("$UpCase"))
+                    mimestr = "Windows System/System File";
+                else if(filename.startsWith("$MFT") || filename.startsWith("$MFTMirr") || filename.startsWith("$LogFile") || filename.startsWith("$Volume") || filename.startsWith("$AttrDef") || filename.startsWith("$Bitmap") || filename.startsWith("$Boot") || filename.startsWith("$BadClus") || filename.startsWith("$Secure") || filename.startsWith("$Extend"))
+                    mimestr = "Windows System/System File";
+                else
+                {
+                    // NON-QT WAY USING LIBMAGIC
+                    QByteArray sigbuf = curimg->ReadContent(fileoffset, 1024);
+                    magic_t magical;
+                    const char* catsig;
+                    magical = magic_open(MAGIC_MIME_TYPE);
+                    magic_load(magical, NULL);
+                    catsig = magic_buffer(magical, sigbuf.data(), sigbuf.count());
+                    std::string catsigstr(catsig);
+                    mimestr = QString::fromStdString(catsigstr);
+                    magic_close(magical);
+                    for(int i=0; i < mimestr.count(); i++)
+                    {
+                        if(i == 0 || mimestr.at(i-1) == ' ' || mimestr.at(i-1) == '-' || mimestr.at(i-1) == '/')
+                            mimestr[i] = mimestr[i].toUpper();
+                    }
+                }
+                //else if(filename.startsWith("$INDEX_ROOT:") || filename.startsWith("$DATA:") || filename.startWith("$INDEX_ALLOCATION:"))
+                
+
+                return mimestr;
+
+             */ 
             //qDebug() << "calculate the signature and category for the contents here...";
         }
         // Get the File Content and compress it using lz4 as a single frame ???
         //qDebug() << "lz4 compress file contents and add to the logical image file..";
+        *logout << "Processed:" << tmpfileinfo->absoluteFilePath() << Qt::endl;
+        qDebug() << "Processed: " << tmpfileinfo->fileName();
     }
 }
 
@@ -81,8 +134,8 @@ int main(int argc, char* argv[])
 
     // ADD OPTIONS TO HASH, CATEGORY/SIGNATURE ANALYSIS FOR IMPORTING INTO WOMBAT...
     
-    QCommandLineOption blake3option(QStringList() << "b" << "compute-hash", QCoreApplication::translate("main", "Compute the Blake3 Hash for the file."), QCoreApplication::translate("main", "blake3"));
-    QCommandLineOption signatureoption(QStringList() << "s" << "cat-sig", QCoreApplication::translate("main", "Compute the category/signature for the file."), QCoreApplication::translate("main", "catsig"));
+    QCommandLineOption blake3option(QStringList() << "b" << "compute-hash", QCoreApplication::translate("main", "Compute the Blake3 Hash for the file."));
+    QCommandLineOption signatureoption(QStringList() << "s" << "cat-sig", QCoreApplication::translate("main", "Compute the category/signature for the file."));
     //QCommandLineOption compressionleveloption(QStringList() << "l" << "compress-level", QCoreApplication::translate("main", "Set compression level, default=3."), QCoreApplication::translate("main", "clevel"));
     QCommandLineOption casenumberoption(QStringList() << "c" << "case-number", QCoreApplication::translate("main", "List the case number."), QCoreApplication::translate("main", "casenum"));
     //QCommandLineOption evidencenumberoption(QStringList() << "e" << "evidence-number", QCoreApplication::translate("main", "List the evidence number."), QCoreApplication::translate("main", "evidnum"));
@@ -132,6 +185,7 @@ int main(int argc, char* argv[])
     log.open(QIODevice::WriteOnly | QIODevice::Text);
     QTextStream logout(&log);
 
+    logout << "wombatlogical v0.1 Logical Forensic Imager started at: " << QDateTime::currentDateTime().toString("MM/dd/yyyy hh:mm:ss ap") << Qt::endl;
     // IF I KEEP AN INDEX OF THE STARTING OFFSET OF EACH FILE, I CAN GENERATE A LISTING WITH THE WOMBATINFO FUNCTION TO LIST THE CONTENTS OF THE FILES WITHIN THE IMAGE SUCH AS WHAT ZIP WOULD DO...
 
     // Initiate the Loop over all source files to write their info the logical image file...
@@ -149,66 +203,7 @@ int main(int argc, char* argv[])
     // AND HOW TO VERIFY
     log.close();
     /*
-    // Initialize the block device for byte reading
-    QFile blkdev(blockdevice);
-    blkdev.open(QIODevice::ReadOnly);
-    QDataStream in(&blkdev);
 
-    logout << "wombatimager v0.1 Forensic Imager started at: " << QDateTime::currentDateTime().toString("MM/dd/yyyy hh:mm:ss ap") << Qt::endl;
-    logout << "Source Device" << Qt::endl;
-    logout << "-------------" << Qt::endl;
-
-    // Initialize Blake3 Hasher for block device and forensic image
-    uint8_t sourcehash[BLAKE3_OUT_LEN];
-    blake3_hasher blkhasher;
-    blake3_hasher_init(&blkhasher);
-
-    // GET UDEV INFORMATION FOR THE LOG
-    struct udev* udev;
-    struct udev_device* dev;
-    struct udev_enumerate* enumerate;
-    struct udev_list_entry* devices;
-    struct udev_list_entry* devlistentry;
-    udev = udev_new();
-    enumerate = udev_enumerate_new(udev);
-    udev_enumerate_add_match_subsystem(enumerate, "block");
-    udev_enumerate_scan_devices(enumerate);
-    devices = udev_enumerate_get_list_entry(enumerate);
-    udev_list_entry_foreach(devlistentry, devices)
-    {
-        const char* path;
-        const char* tmp;
-        path = udev_list_entry_get_name(devlistentry);
-        dev = udev_device_new_from_syspath(udev, path);
-        if(strncmp(udev_device_get_devtype(dev), "partition", 9) != 0 && strncmp(udev_device_get_sysname(dev), "loop", 4) != 0)
-        {
-            tmp = udev_device_get_devnode(dev);
-            if(strcmp(tmp, blockdevice.toStdString().c_str()) == 0)
-            {
-                logout << "Device:";
-                const char* devvendor = udev_device_get_property_value(dev, "ID_VENDOR");
-                if(devvendor != NULL)
-                    logout << " " << devvendor;
-                const char* devmodel = udev_device_get_property_value(dev, "ID_MODEL");
-                if(devmodel != NULL)
-                    logout << " " << devmodel;
-                const char* devname = udev_device_get_property_value(dev, "ID_NAME");
-                if(devname != NULL)
-                    logout << " " << devname;
-                logout << Qt::endl;
-                tmp = udev_device_get_devnode(dev);
-                logout << "Device Path: " << tmp << Qt::endl;
-                tmp = udev_device_get_property_value(dev, "ID_SERIAL_SHORT");
-                logout << "Serial Number: " << tmp << Qt::endl;
-                logout << "Size: " << totalbytes << " bytes" << Qt::endl;
-                logout << "Sector Size: " << sectorsize << " bytes" << Qt::endl;
-                logout << "Block Size: " << blocksize << " bytes" << Qt::endl;
-            }
-        }
-        udev_device_unref(dev);
-    }
-    udev_enumerate_unref(enumerate);
-    udev_unref(udev);
     
     // ATTEMPT USING A LZ4FRAME PER BLOCK.
     LZ4F_frameInfo_t lz4frameinfo = LZ4F_INIT_FRAMEINFO;
