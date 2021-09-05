@@ -12,6 +12,7 @@
 
 #include <iostream>
 #include <QFile>
+#include <QDir>
 #include <QFileInfo>
 #include <QDataStream>
 #include <QTextStream>
@@ -22,6 +23,33 @@
 #include "../blake3.h"
 #include <lz4.h>
 #include <lz4frame.h>
+
+void PopulateFile(QFileInfo* tmpfileinfo)
+{
+    if(tmpfileinfo->isDir()) // its a directory, need to read its contents..
+    {
+        QDir tmpdir(tmpfileinfo->absoluteFilePath());
+        if(tmpdir.isEmpty())
+            qDebug() << "dir" << tmpfileinfo->fileName() << "is empty and will be skipped.";
+        else
+        {
+            QFileInfoList infolist = tmpdir.entryInfoList(QDir::NoDotAndDotDot | QDir::Files | QDir::Dirs);
+            for(int i=0; i < infolist.count(); i++)
+            {
+                QFileInfo tmpinfo = infolist.at(i);
+                PopulateFile(&tmpinfo);
+            }
+        }
+    }
+    else if(tmpfileinfo->isFile()) // its a file, so read the info i need...
+    {
+        // name << path << size << created << accessed << modified << status changed << b3 hash << category << signature
+        // other info to gleam such as groupid, userid, permission, 
+        qDebug() << tmpfileinfo->fileName() << tmpfileinfo->absolutePath() << tmpfileinfo->size() << tmpfileinfo->birthTime().toSecsSinceEpoch() << tmpfileinfo->lastRead().toSecsSinceEpoch() << tmpfileinfo->lastModified().toSecsSinceEpoch() << tmpfileinfo->metadataChangeTime().toSecsSinceEpoch();
+        // Get FileInfo to write to the logical image...
+        // Get the File Content and compress it using lz4 as a single frame ???
+    }
+}
 
 int main(int argc, char* argv[])
 {
@@ -37,12 +65,16 @@ int main(int argc, char* argv[])
 
     // ADD OPTIONS TO HASH, CATEGORY/SIGNATURE ANALYSIS FOR IMPORTING INTO WOMBAT...
     
+    QCommandLineOption blake3option(QStringList() << "b" << "compute-hash", QCoreApplication::translate("main", "Compute the Blake3 Hash for the file."), QCoreApplication::translate("main", "blake3"));
+    QCommandLineOption signatureoption(QStringList() << "s" << "cat-sig", QCoreApplication::translate("main", "Compute the category/signature for the file."), QCoreApplication::translate("main", "catsig"));
     //QCommandLineOption compressionleveloption(QStringList() << "l" << "compress-level", QCoreApplication::translate("main", "Set compression level, default=3."), QCoreApplication::translate("main", "clevel"));
     QCommandLineOption casenumberoption(QStringList() << "c" << "case-number", QCoreApplication::translate("main", "List the case number."), QCoreApplication::translate("main", "casenum"));
     //QCommandLineOption evidencenumberoption(QStringList() << "e" << "evidence-number", QCoreApplication::translate("main", "List the evidence number."), QCoreApplication::translate("main", "evidnum"));
     QCommandLineOption examineroption(QStringList() << "x" << "examiner", QCoreApplication::translate("main", "Examiner creating forensic image."), QCoreApplication::translate("main", "examiner"));
     QCommandLineOption descriptionoption(QStringList() << "d" << "description", QCoreApplication::translate("main", "Enter description of evidence to be imaged."), QCoreApplication::translate("main", "desciption"));
     //parser.addOption(compressionleveloption);
+    parser.addOption(blake3option);
+    parser.addOption(signatureoption);
     parser.addOption(casenumberoption);
     //parser.addOption(evidencenumberoption);
     parser.addOption(examineroption);
@@ -55,6 +87,8 @@ int main(int argc, char* argv[])
     //QString evidencenumber = parser.value(evidencenumberoption);
     QString examiner = parser.value(examineroption);
     QString description = parser.value(descriptionoption);
+    bool blake3bool = parser.isSet(blake3option);
+    bool catsigbool = parser.isSet(signatureoption);
     //QString clevel = parser.value(compressionleveloption);
     //qDebug() << "casenumber:" << casenumber << "evidencenumber:" << evidencenumber << "examiner:" << examiner << "descrption:" << description;
     QString imgfile = args.at(0) + ".wli";
@@ -88,18 +122,7 @@ int main(int argc, char* argv[])
     for(int i=0; i < filelist.count(); i++)
     {
         QFileInfo tmpstat(filelist.at(i));
-        if(tmpstat.isDir()) // its a directory, need to read its contents..
-        {
-        }
-        else if(tmpstat.isFile()) // its a file, so read the info i need...
-        {
-            // name << path << size << created << accessed << modified << status changed << b3 hash << category << signature
-            // other info to gleam such as groupid, userid, permission, 
-            qDebug() << tmpstat.fileName() << tmpstat.absolutePath() << tmpstat.size() << tmpstat.birthTime().toSecsSinceEpoch() << tmpstat.lastRead().toSecsSinceEpoch() << tmpstat.lastModified().toSecsSinceEpoch() << tmpstat.metadataChangeTime().toSecsSinceEpoch();
-        }
-
-        // Get FileInfo to write to the logical image...
-        // Get the File Content and compress it using lz4 as a single frame ???
+        PopulateFile(&tmpstat);
     }
     // WRITE THE INDEX STRING TO THE FILE FOR READING LATER...
 
