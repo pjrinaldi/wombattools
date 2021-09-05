@@ -24,7 +24,7 @@
 #include <lz4.h>
 #include <lz4frame.h>
 
-void PopulateFile(QFileInfo* tmpfileinfo)
+void PopulateFile(QFileInfo* tmpfileinfo, bool blake3bool, bool catsigbool, QDataStream* out, QTextStream* logout)
 {
     if(tmpfileinfo->isDir()) // its a directory, need to read its contents..
     {
@@ -37,7 +37,7 @@ void PopulateFile(QFileInfo* tmpfileinfo)
             for(int i=0; i < infolist.count(); i++)
             {
                 QFileInfo tmpinfo = infolist.at(i);
-                PopulateFile(&tmpinfo);
+                PopulateFile(&tmpinfo, blake3bool, catsigbool, out, logout);
             }
         }
     }
@@ -45,9 +45,25 @@ void PopulateFile(QFileInfo* tmpfileinfo)
     {
         // name << path << size << created << accessed << modified << status changed << b3 hash << category << signature
         // other info to gleam such as groupid, userid, permission, 
-        qDebug() << tmpfileinfo->fileName() << tmpfileinfo->absolutePath() << tmpfileinfo->size() << tmpfileinfo->birthTime().toSecsSinceEpoch() << tmpfileinfo->lastRead().toSecsSinceEpoch() << tmpfileinfo->lastModified().toSecsSinceEpoch() << tmpfileinfo->metadataChangeTime().toSecsSinceEpoch();
-        // Get FileInfo to write to the logical image...
+        *out << (QString)tmpfileinfo->fileName(); // FILENAME
+        *out << (QString)tmpfileinfo->absolutePath(); // FULL PATH
+        *out << (qint64)tmpfileinfo->size(); // FILE SIZE (8 bytes)
+        *out << (qint64)tmpfileinfo->birthTime().toSecsSinceEpoch(); // CREATED (8 bytes)
+        *out << (qint64)tmpfileinfo->lastRead().toSecsSinceEpoch(); // ACCESSED (8 bytes)
+        *out << (qint64)tmpfileinfo->lastModified().toSecsSinceEpoch(); // MODIFIED (8 bytes)
+        *out << (qint64)tmpfileinfo->metadataChangeTime().toSecsSinceEpoch(); // STATUS CHANGED (8 bytes)
+        *logout << "Processed:" << tmpfileinfo->absoluteFilePath() << Qt::endl;
+        qDebug() << "Processed: " << tmpfileinfo->fileName();
+        if(blake3bool)
+        {
+            //qDebug() << "calculate blake3 hash for contents here...";
+        }
+        if(catsigbool)
+        {
+            //qDebug() << "calculate the signature and category for the contents here...";
+        }
         // Get the File Content and compress it using lz4 as a single frame ???
+        //qDebug() << "lz4 compress file contents and add to the logical image file..";
     }
 }
 
@@ -122,7 +138,7 @@ int main(int argc, char* argv[])
     for(int i=0; i < filelist.count(); i++)
     {
         QFileInfo tmpstat(filelist.at(i));
-        PopulateFile(&tmpstat);
+        PopulateFile(&tmpstat, blake3bool, catsigbool, &out, &logout);
     }
     // WRITE THE INDEX STRING TO THE FILE FOR READING LATER...
 
