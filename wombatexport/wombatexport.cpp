@@ -66,6 +66,7 @@ void PopulateFile(QFileInfo* tmpfileinfo, bool blake3bool, bool catsigbool, QDat
 }
 */
 
+/*
 static size_t GetBlockSize(const LZ4F_frameInfo_t* info)
 {
     switch (info->blockSizeID)
@@ -80,6 +81,7 @@ static size_t GetBlockSize(const LZ4F_frameInfo_t* info)
             exit(1);
     }
 }
+*/
 
 int main(int argc, char* argv[])
 {
@@ -204,17 +206,19 @@ int main(int argc, char* argv[])
                 qDebug() << "Failed to create restored directory for current file.";
             QFile restorefile(restoredir.absolutePath() + filepath + "/" + filename);
             if(!restorefile.isOpen())
-                restorefile.open(QIODevice::WriteOnly);
+                restorefile.open(QIODevice::WriteOnly | QIODevice::Append);
             QDataStream out(&restorefile);
             // Decompress and Write Contents to the restored file
-            char* cmpbuf = new char[16384];
+            char* cmpbuf = new char[200];
             LZ4F_dctx* lz4dctx;
-            LZ4F_frameInfo_t lz4frameinfo;
+            //LZ4F_frameInfo_t lz4frameinfo;
             LZ4F_errorCode_t errcode;
             errcode = LZ4F_createDecompressionContext(&lz4dctx, LZ4F_getVersion());
             if(LZ4F_isError(errcode))
                 qDebug() << "Create Error:" << LZ4F_getErrorName(errcode);
+            size_t consumedsize = 0;
             //qint64 curpos = 0;
+            /*
             int bytesread = in.readRawData(cmpbuf, 16384);
             qDebug() << "init bytesread:" << bytesread;
             size_t consumedsize = bytesread;
@@ -222,14 +226,17 @@ int main(int argc, char* argv[])
             size_t framesize = LZ4F_getFrameInfo(lz4dctx, &lz4frameinfo, cmpbuf, &consumedsize);
             if(LZ4F_isError(framesize))
                 qDebug() << "GetFrameInfo Error:" << LZ4F_getErrorName(framesize);
-            size_t rawbufsize = GetBlockSize(&lz4frameinfo);
+            */
+            size_t rawbufsize = 1000;
+            //size_t rawbufsize = GetBlockSize(&lz4frameinfo);
             char* rawbuf = new char[rawbufsize];
-            size_t filled = bytesread - consumedsize;
+            size_t filled = 0;
+            //size_t filled = bytesread - consumedsize;
             int firstchunk = 1;
             size_t ret = 1;
             while(ret != 0)
             {
-                size_t readsize = firstchunk ? filled : in.readRawData(cmpbuf, 16384);
+                size_t readsize = firstchunk ? filled : in.readRawData(cmpbuf, 100);
                 qDebug() << "readsize:" << readsize;
                 //fileoffset += readsize;
                 firstchunk = 0;
@@ -241,17 +248,24 @@ int main(int argc, char* argv[])
                     size_t dstsize = rawbufsize;
                     size_t srcsize = (const char*)srcend - (const char*)srcptr;
                     ret = LZ4F_decompress(lz4dctx, rawbuf, &dstsize, srcptr, &srcsize, NULL);
+                    qDebug() << "dstsize:" << dstsize;
                     if(LZ4F_isError(ret))
                         qDebug() << "Decompress Error:" << LZ4F_getErrorName(ret);
-                    int byteswrote = out.writeRawData(rawbuf, dstsize);
-                    qDebug() << "byteswrote:" << byteswrote;
+                    if(dstsize > 0)
+                    {
+                        //int byteswrote = restorefile.write(rawbuf, dstsize);
+                        int byteswrote = out.writeRawData(rawbuf, dstsize);
+                        //out.flush();
+                        qDebug() << "byteswrote:" << byteswrote;
+                    }
                     srcptr = (const char*)srcptr + srcsize;
                 }
                 qDebug() << "ret:" << ret;
             }
             restorefile.close();
+            qDebug() << "restorefile size:" << restorefile.size();
             if(!restorefile.isOpen())
-                restorefile.open(QIODevice::WriteOnly);
+                restorefile.open(QIODevice::ReadOnly);
             restorefile.setFileTime(QDateTime::fromSecsSinceEpoch(filecreate, Qt::UTC), QFileDevice::FileBirthTime);
             restorefile.setFileTime(QDateTime::fromSecsSinceEpoch(fileaccess, Qt::UTC), QFileDevice::FileAccessTime);
             restorefile.setFileTime(QDateTime::fromSecsSinceEpoch(filemodify, Qt::UTC), QFileDevice::FileModificationTime);
