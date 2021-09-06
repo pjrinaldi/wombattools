@@ -145,7 +145,7 @@ int main(int argc, char* argv[])
     QString examiner;
     QString description;
     in >> header >> version >> casenumber >> examiner >> description;
-    qint64 initoffset = wli.pos();
+    //qint64 initoffset = wli.pos();
     qint64 curoffset = wli.pos();
     qDebug() << curoffset;
     QList<qint64> fileindxlist;
