@@ -122,7 +122,9 @@ int main(int argc, char* argv[])
         qint64 filestatus;
         QString srchash;
         QString catsig;
-        in >> filename >> filepath >> filesize >> filecreate >> fileaccess >> filemodify >> filestatus >> srchash >> catsig;
+        qint8 itemtype;
+        qint8 deleted;
+        in >> filename >> filepath >> filesize >> filecreate >> fileaccess >> filemodify >> filestatus >> srchash >> catsig >> itemtype >> deleted;
         //qDebug() << "cur pos before frame:" << wli.pos();
         //qDebug() << "filename:" << filename << "filesize:" << filesize;
         //qDebug() << "new restorepath:" << restoredir.absolutePath() + filepath + "/" + filename;
