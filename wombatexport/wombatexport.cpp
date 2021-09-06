@@ -73,7 +73,7 @@ int main(int argc, char* argv[])
     //for(int i=1; i < args.count(); i++)
     //    filelist.append(args.at(i));
 
-    qDebug() << Qt::endl;
+    //qDebug() << Qt::endl;
     qDebug() << "wombatexport v0.1 Export from a Wombat Logical Forensic Imager started at: " << QDateTime::currentDateTime().toString("MM/dd/yyyy hh:mm:ss ap") << Qt::endl;
     // Initialize the datastream and header for the custom forensic image
     QFile wli(imgfile);
