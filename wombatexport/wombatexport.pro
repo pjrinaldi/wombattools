@@ -5,11 +5,11 @@ INCLUDEPATH += /usr/local/lib/
 INCLUDEPATH += /usr/local/include/
 VPATH += /usr/local/lib/
 VPATH += /usr/local/include/
-HEADERS = ../blake3.h
+#HEADERS = ../blake3.h
 SOURCES = wombatexport.cpp
 release: DESTDIR = release
 debug: DESTDIR = debug
-LIBS += -lblake3 -llz4 #-lzstd -lsnappy
+LIBS += -llz4 #-lblake3 -llz4 #-lzstd -lsnappy
 if(!debug_and_release|build_pass):CONFIG(debug, debug|release) {
 }
 target.path = /usr/local/bin

@@ -9,7 +9,7 @@ HEADERS = ../blake3.h
 SOURCES = wombatlogical.cpp
 release: DESTDIR = release
 debug: DESTDIR = debug
-LIBS += -lblake3 -llz4 #-lzstd -lsnappy
+LIBS += -lblake3 -llz4 -lmagic #-lzstd -lsnappy
 if(!debug_and_release|build_pass):CONFIG(debug, debug|release) {
 }
 target.path = /usr/local/bin

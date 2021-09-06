@@ -1,8 +1,5 @@
 #include <stdint.h>
 #include <fcntl.h>
-//#include <linux/fs.h>
-//#include <sys/ioctl.h>
-//#include <libudev.h>
 #include <unistd.h>
 #include <errno.h>
 #include <stdio.h>
@@ -20,10 +17,11 @@
 #include <QDateTime>
 #include <QDebug>
 #include <QtEndian>
-#include "../blake3.h"
+//#include "../blake3.h"
 #include <lz4.h>
 #include <lz4frame.h>
 
+/*
 void PopulateFile(QFileInfo* tmpfileinfo, bool blake3bool, bool catsigbool, QDataStream* out, QTextStream* logout)
 {
     if(tmpfileinfo->isDir()) // its a directory, need to read its contents..
@@ -66,6 +64,7 @@ void PopulateFile(QFileInfo* tmpfileinfo, bool blake3bool, bool catsigbool, QDat
         //qDebug() << "lz4 compress file contents and add to the logical image file..";
     }
 }
+*/
 
 int main(int argc, char* argv[])
 {
@@ -136,8 +135,14 @@ int main(int argc, char* argv[])
         qint64 filemodify;
         qint64 fileaccess;
         qint64 filestatus;
-        in >> filename >> filepath >> filesize >> filecreate >> fileaccess >> filemodify >> filestatus;
+        QString srchash;
+        QString catsig;
+        in >> filename >> filepath >> filesize >> filecreate >> fileaccess >> filemodify >> filestatus >> srchash >> catsig;
         qDebug() << "filename:" << filename;
+        if(!srchash.isEmpty())
+            qDebug() << "srchash:" << srchash;
+        if(!catsig.isEmpty())
+            qDebug() << "catsig:" << catsig;
         // setFileTime(QDateTime(secssinceepoch, Qt::UTC), QFileDevice::FileBirthTime);
         // QFileDevice::FileAccessTime
         //QFileDevice::FileBirthTime

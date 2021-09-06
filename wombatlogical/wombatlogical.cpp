@@ -57,6 +57,8 @@ void PopulateFile(QFileInfo* tmpfileinfo, bool blake3bool, bool catsigbool, QDat
         uint8_t sourcehash[BLAKE3_OUT_LEN];
         blake3_hasher blkhasher;
         blake3_hasher_init(&blkhasher);
+        QString srchash = "";
+        QString mimestr = "";
         while(!tmpfile.atEnd())
         {
             QByteArray tmparray = tmpfile.read(2048);
@@ -66,55 +68,85 @@ void PopulateFile(QFileInfo* tmpfileinfo, bool blake3bool, bool catsigbool, QDat
         if(blake3bool)
         {
             blake3_hasher_finalize(&blkhasher, sourcehash, BLAKE3_OUT_LEN);
-            QString srchash = "";
             for(size_t i=0; i < BLAKE3_OUT_LEN; i++)
             {
                 srchash.append(QString("%1").arg(sourcehash[i], 2, 16, QChar('0')));
-                printf("%02x", sourcehash[i]);
             }
-            printf(" - Source Device Hash\n");
-            qDebug() << tmpfileinfo->fileName() << srchash;
         }
+        *out << (QString)srchash; // BLAKE3 HASH FOR FILE CONTENTS OR EMPTY
         if(catsigbool)
         {
-            /*
-             *  QString mimestr = "";
-                if(filename.startsWith("$UPCASE_TABLE"))
-                    mimestr = "System File/Up-case Table";
-                else if(filename.startsWith("$ALLOC_BITMAP"))
-                    mimestr = "System File/Allocation Bitmap";
-                else if(filename.startsWith("$UpCase"))
-                    mimestr = "Windows System/System File";
-                else if(filename.startsWith("$MFT") || filename.startsWith("$MFTMirr") || filename.startsWith("$LogFile") || filename.startsWith("$Volume") || filename.startsWith("$AttrDef") || filename.startsWith("$Bitmap") || filename.startsWith("$Boot") || filename.startsWith("$BadClus") || filename.startsWith("$Secure") || filename.startsWith("$Extend"))
-                    mimestr = "Windows System/System File";
-                else
+            if(tmpfileinfo->fileName().startsWith("$UPCASE_TABLE"))
+                mimestr = "System File/Up-case Table";
+            else if(tmpfileinfo->fileName().startsWith("$ALLOC_BITMAP"))
+                mimestr = "System File/Allocation Bitmap";
+            else if(tmpfileinfo->fileName().startsWith("$UpCase"))
+                mimestr = "Windows System/System File";
+            else if(tmpfileinfo->fileName().startsWith("$MFT") || tmpfileinfo->fileName().startsWith("$MFTMirr") || tmpfileinfo->fileName().startsWith("$LogFile") || tmpfileinfo->fileName().startsWith("$Volume") || tmpfileinfo->fileName().startsWith("$AttrDef") || tmpfileinfo->fileName().startsWith("$Bitmap") || tmpfileinfo->fileName().startsWith("$Boot") || tmpfileinfo->fileName().startsWith("$BadClus") || tmpfileinfo->fileName().startsWith("$Secure") || tmpfileinfo->fileName().startsWith("$Extend"))
+                mimestr = "Windows System/System File";
+            else
+            {
+                // NON-QT WAY USING LIBMAGIC
+                tmpfile.seek(0);
+                QByteArray sigbuf = tmpfile.read(2048);
+                magic_t magical;
+                const char* catsig;
+                magical = magic_open(MAGIC_MIME_TYPE);
+                magic_load(magical, NULL);
+                catsig = magic_buffer(magical, sigbuf.data(), sigbuf.count());
+                std::string catsigstr(catsig);
+                mimestr = QString::fromStdString(catsigstr);
+                magic_close(magical);
+                for(int i=0; i < mimestr.count(); i++)
                 {
-                    // NON-QT WAY USING LIBMAGIC
-                    QByteArray sigbuf = curimg->ReadContent(fileoffset, 1024);
-                    magic_t magical;
-                    const char* catsig;
-                    magical = magic_open(MAGIC_MIME_TYPE);
-                    magic_load(magical, NULL);
-                    catsig = magic_buffer(magical, sigbuf.data(), sigbuf.count());
-                    std::string catsigstr(catsig);
-                    mimestr = QString::fromStdString(catsigstr);
-                    magic_close(magical);
-                    for(int i=0; i < mimestr.count(); i++)
-                    {
-                        if(i == 0 || mimestr.at(i-1) == ' ' || mimestr.at(i-1) == '-' || mimestr.at(i-1) == '/')
-                            mimestr[i] = mimestr[i].toUpper();
-                    }
+                    if(i == 0 || mimestr.at(i-1) == ' ' || mimestr.at(i-1) == '-' || mimestr.at(i-1) == '/')
+                        mimestr[i] = mimestr[i].toUpper();
                 }
-                //else if(filename.startsWith("$INDEX_ROOT:") || filename.startsWith("$DATA:") || filename.startWith("$INDEX_ALLOCATION:"))
-                
-
-                return mimestr;
-
-             */ 
-            //qDebug() << "calculate the signature and category for the contents here...";
+            }
+            //else if(tmpfileinfo->fileName().startsWith("$INDEX_ROOT:") || tmpfileinfo->fileName().startsWith("$DATA:") || tmpfileinfo->fileName().startWith("$INDEX_ALLOCATION:"))
         }
-        // Get the File Content and compress it using lz4 as a single frame ???
-        //qDebug() << "lz4 compress file contents and add to the logical image file..";
+        *out << (QString)mimestr; // CATEGORY/SIGNATURE STRING FOR FILE CONTENTS OR EMPTY
+
+        // ATTEMPT USING A SINGLE LZ4FRAME SIMILAR TO BLAKE3 HASHING
+        tmpfile.seek(0);
+        qint64 curpos = 0;
+        size_t destsize = LZ4F_compressFrameBound(2048, NULL);
+        char* dstbuf = new char[destsize];
+        char* srcbuf = new char[2048];
+        int dstbytes = 0;
+        int compressedsize = 0;
+        LZ4F_cctx* lz4cctx;
+        LZ4F_errorCode_t errcode;
+        errcode = LZ4F_createCompressionContext(&lz4cctx, LZ4F_getVersion());
+        if(LZ4F_isError(errcode))
+            qDebug() << "LZ4 Create Error:" << LZ4F_getErrorName(errcode);
+        dstbytes = LZ4F_compressBegin(lz4cctx, dstbuf, destsize, NULL);
+        compressedsize += dstbytes;
+        if(LZ4F_isError(dstbytes))
+            qDebug() << "LZ4 Begin Error:" << LZ4F_getErrorName(dstbytes);
+        out->writeRawData(dstbuf, dstbytes);
+        while(curpos < tmpfile.size())
+        {
+            int bytesread = tmpfile.read(srcbuf, 2048);
+            dstbytes = LZ4F_compressUpdate(lz4cctx, dstbuf, destsize, srcbuf, bytesread, NULL);
+            if(LZ4F_isError(dstbytes))
+                qDebug() << "LZ4 Update Error:" << LZ4F_getErrorName(dstbytes);
+            dstbytes = LZ4F_flush(lz4cctx, dstbuf, destsize, NULL);
+            if(LZ4F_isError(dstbytes))
+                qDebug() << "LZ4 Flush Error:" << LZ4F_getErrorName(dstbytes);
+            compressedsize += dstbytes;
+            out->writeRawData(dstbuf, dstbytes);
+            curpos = curpos + bytesread;
+            //printf("Wrote %llu of %llu bytes\r", curpos, totalbytes);
+            //fflush(stdout);
+        }
+        dstbytes = LZ4F_compressEnd(lz4cctx, dstbuf, destsize, NULL);
+        compressedsize += dstbytes;
+        out->writeRawData(dstbuf, dstbytes);
+        delete[] srcbuf;
+        delete[] dstbuf;
+        errcode = LZ4F_freeCompressionContext(lz4cctx);
+        tmpfile.close();
         *logout << "Processed:" << tmpfileinfo->absoluteFilePath() << Qt::endl;
         qDebug() << "Processed: " << tmpfileinfo->fileName();
     }
