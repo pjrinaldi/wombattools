@@ -17,71 +17,8 @@
 #include <QDateTime>
 #include <QDebug>
 #include <QtEndian>
-//#include "../blake3.h"
 #include <lz4.h>
 #include <lz4frame.h>
-
-/*
-void PopulateFile(QFileInfo* tmpfileinfo, bool blake3bool, bool catsigbool, QDataStream* out, QTextStream* logout)
-{
-    if(tmpfileinfo->isDir()) // its a directory, need to read its contents..
-    {
-        QDir tmpdir(tmpfileinfo->absoluteFilePath());
-        if(tmpdir.isEmpty())
-            qDebug() << "dir" << tmpfileinfo->fileName() << "is empty and will be skipped.";
-        else
-        {
-            QFileInfoList infolist = tmpdir.entryInfoList(QDir::NoDotAndDotDot | QDir::Files | QDir::Dirs);
-            for(int i=0; i < infolist.count(); i++)
-            {
-                QFileInfo tmpinfo = infolist.at(i);
-                PopulateFile(&tmpinfo, blake3bool, catsigbool, out, logout);
-            }
-        }
-    }
-    else if(tmpfileinfo->isFile()) // its a file, so read the info i need...
-    {
-        // name << path << size << created << accessed << modified << status changed << b3 hash << category << signature
-        // other info to gleam such as groupid, userid, permission, 
-        *out << (QString)tmpfileinfo->fileName(); // FILENAME
-        *out << (QString)tmpfileinfo->absolutePath(); // FULL PATH
-        *out << (qint64)tmpfileinfo->size(); // FILE SIZE (8 bytes)
-        *out << (qint64)tmpfileinfo->birthTime().toSecsSinceEpoch(); // CREATED (8 bytes)
-        *out << (qint64)tmpfileinfo->lastRead().toSecsSinceEpoch(); // ACCESSED (8 bytes)
-        *out << (qint64)tmpfileinfo->lastModified().toSecsSinceEpoch(); // MODIFIED (8 bytes)
-        *out << (qint64)tmpfileinfo->metadataChangeTime().toSecsSinceEpoch(); // STATUS CHANGED (8 bytes)
-        *logout << "Processed:" << tmpfileinfo->absoluteFilePath() << Qt::endl;
-        qDebug() << "Processed: " << tmpfileinfo->fileName();
-        if(blake3bool)
-        {
-            //qDebug() << "calculate blake3 hash for contents here...";
-        }
-        if(catsigbool)
-        {
-            //qDebug() << "calculate the signature and category for the contents here...";
-        }
-        // Get the File Content and compress it using lz4 as a single frame ???
-        //qDebug() << "lz4 compress file contents and add to the logical image file..";
-    }
-}
-*/
-
-/*
-static size_t GetBlockSize(const LZ4F_frameInfo_t* info)
-{
-    switch (info->blockSizeID)
-    {
-        case LZ4F_default:
-        case LZ4F_max64KB:  return 1 << 16;
-        case LZ4F_max256KB: return 1 << 18;
-        case LZ4F_max1MB:   return 1 << 20;
-        case LZ4F_max4MB:   return 1 << 22;
-        default:
-            printf("Impossible with expected frame specification (<=v1.6.1)\n");
-            exit(1);
-    }
-}
-*/
 
 int main(int argc, char* argv[])
 {
@@ -136,6 +73,8 @@ int main(int argc, char* argv[])
     //for(int i=1; i < args.count(); i++)
     //    filelist.append(args.at(i));
 
+    qDebug() << Qt::endl;
+    qDebug() << "wombatexport v0.1 Export from a Wombat Logical Forensic Imager started at: " << QDateTime::currentDateTime().toString("MM/dd/yyyy hh:mm:ss ap") << Qt::endl;
     // Initialize the datastream and header for the custom forensic image
     QFile wli(imgfile);
     if(!wli.isOpen())
@@ -149,7 +88,7 @@ int main(int argc, char* argv[])
     in >> header >> version >> casenumber >> examiner >> description;
     //qint64 initoffset = wli.pos();
     qint64 curoffset = wli.pos();
-    qDebug() << curoffset;
+    //qDebug() << curoffset;
     QList<qint64> fileindxlist;
     while(!in.atEnd())
     {
@@ -158,17 +97,6 @@ int main(int argc, char* argv[])
         if(isindx >= 0)
             fileindxlist.append(curoffset + isindx);
         curoffset += 1000;
-        /*
-        QByteArray skiparray = wfi.read(10000);
-        int isskiphead = skiparray.lastIndexOf("_*M");
-        QString getindx = "";
-        if(qFromBigEndian<quint32>(skiparray.mid(isskiphead, 4)) == 0x5f2a4d18)
-        {
-            wfi.seek(wfi.size() - 128 - 10000 + isskiphead + 8);
-            in >> getindx;
-        }
-        wfi.seek(0);
-         */ 
     }
     //qDebug() << "fileindxlist:" << fileindxlist;
     //qDebug() << "fileindxlist count:" << fileindxlist.count();
@@ -185,101 +113,6 @@ int main(int argc, char* argv[])
         wli.read(8);
         //qDebug() << "wlistart:" << QString(wli.read(8));
         //qDebug() << "wli start:" << wli.read(8).toHex()
-        //qDebug() << "fileoffset:" << fileoffset << "lzfilesize:" << lzfilesize;
-        //while(fileoffset < fileoffset + filesize)
-        //{
-            QString filename;
-            QString filepath;
-            qint64 filesize;
-            qint64 filecreate;
-            qint64 filemodify;
-            qint64 fileaccess;
-            qint64 filestatus;
-            QString srchash;
-            QString catsig;
-            in >> filename >> filepath >> filesize >> filecreate >> fileaccess >> filemodify >> filestatus >> srchash >> catsig;
-            //qDebug() << "cur pos before frame:" << wli.pos();
-            //qDebug() << "filename:" << filename << "filesize:" << filesize;
-            //qDebug() << "new restorepath:" << restoredir.absolutePath() + filepath + "/" + filename;
-            QDir tmpdir;
-            if(tmpdir.mkpath(restoredir.absolutePath() + filepath) == false)
-                qDebug() << "Failed to create restored directory for current file.";
-            QFile restorefile(restoredir.absolutePath() + filepath + "/" + filename);
-            if(!restorefile.isOpen())
-                restorefile.open(QIODevice::WriteOnly | QIODevice::Append);
-            QDataStream out(&restorefile);
-            // Decompress and Write Contents to the restored file
-            char* cmpbuf = new char[200];
-            LZ4F_dctx* lz4dctx;
-            //LZ4F_frameInfo_t lz4frameinfo;
-            LZ4F_errorCode_t errcode;
-            errcode = LZ4F_createDecompressionContext(&lz4dctx, LZ4F_getVersion());
-            if(LZ4F_isError(errcode))
-                qDebug() << "Create Error:" << LZ4F_getErrorName(errcode);
-            size_t consumedsize = 0;
-            //qint64 curpos = 0;
-            /*
-            int bytesread = in.readRawData(cmpbuf, 16384);
-            qDebug() << "init bytesread:" << bytesread;
-            size_t consumedsize = bytesread;
-            //fileoffset += bytesread;
-            size_t framesize = LZ4F_getFrameInfo(lz4dctx, &lz4frameinfo, cmpbuf, &consumedsize);
-            if(LZ4F_isError(framesize))
-                qDebug() << "GetFrameInfo Error:" << LZ4F_getErrorName(framesize);
-            */
-            size_t rawbufsize = 1000;
-            //size_t rawbufsize = GetBlockSize(&lz4frameinfo);
-            char* rawbuf = new char[rawbufsize];
-            size_t filled = 0;
-            //size_t filled = bytesread - consumedsize;
-            int firstchunk = 1;
-            size_t ret = 1;
-            while(ret != 0)
-            {
-                size_t readsize = firstchunk ? filled : in.readRawData(cmpbuf, 100);
-                //qDebug() << "readsize:" << readsize;
-                //fileoffset += readsize;
-                firstchunk = 0;
-                const void* srcptr = (const char*)cmpbuf + consumedsize;
-                consumedsize = 0;
-                const void* const srcend = (const char*)srcptr + readsize;
-                while(srcptr < srcend && ret != 0)
-                {
-                    size_t dstsize = rawbufsize;
-                    size_t srcsize = (const char*)srcend - (const char*)srcptr;
-                    ret = LZ4F_decompress(lz4dctx, rawbuf, &dstsize, srcptr, &srcsize, NULL);
-                    //qDebug() << "dstsize:" << dstsize;
-                    if(LZ4F_isError(ret))
-                        qDebug() << "Decompress Error:" << LZ4F_getErrorName(ret);
-                    if(dstsize > 0)
-                    {
-                        int byteswrote = out.writeRawData(rawbuf, dstsize);
-                        //qDebug() << "byteswrote:" << byteswrote;
-                    }
-                    srcptr = (const char*)srcptr + srcsize;
-                }
-                //qDebug() << "ret:" << ret;
-            }
-            restorefile.close();
-            //qDebug() << "restorefile size:" << restorefile.size();
-            if(!restorefile.isOpen())
-                restorefile.open(QIODevice::ReadOnly);
-            restorefile.setFileTime(QDateTime::fromSecsSinceEpoch(filecreate, Qt::UTC), QFileDevice::FileBirthTime);
-            restorefile.setFileTime(QDateTime::fromSecsSinceEpoch(fileaccess, Qt::UTC), QFileDevice::FileAccessTime);
-            restorefile.setFileTime(QDateTime::fromSecsSinceEpoch(filemodify, Qt::UTC), QFileDevice::FileModificationTime);
-            restorefile.setFileTime(QDateTime::fromSecsSinceEpoch(filestatus, Qt::UTC), QFileDevice::FileMetadataChangeTime);
-            restorefile.close();
-            qDebug() << "Restored" << QString(filepath + "/" + filename) << "to" << restoredir.absolutePath();
-            //qDebug() << "filename:" << filename;
-            //if(!srchash.isEmpty())
-            //    qDebug() << "srchash:" << srchash;
-            //if(!catsig.isEmpty())
-            //    qDebug() << "catsig:" << catsig;
-        //}
-    }
-    /*
-    while(!in.atEnd())
-    {
         QString filename;
         QString filepath;
         qint64 filesize;
@@ -290,36 +123,32 @@ int main(int argc, char* argv[])
         QString srchash;
         QString catsig;
         in >> filename >> filepath >> filesize >> filecreate >> fileaccess >> filemodify >> filestatus >> srchash >> catsig;
+        //qDebug() << "cur pos before frame:" << wli.pos();
+        //qDebug() << "filename:" << filename << "filesize:" << filesize;
         //qDebug() << "new restorepath:" << restoredir.absolutePath() + filepath + "/" + filename;
         QDir tmpdir;
         if(tmpdir.mkpath(restoredir.absolutePath() + filepath) == false)
             qDebug() << "Failed to create restored directory for current file.";
         QFile restorefile(restoredir.absolutePath() + filepath + "/" + filename);
         if(!restorefile.isOpen())
-            restorefile.open(QIODevice::WriteOnly);
+            restorefile.open(QIODevice::WriteOnly | QIODevice::Append);
         QDataStream out(&restorefile);
         // Decompress and Write Contents to the restored file
-        char* cmpbuf = new char[16384];
+        char* cmpbuf = new char[200];
         LZ4F_dctx* lz4dctx;
-        LZ4F_frameInfo_t lz4frameinfo;
         LZ4F_errorCode_t errcode;
         errcode = LZ4F_createDecompressionContext(&lz4dctx, LZ4F_getVersion());
         if(LZ4F_isError(errcode))
             qDebug() << "Create Error:" << LZ4F_getErrorName(errcode);
-        //qint64 curpos = 0;
-        int bytesread = in.readRawData(cmpbuf, 16384);
-        size_t consumedsize = bytesread;
-        size_t framesize = LZ4F_getFrameInfo(lz4dctx, &lz4frameinfo, cmpbuf, &consumedsize);
-        if(LZ4F_isError(framesize))
-            qDebug() << "GetFrameInfo Error:" << LZ4F_getErrorName(framesize);
-        size_t rawbufsize = GetBlockSize(&lz4frameinfo);
+        size_t consumedsize = 0;
+        size_t rawbufsize = 1000;
         char* rawbuf = new char[rawbufsize];
-        size_t filled = bytesread - consumedsize;
+        size_t filled = 0;
         int firstchunk = 1;
         size_t ret = 1;
         while(ret != 0)
         {
-            size_t readsize = firstchunk ? filled : in.readRawData(cmpbuf, 16384);
+            size_t readsize = firstchunk ? filled : in.readRawData(cmpbuf, 100);
             firstchunk = 0;
             const void* srcptr = (const char*)cmpbuf + consumedsize;
             consumedsize = 0;
@@ -329,84 +158,31 @@ int main(int argc, char* argv[])
                 size_t dstsize = rawbufsize;
                 size_t srcsize = (const char*)srcend - (const char*)srcptr;
                 ret = LZ4F_decompress(lz4dctx, rawbuf, &dstsize, srcptr, &srcsize, NULL);
+                //qDebug() << "dstsize:" << dstsize;
                 if(LZ4F_isError(ret))
                     qDebug() << "Decompress Error:" << LZ4F_getErrorName(ret);
-                int byteswrote = out.writeRawData(rawbuf, dstsize);
+                if(dstsize > 0)
+                {
+                    int byteswrote = out.writeRawData(rawbuf, dstsize);
+                    //qDebug() << "byteswrote:" << byteswrote;
+                }
                 srcptr = (const char*)srcptr + srcsize;
             }
+            //qDebug() << "ret:" << ret;
         }
         restorefile.close();
+        //qDebug() << "restorefile size:" << restorefile.size();
         if(!restorefile.isOpen())
-            restorefile.open(QIODevice::WriteOnly);
+            restorefile.open(QIODevice::ReadOnly);
         restorefile.setFileTime(QDateTime::fromSecsSinceEpoch(filecreate, Qt::UTC), QFileDevice::FileBirthTime);
         restorefile.setFileTime(QDateTime::fromSecsSinceEpoch(fileaccess, Qt::UTC), QFileDevice::FileAccessTime);
         restorefile.setFileTime(QDateTime::fromSecsSinceEpoch(filemodify, Qt::UTC), QFileDevice::FileModificationTime);
         restorefile.setFileTime(QDateTime::fromSecsSinceEpoch(filestatus, Qt::UTC), QFileDevice::FileMetadataChangeTime);
         restorefile.close();
-        qDebug() << "Restored" << QString(filepath + "/" + filename) << "to" << restoredir.absolutePath();
-        //qDebug() << "filename:" << filename;
-        //if(!srchash.isEmpty())
-        //    qDebug() << "srchash:" << srchash;
-        //if(!catsig.isEmpty())
-        //    qDebug() << "catsig:" << catsig;
+        qDebug() << "Exported" << QString(filepath + "/" + filename) << "to" << restoredir.absolutePath();
     }
-    */
+    qDebug() << Qt::endl << "wombatexport finished at" << QDateTime::currentDateTime().toString("MM/dd/yyyy hh:mm:ss ap") << Qt::endl;
     wli.close();
 
-    // IF I KEEP AN INDEX OF THE STARTING OFFSET OF EACH FILE, I CAN GENERATE A LISTING WITH THE WOMBATINFO FUNCTION TO LIST THE CONTENTS OF THE FILES WITHIN THE IMAGE SUCH AS WHAT ZIP WOULD DO...
-    // WRITE THE INDEX STRING TO THE FILE FOR READING LATER...
-
-    /*
-    char* rawbuf = new char[rawbufsize];
-    size_t filled = bytesread - consumedsize;
-    int firstchunk = 1;
-    size_t ret = 1;
-    while(ret != 0)
-    {
-        size_t readsize = firstchunk ? filled : cin.readRawData(cmpbuf, IN_CHUNK_SIZE);
-        firstchunk = 0;
-        const void* srcptr = (const char*)cmpbuf + consumedsize;
-        consumedsize = 0;
-        const void* const srcend = (const char*)srcptr + readsize;
-        while(srcptr < srcend && ret != 0)
-        {
-            size_t dstsize = rawbufsize;
-            size_t srcsize = (const char*)srcend - (const char*)srcptr;
-            ret = LZ4F_decompress(lz4dctx, rawbuf, &dstsize, srcptr, &srcsize, NULL);
-            if(LZ4F_isError(ret))
-            {
-                printf("decompression error: %s\n", LZ4F_getErrorName(ret));
-            }
-            printf("Verifying %ld of %llu bytes\r", dstsize, totalbytes);
-            fflush(stdout);
-            //write here
-            //int byteswrote = cout.writeRawData(rawbuf, dstsize);
-            srcptr = (const char*)srcptr + srcsize;
-        }
-    }
-    //qDebug() << "ret should be zero:" << ret;
-    cwfi.close();
-    //rawdd.close();
-    delete[] cmpbuf;
-    delete[] rawbuf;
-
-    errcode = LZ4F_freeDecompressionContext(lz4dctx);
-
-    // VERIFY HASHES HERE...
-    if(memcmp(sourcehash, forimghash, BLAKE3_OUT_LEN) == 0)
-    {
-        printf("\nVerification Successful\n");
-        logout << "Verification Successful" << Qt::endl;
-    }
-    else
-    {
-        printf("\nVerification Failed\n");
-        logout << "Verification Failed" << Qt::endl;
-    }
-    printf("Finished Forensic Image Verification at %s\n", QDateTime::currentDateTime().toString("MM/dd/yyyy hh:mm:ss ap").toStdString().c_str());
-    logout << "Finished Forensic Image Verification at:" << QDateTime::currentDateTime().toString("MM/dd/yyyy hh:mm:ss ap") << Qt::endl;
-    log.close();
-
-*/
     return 0;
 }
