@@ -170,8 +170,8 @@ int main(int argc, char* argv[])
         wfi.seek(0);
          */ 
     }
-    qDebug() << "fileindxlist:" << fileindxlist;
-    qDebug() << "fileindxlist count:" << fileindxlist.count();
+    //qDebug() << "fileindxlist:" << fileindxlist;
+    //qDebug() << "fileindxlist count:" << fileindxlist.count();
     for(int i=0; i < fileindxlist.count(); i++)
     {
         qint64 fileoffset = fileindxlist.at(i);
@@ -185,7 +185,7 @@ int main(int argc, char* argv[])
         wli.read(8);
         //qDebug() << "wlistart:" << QString(wli.read(8));
         //qDebug() << "wli start:" << wli.read(8).toHex()
-        qDebug() << "fileoffset:" << fileoffset << "lzfilesize:" << lzfilesize;
+        //qDebug() << "fileoffset:" << fileoffset << "lzfilesize:" << lzfilesize;
         //while(fileoffset < fileoffset + filesize)
         //{
             QString filename;
@@ -198,8 +198,8 @@ int main(int argc, char* argv[])
             QString srchash;
             QString catsig;
             in >> filename >> filepath >> filesize >> filecreate >> fileaccess >> filemodify >> filestatus >> srchash >> catsig;
-            qDebug() << "cur pos before frame:" << wli.pos();
-            qDebug() << "filename:" << filename << "filesize:" << filesize;
+            //qDebug() << "cur pos before frame:" << wli.pos();
+            //qDebug() << "filename:" << filename << "filesize:" << filesize;
             //qDebug() << "new restorepath:" << restoredir.absolutePath() + filepath + "/" + filename;
             QDir tmpdir;
             if(tmpdir.mkpath(restoredir.absolutePath() + filepath) == false)
@@ -237,7 +237,7 @@ int main(int argc, char* argv[])
             while(ret != 0)
             {
                 size_t readsize = firstchunk ? filled : in.readRawData(cmpbuf, 100);
-                qDebug() << "readsize:" << readsize;
+                //qDebug() << "readsize:" << readsize;
                 //fileoffset += readsize;
                 firstchunk = 0;
                 const void* srcptr = (const char*)cmpbuf + consumedsize;
@@ -248,22 +248,20 @@ int main(int argc, char* argv[])
                     size_t dstsize = rawbufsize;
                     size_t srcsize = (const char*)srcend - (const char*)srcptr;
                     ret = LZ4F_decompress(lz4dctx, rawbuf, &dstsize, srcptr, &srcsize, NULL);
-                    qDebug() << "dstsize:" << dstsize;
+                    //qDebug() << "dstsize:" << dstsize;
                     if(LZ4F_isError(ret))
                         qDebug() << "Decompress Error:" << LZ4F_getErrorName(ret);
                     if(dstsize > 0)
                     {
-                        //int byteswrote = restorefile.write(rawbuf, dstsize);
                         int byteswrote = out.writeRawData(rawbuf, dstsize);
-                        //out.flush();
-                        qDebug() << "byteswrote:" << byteswrote;
+                        //qDebug() << "byteswrote:" << byteswrote;
                     }
                     srcptr = (const char*)srcptr + srcsize;
                 }
-                qDebug() << "ret:" << ret;
+                //qDebug() << "ret:" << ret;
             }
             restorefile.close();
-            qDebug() << "restorefile size:" << restorefile.size();
+            //qDebug() << "restorefile size:" << restorefile.size();
             if(!restorefile.isOpen())
                 restorefile.open(QIODevice::ReadOnly);
             restorefile.setFileTime(QDateTime::fromSecsSinceEpoch(filecreate, Qt::UTC), QFileDevice::FileBirthTime);
