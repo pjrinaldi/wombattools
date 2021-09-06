@@ -43,6 +43,7 @@ void PopulateFile(QFileInfo* tmpfileinfo, bool blake3bool, bool catsigbool, QDat
     {
         // name << path << size << created << accessed << modified << status changed << b3 hash << category << signature
         // other info to gleam such as groupid, userid, permission, 
+        *out << (qint64)0x776c69696e646578; // wombat logical image index entry
         *out << (QString)tmpfileinfo->fileName(); // FILENAME
         *out << (QString)tmpfileinfo->absolutePath(); // FULL PATH
         *out << (qint64)tmpfileinfo->size(); // FILE SIZE (8 bytes)
