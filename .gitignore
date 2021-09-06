@@ -55,6 +55,7 @@ wombatinfo/wi2/debug
 wombatinfo/wi2/release
 wombatexport/debug
 wombatexport/release
+wombatexport/test
 
 # Qt unit tests
 target_wrapper.*
