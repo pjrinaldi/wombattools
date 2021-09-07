@@ -224,7 +224,6 @@ int main(int argc, char* argv[])
         printf("Writing %llu of %llu bytes\r", curpos, totalbytes);
         fflush(stdout);
     }
-
     delete[] srcbuf;
     delete[] dstbuf;
     errcode = LZ4F_freeCompressionContext(lz4cctx);
@@ -242,6 +241,59 @@ int main(int argc, char* argv[])
     printf(" - Source Device Hash\n");
     out << srchash;
     wfi.close();
+    
+    if(!wfi.isOpen())
+        wfi.open(QIODevice::ReadOnly);
+    QList<qint64> frameindxlist;
+    frameindxlist.clear();
+    qint64 coff = 0;
+    //while(!wfi.atEnd())
+    while(coff < 1000)
+    {
+        curpos = 0;
+        QByteArray srcharray = wfi.read(1000);
+        qDebug() << "srcharray hex count:" << srcharray.toHex().count();
+        //int frstindx = srcharray.toHex().indexOf("04224d18");
+        int lastindx = srcharray.toHex().lastIndexOf("04224d18");
+        //qDebug() << "lastindx:" << lastindx;
+        //qDebug() << "coff:" << coff << "lastindx:" << lastindx << lastindx/2;
+        if(lastindx == 0)
+            frameindxlist.append(coff);
+        else
+        {
+            while(curpos <= srcharray.toHex().count() && lastindx > 0)
+            {
+                int isindx = srcharray.toHex().indexOf("04224d18", curpos);
+                //qDebug() << "isindx:" << isindx << isindx/2;
+                if(isindx >= 0)
+                    frameindxlist.append(coff + isindx/2);
+                else
+                    break;
+                curpos += isindx + 1;
+                qDebug() << "curpos:" << coff + curpos;
+                //frameindxlist.append(coff + lastindx/2);
+            }
+        }
+        coff += 1000;
+        //qDebug() << "coff:" << coff;
+    }
+    wfi.close();
+    qDebug() << "frameindxlist count:" << frameindxlist.count();
+    qDebug() << "indxlist count:" << indxstr.split(",", Qt::SkipEmptyParts).count();
+    qDebug() << "indxlist:" << indxstr.split(",", Qt::SkipEmptyParts);
+    qDebug() << "framlist:" << frameindxlist;
+    /*
+    //0x04224d18
+    QList<qint64> fileindxlist;
+    while(!in.atEnd())
+    {
+        QByteArray skiparray = wli.read(1000);
+        int isindx = skiparray.indexOf("wliindex");
+        if(isindx >= 0)
+            fileindxlist.append(curoffset + isindx);
+        curoffset += 1000;
+    }
+    */
 
     uint8_t forimghash[BLAKE3_OUT_LEN];
     blake3_hasher imghasher;
