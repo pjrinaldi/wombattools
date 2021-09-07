@@ -24,6 +24,32 @@
 #include <lz4.h>
 #include <lz4frame.h>
 
+/*
+void FindNextFrame(qint64 initialindex, QList<qint64>* framelist, QFile* wfi)
+{
+    //qDebug() << "initial index:" << initialindex;
+    if(!wfi->isOpen())
+        wfi->open(QIODevice::ReadOnly);
+    wfi->seek(initialindex);
+    QByteArray srcharray = wfi->peek(131072);
+    int srchindx = srcharray.toHex().indexOf("04224d18");
+    if(srchindx == -1)
+    {
+        qDebug() << "this should occur after the last frame near the end of the file";
+    }
+    //int srchindx = srcharray.toHex().indexOf("04224d18", initialindex*2);
+    wfi->seek(initialindex + srchindx/2);
+    if(qFromBigEndian<qint32>(wfi->peek(4)) == 0x04224d18)
+    {
+        //qDebug() << "frame found:" << srchindx/2;
+        framelist->append(initialindex + srchindx/2);
+        FindNextFrame(initialindex + srchindx/2 + 1, framelist, wfi);
+    }
+    //else
+    //    qDebug() << "frame error:" << srchindx/2;
+}
+*/
+
 int main(int argc, char* argv[])
 {
     QCoreApplication app(argc, argv);
@@ -229,7 +255,7 @@ int main(int argc, char* argv[])
     errcode = LZ4F_freeCompressionContext(lz4cctx);
     blkdev.close();
     // SKIPPABLE FRAME WITH INDEX STRING
-    out << (quint32)0x5F2A4D18 << (quint32)indxstr.size() << (QString)indxstr;
+    //out << (quint32)0x5F2A4D18 << (quint32)indxstr.size() << (QString)indxstr;
 
     blake3_hasher_finalize(&blkhasher, sourcehash, BLAKE3_OUT_LEN);
     QString srchash = "";
@@ -242,17 +268,57 @@ int main(int argc, char* argv[])
     out << srchash;
     wfi.close();
     
+    /*
+    // HOW TO GET FRAME INDEX LIST OUT OF THE WFI FILE 
+    QList<qint64> frameindxlist;
+    frameindxlist.clear();
+    FindNextFrame(0, &frameindxlist, &wfi);
+    */
+    
+    //qDebug() << "frameindxlist.count():" << frameindxlist.count();
+
+    /*
     if(!wfi.isOpen())
         wfi.open(QIODevice::ReadOnly);
     QList<qint64> frameindxlist;
     frameindxlist.clear();
     qint64 coff = 0;
-    //while(!wfi.atEnd())
-    while(coff < 1000)
+    wfi.seek(39);
+    QByteArray srcharray = wfi.peek(4);
+    int initialindex = 0;
+    int nextindex = 0;
+    if(qFromBigEndian<qint32>(srcharray) == 0x04224d18)
+    {
+        qDebug() << "1st frame found!" << wfi.pos();
+        initialindex = wfi.pos();
+        frameindxlist.append(initialindex);
+        wfi.seek(0);
+        //wfi.seek(initialindex + 1);
+        QByteArray scndsrch = wfi.peek(500);
+        int secondindex = scndsrch.toHex().indexOf("04224d18", initialindex*2 + 1);
+        qDebug() << "secondindex:" << secondindex/2;
+        wfi.seek(secondindex/2);
+        if(qFromBigEndian<qint32>(wfi.peek(4)) == 0x04224d18)
+        {
+            qDebug() << "2nd frame found:" << wfi.pos();
+            frameindxlist.append(wfi.pos());
+            //FindNextFrame(initialindex, frameindxlist);
+        }
+    }
+    /*
+    while(!wfi.atEnd())
+    {
+        wfi.seek(nextindex);
+        //int isindx = wfi.peek(100).indexOf(
+    }
+    */
+    //while(coff < 1000)
+    /*
+    while(!wfi.atEnd())
     {
         curpos = 0;
         QByteArray srcharray = wfi.read(1000);
-        qDebug() << "srcharray hex count:" << srcharray.toHex().count();
+        //qDebug() << "srcharray hex count:" << srcharray.toHex().count();
         //int frstindx = srcharray.toHex().indexOf("04224d18");
         int lastindx = srcharray.toHex().lastIndexOf("04224d18");
         //qDebug() << "lastindx:" << lastindx;
@@ -261,27 +327,30 @@ int main(int argc, char* argv[])
             frameindxlist.append(coff);
         else
         {
+            //while(curpos <= srcharray.toHex().count())
             while(curpos <= srcharray.toHex().count() && lastindx > 0)
             {
+                //qDebug() << "curpos before indexof:" << curpos;
                 int isindx = srcharray.toHex().indexOf("04224d18", curpos);
-                //qDebug() << "isindx:" << isindx << isindx/2;
+                //qDebug() << "isindx:" << isindx;
                 if(isindx >= 0)
                     frameindxlist.append(coff + isindx/2);
                 else
                     break;
-                curpos += isindx + 1;
-                qDebug() << "curpos:" << coff + curpos;
+                curpos = isindx + 1;
+                //qDebug() << "curpos:" << coff + curpos;
                 //frameindxlist.append(coff + lastindx/2);
             }
         }
         coff += 1000;
         //qDebug() << "coff:" << coff;
     }
+    */
     wfi.close();
-    qDebug() << "frameindxlist count:" << frameindxlist.count();
-    qDebug() << "indxlist count:" << indxstr.split(",", Qt::SkipEmptyParts).count();
-    qDebug() << "indxlist:" << indxstr.split(",", Qt::SkipEmptyParts);
-    qDebug() << "framlist:" << frameindxlist;
+    //qDebug() << "frameindxlist count:" << frameindxlist.count();
+    //qDebug() << "indxlist count:" << indxstr.split(",", Qt::SkipEmptyParts).count();
+    //qDebug() << "indxlist:" << indxstr.split(",", Qt::SkipEmptyParts);
+    //qDebug() << "framlist:" << frameindxlist;
     /*
     //0x04224d18
     QList<qint64> fileindxlist;
