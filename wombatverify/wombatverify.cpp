@@ -24,6 +24,30 @@
 #include <lz4.h>
 #include <lz4frame.h>
 
+void FindNextFrame(qint64 initialindex, QList<qint64>* framelist, QFile* wfi)
+{
+    //qDebug() << "initial index:" << initialindex;
+    if(!wfi->isOpen())
+        wfi->open(QIODevice::ReadOnly);
+    wfi->seek(initialindex);
+    QByteArray srcharray = wfi->peek(131072);
+    int srchindx = srcharray.toHex().indexOf("04224d18");
+    if(srchindx == -1)
+    {
+        //qDebug() << "this should occur after the last frame near the end of the file";
+    }
+    //int srchindx = srcharray.toHex().indexOf("04224d18", initialindex*2);
+    wfi->seek(initialindex + srchindx/2);
+    if(qFromBigEndian<qint32>(wfi->peek(4)) == 0x04224d18)
+    {
+        //qDebug() << "frame found:" << srchindx/2;
+        framelist->append(initialindex + srchindx/2);
+        FindNextFrame(initialindex + srchindx/2 + 1, framelist, wfi);
+    }
+    //else
+    //    qDebug() << "frame error:" << srchindx/2;
+}
+
 int main(int argc, char* argv[])
 {
     QCoreApplication app(argc, argv);
@@ -49,6 +73,7 @@ int main(int argc, char* argv[])
         return 1;
     }
 
+    /*
     // METHOD TO GET THE SKIPPABLE FRAME INDX CONTENT !!!!!
     wfi.seek(wfi.size() - 128 - 10000);
     QByteArray skiparray = wfi.read(10000);
@@ -59,6 +84,13 @@ int main(int argc, char* argv[])
         wfi.seek(wfi.size() - 128 - 10000 + isskiphead + 8);
         in >> getindx;
     }
+    */
+
+    // HOW TO GET FRAME INDEX LIST OUT OF THE WFI FILE 
+    QList<qint64> frameindxlist;
+    frameindxlist.clear();
+    FindNextFrame(0, &frameindxlist, &wfi);
+
     wfi.seek(0);
 
     quint64 header;
@@ -95,18 +127,22 @@ int main(int argc, char* argv[])
     quint64 frameoffset = 0;
     quint64 framesize = 0;
     quint64 curpos = 0;
-    QStringList indxlist = getindx.split(",", Qt::SkipEmptyParts);
+
+    //QStringList indxlist = getindx.split(",", Qt::SkipEmptyParts);
     //qDebug() << "current position before for loop:" << wfi.pos();
+
     size_t ret = 1;
     size_t bread = 0;
     for(int i=0; i < (totalbytes / blocksize); i++)
     {
-        frameoffset = indxlist.at(i).toULongLong();
+        frameoffset = frameindxlist.at(i);
+        //frameoffset = indxlist.at(i).toULongLong();
         if(i == ((totalbytes / blocksize) - 1))
             framesize = totalbytes - frameoffset;
         else
         {
-            framesize = indxlist.at(i+1).toULongLong() - frameoffset;
+            framesize = frameindxlist.at(i+1) - frameoffset;
+            //framesize = indxlist.at(i+1).toULongLong() - frameoffset;
         }
         int bytesread = in.readRawData(cmpbuf, framesize);
         bread = bytesread;
