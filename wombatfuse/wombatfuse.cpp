@@ -241,7 +241,7 @@ int main(int argc, char* argv[])
     //QList<qint64> frameindxlist;
     frameindxlist.clear();
     FindNextFrame(0, &frameindxlist, &cwfile);
-    qDebug() << "fil count:" << frameindxlist.count();
+    //qDebug() << "fil count:" << frameindxlist.count();
 
     /*
     // METHOD TO GET THE SKIPPABLE FRAME INDX CONTENT !!!!!
