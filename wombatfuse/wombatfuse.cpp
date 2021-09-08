@@ -29,18 +29,43 @@
 
 #include <fuse3/fuse.h>
 
+void FindNextFrame(qint64 initialindex, QList<qint64>* framelist, QFile* wfi)
+{
+    //qDebug() << "initial index:" << initialindex;
+    if(!wfi->isOpen())
+        wfi->open(QIODevice::ReadOnly);
+    wfi->seek(initialindex);
+    QByteArray srcharray = wfi->peek(131072);
+    int srchindx = srcharray.toHex().indexOf("04224d18");
+    if(srchindx == -1)
+    {
+        //qDebug() << "this should occur after the last frame near the end of the file";
+    }
+    //int srchindx = srcharray.toHex().indexOf("04224d18", initialindex*2);
+    wfi->seek(initialindex + srchindx/2);
+    if(qFromBigEndian<qint32>(wfi->peek(4)) == 0x04224d18)
+    {
+        //qDebug() << "frame found:" << srchindx/2;
+        framelist->append(initialindex + srchindx/2);
+        FindNextFrame(initialindex + srchindx/2 + 1, framelist, wfi);
+    }
+    //else
+    //    qDebug() << "frame error:" << srchindx/2;
+}
+
 static QString wfimg;
 static QString imgfile;
 static QString ifile;
 static QString mntpt;
-static QStringList indxlist;
+//static QStringList indxlist;
+static QList<qint64> frameindxlist;
 static const char* relativefilename = NULL;
 static const char* rawfilename = NULL;
 //static std::string lz4filename;
-static off_t lz4size = 0;
+//static off_t lz4size = 0;
 static off_t rawsize = 0;
 static size_t framecnt = 0;
-static off_t curoffset = 0;
+//static off_t curoffset = 0;
 static off_t blocksize = 0;
 
 static void *wombat_init(struct fuse_conn_info *conn, struct fuse_config *cfg)
@@ -110,7 +135,7 @@ static int wombat_read(const char *path, char *buf, size_t size, off_t offset, s
     QFile wfi(wfimg);
     wfi.open(QIODevice::ReadOnly);
     QDataStream in(&wfi);
-    qint64 lz4start = curoffset;
+    //qint64 lz4start = curoffset;
     LZ4F_dctx* lz4dctx;
     LZ4F_errorCode_t errcode;
     errcode = LZ4F_createDecompressionContext(&lz4dctx, LZ4F_getVersion());
@@ -138,12 +163,15 @@ static int wombat_read(const char *path, char *buf, size_t size, off_t offset, s
     //for(int i=indxstart; i < framecnt; i++)
     for(qint64 i=indxstart; i < framecnt; i++)
     {
-        frameoffset = indxlist.at(i).toULongLong();
+        frameoffset = frameindxlist.at(i);
+        //frameoffset = indxlist.at(i).toULongLong();
         if(i == (framecnt - 1))
             framesize = rawsize - frameoffset;
         else
-            framesize = indxlist.at(i+1).toULongLong() - frameoffset;
-        wfi.seek(curoffset + frameoffset);
+            framesize = frameindxlist.at(i+1) - frameoffset;
+            //framesize = indxlist.at(i+1).toULongLong() - frameoffset;
+        wfi.seek(frameoffset);
+        //wfi.seek(curoffset + frameoffset);
         int bytesread = in.readRawData(cmpbuf, framesize);
         bread = bytesread;
         ret = LZ4F_decompress(lz4dctx, rawbuf, &dstsize, cmpbuf, &bread, NULL);
@@ -209,6 +237,13 @@ int main(int argc, char* argv[])
     cwfile.open(QIODevice::ReadOnly);
     QDataStream cin(&cwfile);
     
+    // HOW TO GET FRAME INDEX LIST OUT OF THE WFI FILE 
+    //QList<qint64> frameindxlist;
+    frameindxlist.clear();
+    FindNextFrame(0, &frameindxlist, &cwfile);
+    qDebug() << "fil count:" << frameindxlist.count();
+
+    /*
     // METHOD TO GET THE SKIPPABLE FRAME INDX CONTENT !!!!!
     cwfile.seek(cwfile.size() - 128 - 1000000);
     QByteArray skiparray = cwfile.read(1000000);
@@ -228,10 +263,13 @@ int main(int argc, char* argv[])
         qDebug() << "couldn't find the skippable frame.";
         return 1;
     }
+    */
         
     //qDebug() << "getindx:" << getindx;
-    indxlist.clear();
-    indxlist = getindx.split(",", Qt::SkipEmptyParts);
+    
+    //indxlist.clear();
+    //indxlist = getindx.split(",", Qt::SkipEmptyParts);
+    
     //qDebug() << "indxlist:" << indxlist;
     //qDebug() << "indxlist count:" << indxlist.count();
     //qDebug() << "indxlist last:" << indxlist.last() << "indxlist last - 1:" << indxlist.at(indxlist.count() - 2);
@@ -250,7 +288,7 @@ int main(int argc, char* argv[])
     QString description;
     cin >> header >> version >> sectorsize >> blksize >> totalbytes >> cnum >> evidnum >> examiner >> description;
     //qDebug() << "current position before for loop:" << cwfile.pos();
-    curoffset = cwfile.pos();
+    //curoffset = cwfile.pos();
     framecnt = totalbytes / blksize;
     rawsize = (off_t)totalbytes;
     blocksize = (size_t)blksize;
