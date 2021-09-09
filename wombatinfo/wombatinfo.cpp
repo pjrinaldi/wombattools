@@ -84,16 +84,19 @@ int main(int argc, char* argv[])
     QString lz4ver = QString::number(LZ4_VERSION_NUMBER);
     lz4ver.replace("0", ".");
     if(islogical == 0)
-        printf("Raw Media Size:\t\t%llu\n", totalbytes);
+        printf("Raw Media Size:\t\t%llu bytes\n", totalbytes);
     printf("LZ4 Version:\t\t%s\n", lz4ver.toStdString().c_str()); 
     if(islogical == 0)
-        printf("LZ4 Block Size:\t\t%u\n", blocksize);
+        printf("LZ4 Block Size:\t\t%u bytes\n", blocksize);
     
-    printf("Case Number:\t\t%s\n", casenumber.toStdString().c_str());
-    if(islogical == 0)
+    if(!casenumber.isEmpty())
+        printf("Case Number:\t\t%s\n", casenumber.toStdString().c_str());
+    if(islogical == 0 && !evidnumber.isEmpty())
         printf("Evidence Number:\t%s\n", evidnumber.toStdString().c_str());
-    printf("Examiner:\t\t%s\n", examiner.toStdString().c_str());
-    printf("Description:\t\t%s\n", description.toStdString().c_str());
+    if(!examiner.isEmpty())
+        printf("Examiner:\t\t%s\n", examiner.toStdString().c_str());
+    if(!description.isEmpty())
+        printf("Description:\t\t%s\n", description.toStdString().c_str());
 
     if(islogical == 0)
     {
@@ -147,15 +150,15 @@ int main(int argc, char* argv[])
             qint8 deleted;
             in >> filename >> filepath >> filesize >> filecreate >> fileaccess >> filemodify >> filestatus >> srchash >> catsig >> itemtype >> deleted;
             printf("%s\n%d %s\n%s\n", std::string(filename.count() + 5, '-').c_str(), i+1, filename.toStdString().c_str(), std::string(filename.count() + 5, '-').c_str());
-            printf("PATH:        %s\n", filepath.toStdString().c_str());
-            printf("SIZE:        %lld\n", filesize);
-            printf("CREATE:      %s\n", QDateTime::fromSecsSinceEpoch(filecreate).toString("MM/dd/yyyy hh:mm:ss AP").toStdString().c_str());
+            printf("File Path:\t\t%s\n", filepath.toStdString().c_str());
+            printf("File Size:\t\t%lld bytes\n", filesize);
+            printf("Created Date:\t\t%s\n", QDateTime::fromSecsSinceEpoch(filecreate).toString("MM/dd/yyyy hh:mm:ss AP").toStdString().c_str());
             if(!srchash.isEmpty())
-                printf("BLAKE3 HASH: %s\n", srchash.toStdString().c_str());
+                printf("BLAKE3 Hash:\t\t%s\n", srchash.toStdString().c_str());
             if(!catsig.isEmpty())
             {
-                printf("CATEGORY:    %s\n", catsig.split("/").at(0).toStdString().c_str());
-                printf("SIGNATURE:   %s\n", catsig.split("/").at(1).toStdString().c_str());
+                printf("Category:\t\t%s\n", catsig.split("/").at(0).toStdString().c_str());
+                printf("Signature:\t\t%s\n", catsig.split("/").at(1).toStdString().c_str());
             }
             if(i < fileindxlist.count() - 1)
                 printf("\n");
