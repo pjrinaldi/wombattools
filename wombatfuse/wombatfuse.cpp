@@ -166,7 +166,10 @@ static int wombat_read(const char *path, char *buf, size_t size, off_t offset, s
         frameoffset = frameindxlist.at(i);
         //frameoffset = indxlist.at(i).toULongLong();
         if(i == (framecnt - 1))
+	{
+	    // this should be framesize = wfi.size() - 128 - frameoffset;
             framesize = rawsize - frameoffset;
+	}
         else
             framesize = frameindxlist.at(i+1) - frameoffset;
             //framesize = indxlist.at(i+1).toULongLong() - frameoffset;
@@ -290,6 +293,7 @@ int main(int argc, char* argv[])
     //qDebug() << "current position before for loop:" << cwfile.pos();
     //curoffset = cwfile.pos();
     framecnt = totalbytes / blksize;
+    qDebug() << "framecnt (size):" << framecnt << "framecnt (count):" << frameindxlist.count();
     rawsize = (off_t)totalbytes;
     blocksize = (size_t)blksize;
     //qDebug() << "blocksize:" << blocksize << "framecnt:" << framecnt;
