@@ -160,6 +160,7 @@ static int wombat_read(const char *path, char *buf, size_t size, off_t offset, s
         indxcnt++;
     qint64 indxend = indxstart + indxcnt;
     //if(indxend > rawsize / blocksize)
+    // this should be i=indxstart; i <= indxend; i++)
     //for(int i=indxstart; i < framecnt; i++)
     for(qint64 i=indxstart; i < framecnt; i++)
     {
