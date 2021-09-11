@@ -221,7 +221,6 @@ int main(int argc, char* argv[])
     QTextStream logout(&log);
 
     logout << "wombatlogical v0.1 Logical Forensic Imager started at: " << QDateTime::currentDateTime().toString("MM/dd/yyyy hh:mm:ss ap") << Qt::endl;
-    // IF I KEEP AN INDEX OF THE STARTING OFFSET OF EACH FILE, I CAN GENERATE A LISTING WITH THE WOMBATINFO FUNCTION TO LIST THE CONTENTS OF THE FILES WITHIN THE IMAGE SUCH AS WHAT ZIP WOULD DO...
 
     // Initiate the Loop over all source files to write their info the logical image file...
     for(int i=0; i < filelist.count(); i++)
@@ -236,6 +235,29 @@ int main(int argc, char* argv[])
     // OF COURSE, IF I STICK THE HASH BACK INTO THE END OF THE FILE, I WOULD THEN HAVE TO READ THE ENTIRE FILE MINUS THE HASH VALUE TO VERIFY IT AT A LATER DATE WITH WOMBATVERIFY
     // HASHING THE LOGICAL IMAGE IN THIS WAY WOULDN'T BE COMPATIBLE WITH B3SUM, BUT THIS IS DIFFERENT AND DOESN'T NEED TO BE COMPATIBLE. WITH THAT IN MIND, I'LL HAVE TO FIGURE OUT WHAT TO PASS...
     // AND HOW TO VERIFY
+    blake3_hasher logicalhasher;
+    blake3_hasher_init(&logicalhasher);
+    wli.open(QIODevice::ReadOnly);
+    wli.seek(0);
+    while(!wli.atEnd())
+    {
+        QByteArray tmparray = wli.read(65536);
+        blake3_hasher_update(&logicalhasher, tmparray.data(), tmparray.count());
+    }
+    wli.close();
+    uint8_t output[BLAKE3_OUT_LEN];
+    blake3_hasher_finalize(&logicalhasher, output, BLAKE3_OUT_LEN);
+    QString logicalhash = "";
+    for(size_t i=0; i < BLAKE3_OUT_LEN; i++)
+        logicalhash.append(QString("%1").arg(output[i], 2, 16, QChar('0')));
+    wli.open(QIODevice::WriteOnly | QIODevice::Append);
+    wli.seek(wli.size());
+    QDataStream wout(&wli);
+    wout << (QString)logicalhash;
+    wli.close();
+
+    logout << logicalhash << " - BLAKE3 Logical Image Hash" << Qt::endl;
+    // WHEN VERIFYING THE LOGICAL IMAGE, I NEED TO DO 128 FOR THE HASH TO COMPARE AND READ THE IMAGE FROM 0 UP TO 132 (128 FOR HASH + 4 FOR SIZE OF THE QSTRING);
     log.close();
 
     return 0;
