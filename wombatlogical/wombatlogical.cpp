@@ -256,7 +256,7 @@ int main(int argc, char* argv[])
     wout << (QString)logicalhash;
     wli.close();
 
-    logout << logicalhash << " - BLAKE3 Logical Image Hash" << Qt::endl;
+    logout << logicalhash << " - Logical Image Hash" << Qt::endl;
     // WHEN VERIFYING THE LOGICAL IMAGE, I NEED TO DO 128 FOR THE HASH TO COMPARE AND READ THE IMAGE FROM 0 UP TO 132 (128 FOR HASH + 4 FOR SIZE OF THE QSTRING);
     log.close();
 
