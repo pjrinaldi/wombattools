@@ -54,10 +54,10 @@ int main(int argc, char* argv[])
     QCoreApplication::setApplicationName("wombatverify");
     QCoreApplication::setApplicationVersion("0.1");
     QCommandLineParser parser;
-    parser.setApplicationDescription("Verify a wombat forensic image.");
+    parser.setApplicationDescription("Verify a wombat forensic image and wombat logical forensic image.");
     parser.addHelpOption();
     parser.addVersionOption();
-    parser.addPositionalArgument("image", QCoreApplication::translate("main", "Wombat forensic image file name."));
+    parser.addPositionalArgument("image", QCoreApplication::translate("main", "Wombat forensic/logical image file name."));
 
     parser.process(app);
 
@@ -72,124 +72,145 @@ int main(int argc, char* argv[])
         qDebug() << "Wrong Qt Data Stream version:" << in.version();
         return 1;
     }
-
-    /*
-    // METHOD TO GET THE SKIPPABLE FRAME INDX CONTENT !!!!!
-    wfi.seek(wfi.size() - 128 - 10000);
-    QByteArray skiparray = wfi.read(10000);
-    int isskiphead = skiparray.lastIndexOf("_*M");
-    QString getindx = "";
-    if(qFromBigEndian<quint32>(skiparray.mid(isskiphead, 4)) == 0x5f2a4d18)
-    {
-        wfi.seek(wfi.size() - 128 - 10000 + isskiphead + 8);
-        in >> getindx;
-    }
-    */
-
-    // HOW TO GET FRAME INDEX LIST OUT OF THE WFI FILE 
-    QList<qint64> frameindxlist;
-    frameindxlist.clear();
-    FindNextFrame(0, &frameindxlist, &wfi);
-
-    wfi.seek(0);
-
     quint64 header;
-    uint8_t version;
-    quint16 sectorsize;
-    quint32 blocksize;
-    quint64 totalbytes;
-    QString casenumber;
-    QString evidnumber;
-    QString examiner;
-    QString description;
-    in >> header >> version >> sectorsize >> blocksize >> totalbytes >> casenumber >> evidnumber >> examiner >> description;
-    if(header != 0x776f6d6261746669)
+    in >> header;
+    if(header == 0x776f6d6261746669) // wombat forensic image
     {
-        qDebug() << "Wrong file type, not a wombat forensic image.";
-        return 1;
-    }
-    if(version != 1)
-    {
-        qDebug() << "Not the correct wombat forensic image format.";
-        return 1;
-    }
-    
-    printf("wombatverify v0.1 started at: %s\n", QDateTime::currentDateTime().toString("MM/dd/yyyy hh:mm:ss ap").toStdString().c_str());
-    uint8_t imghash[BLAKE3_OUT_LEN];
-    blake3_hasher imghasher;
-    blake3_hasher_init(&imghasher);
-    LZ4F_dctx* lz4dctx;
-    LZ4F_errorCode_t errcode;
-    errcode = LZ4F_createDecompressionContext(&lz4dctx, LZ4F_getVersion());
-    if(LZ4F_isError(errcode))
-        printf("%s\n", LZ4F_getErrorName(errcode));
-    char* cmpbuf = new char[2*blocksize];
-    quint64 frameoffset = 0;
-    quint64 framesize = 0;
-    quint64 curpos = 0;
+        // HOW TO GET FRAME INDEX LIST OUT OF THE WFI FILE 
+        QList<qint64> frameindxlist;
+        frameindxlist.clear();
+        FindNextFrame(0, &frameindxlist, &wfi);
 
-    //QStringList indxlist = getindx.split(",", Qt::SkipEmptyParts);
-    //qDebug() << "current position before for loop:" << wfi.pos();
+        wfi.seek(0);
 
-    size_t ret = 1;
-    size_t bread = 0;
-    for(int i=0; i < (totalbytes / blocksize); i++)
-    {
-        frameoffset = frameindxlist.at(i);
-        //frameoffset = indxlist.at(i).toULongLong();
-        if(i == ((totalbytes / blocksize) - 1))
-            framesize = totalbytes - frameoffset;
+        uint8_t version;
+        quint16 sectorsize;
+        quint32 blocksize;
+        quint64 totalbytes;
+        QString casenumber;
+        QString evidnumber;
+        QString examiner;
+        QString description;
+        in >> header >> version >> sectorsize >> blocksize >> totalbytes >> casenumber >> evidnumber >> examiner >> description;
+        if(header != 0x776f6d6261746669)
+        {
+            qDebug() << "Wrong file type, not a wombat forensic image.";
+            return 1;
+        }
+        if(version != 1)
+        {
+            qDebug() << "Not the correct wombat forensic image format.";
+            return 1;
+        }
+        
+        printf("wombatverify v0.1 started at: %s\n", QDateTime::currentDateTime().toString("MM/dd/yyyy hh:mm:ss ap").toStdString().c_str());
+        uint8_t imghash[BLAKE3_OUT_LEN];
+        blake3_hasher imghasher;
+        blake3_hasher_init(&imghasher);
+        LZ4F_dctx* lz4dctx;
+        LZ4F_errorCode_t errcode;
+        errcode = LZ4F_createDecompressionContext(&lz4dctx, LZ4F_getVersion());
+        if(LZ4F_isError(errcode))
+            printf("%s\n", LZ4F_getErrorName(errcode));
+        char* cmpbuf = new char[2*blocksize];
+        quint64 frameoffset = 0;
+        quint64 framesize = 0;
+        quint64 curpos = 0;
+
+        //QStringList indxlist = getindx.split(",", Qt::SkipEmptyParts);
+        //qDebug() << "current position before for loop:" << wfi.pos();
+
+        size_t ret = 1;
+        size_t bread = 0;
+        for(int i=0; i < (totalbytes / blocksize); i++)
+        {
+            frameoffset = frameindxlist.at(i);
+            //frameoffset = indxlist.at(i).toULongLong();
+            if(i == ((totalbytes / blocksize) - 1))
+                framesize = totalbytes - frameoffset;
+            else
+            {
+                framesize = frameindxlist.at(i+1) - frameoffset;
+                //framesize = indxlist.at(i+1).toULongLong() - frameoffset;
+            }
+            int bytesread = in.readRawData(cmpbuf, framesize);
+            bread = bytesread;
+            size_t rawbufsize = blocksize;
+            char* rawbuf = new char[rawbufsize];
+            size_t dstsize = rawbufsize;
+            ret = LZ4F_decompress(lz4dctx, rawbuf, &dstsize, cmpbuf, &bread, NULL);
+            if(LZ4F_isError(ret))
+                printf("decompress error %s\n", LZ4F_getErrorName(ret));
+            blake3_hasher_update(&imghasher, rawbuf, dstsize);
+            curpos += dstsize;
+            printf("Verifying %llu of %llu bytes\r", curpos, totalbytes);
+            fflush(stdout);
+        }
+        blake3_hasher_finalize(&imghasher, imghash, BLAKE3_OUT_LEN);
+        QString calchash = "";
+        for(size_t i=0; i < BLAKE3_OUT_LEN; i++)
+        {
+            printf("%02x", imghash[i]);
+            calchash.append(QString("%1").arg(imghash[i], 2, 16, QChar('0')));
+        }
+        printf(" - Forensic Image Hash\n");
+
+        //HOW TO GET HASH OUT OF THE IMAGE FOR THE WOMBATVERIFY FUNCTION...
+        wfi.seek(wfi.size() - 132);
+        QString readhash = "";
+        in >> readhash;
+        wfi.close();
+        delete[] cmpbuf;
+
+        errcode = LZ4F_freeDecompressionContext(lz4dctx);
+
+        // VERIFY HASHES HERE...
+        if(calchash == readhash)
+        {
+            printf("\nVerification Successful\n");
+        }
         else
         {
-            framesize = frameindxlist.at(i+1) - frameoffset;
-            //framesize = indxlist.at(i+1).toULongLong() - frameoffset;
+            printf("\nVerification Failed\n");
         }
-        int bytesread = in.readRawData(cmpbuf, framesize);
-        bread = bytesread;
-        size_t rawbufsize = blocksize;
-        char* rawbuf = new char[rawbufsize];
-        size_t dstsize = rawbufsize;
-        ret = LZ4F_decompress(lz4dctx, rawbuf, &dstsize, cmpbuf, &bread, NULL);
-        if(LZ4F_isError(ret))
-            printf("decompress error %s\n", LZ4F_getErrorName(ret));
-        blake3_hasher_update(&imghasher, rawbuf, dstsize);
-        curpos += dstsize;
-        printf("Verifying %llu of %llu bytes\r", curpos, totalbytes);
-        fflush(stdout);
+        printf("Finished Forensic Image Verification at %s\n", QDateTime::currentDateTime().toString("MM/dd/yyyy hh:mm:ss ap").toStdString().c_str());
     }
-    blake3_hasher_finalize(&imghasher, imghash, BLAKE3_OUT_LEN);
-    QString calchash = "";
-    for(size_t i=0; i < BLAKE3_OUT_LEN; i++)
+    else if(header == 0x776f6d6261746c69) // wombat logical image
     {
-        printf("%02x", imghash[i]);
-        calchash.append(QString("%1").arg(imghash[i], 2, 16, QChar('0')));
-    }
-    printf(" - Forensic Image Hash\n");
+        printf("wombatverify v0.1 started at: %s\n", QDateTime::currentDateTime().toString("MM/dd/yyyy hh:mm:ss ap").toStdString().c_str());
+        wfi.seek(0);
+        qint64 imgsize = wfi.size() - 132;
+        blake3_hasher logicalhasher;
+        blake3_hasher_init(&logicalhasher);
+        qint64 curpos = 0;
+        while(!wfi.atEnd())
+        {
+            QByteArray tmparray = wfi.read(65536);
+            curpos += tmparray.count();
+            if(curpos > imgsize)
+                tmparray.chop(132);
+            blake3_hasher_update(&logicalhasher, tmparray.data(), tmparray.count());
+            printf("Verifying %llu of %llu bytes\r", curpos, imgsize);
+            fflush(stdout);
+        }
+        // read existing hash
+        wfi.seek(imgsize);
+        QString readhash;
+        in >> readhash;
+        wfi.close();
+        uint8_t output[BLAKE3_OUT_LEN];
+        blake3_hasher_finalize(&logicalhasher, output, BLAKE3_OUT_LEN);
+        QString calchash = "";
+        for(size_t i=0; i < BLAKE3_OUT_LEN; i++)
+            calchash.append(QString("%1").arg(output[i], 2, 16, QChar('0')));
 
-    //HOW TO GET HASH OUT OF THE IMAGE FOR THE WOMBATVERIFY FUNCTION...
-    wfi.seek(wfi.size() - 128);
-    QString readhash;
-    QByteArray tmparray = wfi.read(128);
-    for(int i=1; i < 128; i++)
-    {
-        if(i % 2 != 0)
-            readhash.append(tmparray.at(i));
+        printf("%s - Logical Image Hash\n", calchash.toStdString().c_str());
+        if(calchash == readhash)
+            printf("\nVerification Successful\n");
+        else
+            printf("\nVerification Failed\n");
+        printf("Finished Logical Image Verification at %s\n", QDateTime::currentDateTime().toString("MM/dd/yyyy hh:mm:ss ap").toStdString().c_str());
     }
-    //qDebug() << "readhash:" << readhash;
-    wfi.close();
-    delete[] cmpbuf;
 
-    errcode = LZ4F_freeDecompressionContext(lz4dctx);
-
-    // VERIFY HASHES HERE...
-    if(calchash == readhash)
-    {
-        printf("\nVerification Successful\n");
-    }
-    else
-    {
-        printf("\nVerification Failed\n");
-    }
-    printf("Finished Forensic Image Verification at %s\n", QDateTime::currentDateTime().toString("MM/dd/yyyy hh:mm:ss ap").toStdString().c_str());
     return 0;
 }

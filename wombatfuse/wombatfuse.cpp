@@ -169,7 +169,7 @@ static int wombat_read(const char *path, char *buf, size_t size, off_t offset, s
         if(i == (framecnt - 1))
 	{
 	    // this should be framesize = wfi.size() - 128 - frameoffset;
-            framesize = rawsize - frameoffset;
+            framesize = framesize - 132 - frameoffset;
 	}
         else
             framesize = frameindxlist.at(i+1) - frameoffset;
