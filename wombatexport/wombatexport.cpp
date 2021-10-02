@@ -54,6 +54,11 @@ int main(int argc, char* argv[])
     parser.process(app);
 
     const QStringList args = parser.positionalArguments();
+    if(args.count() <= 1)
+    {
+        qInfo() << "Image and/or directory not provided.\n";
+        parser.showHelp(1);
+    }
     //QString casenumber = parser.value(casenumberoption);
     //QString evidencenumber = parser.value(evidencenumberoption);
     //QString examiner = parser.value(examineroption);
