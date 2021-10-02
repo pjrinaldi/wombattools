@@ -80,6 +80,12 @@ int main(int argc, char* argv[])
     QString evidencenumber = parser.value(evidencenumberoption);
     QString examiner = parser.value(examineroption);
     QString description = parser.value(descriptionoption);
+    if(args.count() <= 1)
+    {
+        qInfo() << "Missing Source and/or image arguments\n";
+        parser.showHelp(1);
+        return 1;
+    }
     //QString clevel = parser.value(compressionleveloption);
     //qDebug() << "casenumber:" << casenumber << "evidencenumber:" << evidencenumber << "examiner:" << examiner << "descrption:" << description;
     QString blockdevice = args.at(0);
