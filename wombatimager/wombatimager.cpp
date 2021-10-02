@@ -84,7 +84,7 @@ int main(int argc, char* argv[])
     {
         qInfo() << "Missing Source and/or image arguments\n";
         parser.showHelp(1);
-        return 1;
+        //return 1;
     }
     //QString clevel = parser.value(compressionleveloption);
     //qDebug() << "casenumber:" << casenumber << "evidencenumber:" << evidencenumber << "examiner:" << examiner << "descrption:" << description;
