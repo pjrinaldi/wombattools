@@ -222,10 +222,11 @@ int main(int argc, char* argv[])
 
     const QStringList args = parser.positionalArguments();
 
-    if(args.count() == 0)
+    if(args.count() <= 1)
     {
-        printf("Usage: wombatfuse imagefile mountpoint.\n");
-        return 1;
+        printf("No image and/or mountpoint provided.\n");
+        parser.showHelp(1);
+        //return 1;
     }
     wfimg = args.at(0);
     mntpt = args.at(1);
