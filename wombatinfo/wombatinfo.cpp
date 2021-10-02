@@ -34,6 +34,11 @@ int main(int argc, char* argv[])
     parser.process(app);
 
     const QStringList args = parser.positionalArguments();
+    if(args.count() <= 0)
+    {
+        qInfo() << "No Wombat Forensic Image Provided.\n";
+        parser.showHelp(1);
+    }
     QString imgfile = args.at(0);
     QFile wfi(imgfile);
     if(!wfi.isOpen())
@@ -41,7 +46,7 @@ int main(int argc, char* argv[])
     QDataStream in(&wfi);
     if(in.version() != QDataStream::Qt_5_15)
     {
-        qDebug() << "Wrong Qt Data Stream version:" << in.version();
+        qInfo() << "Wrong Qt Data Stream version:" << in.version();
         return 1;
     }
 
