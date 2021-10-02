@@ -187,6 +187,11 @@ int main(int argc, char* argv[])
     parser.process(app);
 
     const QStringList args = parser.positionalArguments();
+    if(args.count() <= 1)
+    {
+        qInfo() << "No image and/or source files/dirs provided.\n";
+        parser.showHelp(1);
+    }
     QString casenumber = parser.value(casenumberoption);
     //QString evidencenumber = parser.value(evidencenumberoption);
     QString examiner = parser.value(examineroption);
