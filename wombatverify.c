@@ -4,7 +4,7 @@
 #include <string.h>
 #include <stdlib.h>
 
-#include "../blake3.h"
+#include "blake3.h"
 #include "common.h"
 #include <zstd.h>
 

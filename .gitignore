@@ -1,5 +1,6 @@
 old
 test.*
+*.o
 wombathasher
 wombathasher+
 wombatimager
