@@ -1,76 +1,8 @@
-# C++ objects and libs
-*.slo
-*.lo
-*.o
-*.la
-*.lai
-#*.so
-#*.so.*
-*.dll
-*.dylib
-
-# Qt-es
-object_script.*.Release
-object_script.*.Debug
-*_plugin_import.cpp
-.qmake.cache
-*/.qmake.stash
-*.pro.user
-*.pro.user.*
-*.qbs.user
-*.qbs.user.*
-*.moc
-moc_*.cpp
-moc_*.h
-qrc_*.cpp
-ui_*.h
-*.qmlc
-*.jsc
-Makefile*
-*build-*
-*.qm
-*.prl
-wombatimager/.qmake.stash
-wombatimager/debug
-wombatimager/release
-wombatverify/debug
-wombatverify/release
-wombatinfo/debug
-wombatinfo/release
-wombatfuse/debug
-wombatfuse/release
-wombatfuse/reference
-wombatlogical/debug
-wombatlogical/release
-wombatimager/wi2/debug
-wombatimager/wi2/release
-wi2/debug
-wi2/release
-wombatfuse/wf2/debug
-wombatfuse/wf2/release
-wombatverify/wv2/debug
-wombatverify/wv2/release
-wombatinfo/wi2/debug
-wombatinfo/wi2/release
-wombatexport/debug
-wombatexport/release
-wombatexport/test
-
-# Qt unit tests
-target_wrapper.*
-
-# QtCreator
-*.autosave
-
-# QtCreator Qml
-*.qmlproject.user
-*.qmlproject.user.*
-
-# QtCreator CMake
-CMakeLists.txt.user*
-
-# QtCreator 4.8< compilation database 
-compile_commands.json
-
-# QtCreator local machine specific files for imported projects
-*creator.user*
+old
+test.*
+wombathasher
+wombathasher+
+wombatimager
+wombatinfo
+wombatmount
+wombatverify
