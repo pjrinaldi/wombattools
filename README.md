@@ -10,4 +10,4 @@ The wombat logical image (wli), will be a zstd compressed tar file with the fore
 * A command line info tool to provide information about the wombat forensic (v0.1) and wombat logical image. (TODO)
 * A command line logical imager using zst for compression, blake3 for hashing, and tar for file/dir storage (TODO)
 * A command line export tool to export the files contained in the wombat logical image. (TODO)
-* A command line fuse tool to fuse mount just the uncompressed raw dd image. The fuse tool will allow other forensic tools to parse the image such as the sleuthkit or xways, adlab, etc...
+* A command line fuse tool to fuse mount just the uncompressed raw dd image. The fuse tool will allow other forensic tools to parse the image such as the sleuthkit or xways, adlab, etc... (v0.1)
