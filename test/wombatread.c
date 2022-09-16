@@ -33,6 +33,9 @@ int main(int argc, char* argv[])
 	if(buffer != NULL)
 	    printf("%s \tLength: %zu\n", buffer, strlen(buffer));
 	free(buffer);
+	char wfistr2[256];
+	realpath(argv[1], wfistr2);
+	printf("wfistr2: \"%s\"\n", wfistr2);
 
 	FILE* fout = NULL;
 	fout = fopen_orDie(argv[1], "rb");

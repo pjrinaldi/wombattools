@@ -26,6 +26,7 @@ struct wfi_metadata
 } wfimd;
 
 static const char* wfistr = NULL;
+//static char wfistr[256];
 static off_t rawsize = 0;
 
 void ShowUsage(int outtype)
@@ -203,12 +204,23 @@ int main(int argc, char* argv[])
         
         printf("command run: %s %s %s\n", argv[0], argv[1], argv[2]);
         
-	char* buffer = getcwd(NULL, 0);
-	if(buffer != NULL)
-	    printf("%s \tLength: %zu\n", buffer, strlen(buffer));
-	free(buffer);
-        wfistr = argv[1];
-        printf("wfistr: %s\n", wfistr);
+	/* only gets cwd, i want to use realpath("original path", resolved_path)
+	 * char wfistr[256];
+	 * realpath(argv[1], wfistr);
+	char* cwdbuf = getcwd(NULL, 0);
+	if(cwdbuf != NULL)
+	    printf("%s \tLength: %zu\n", buffer, strlen(cwdbuf));
+	free(cwdbuf);
+	*/
+
+	char wfistr2[256];
+	realpath(argv[1], wfistr2);
+	printf("wfistr: \"%s\"\n", wfistr2);
+	
+	wfistr = malloc(sizeof(char)*strlen(wfistr2));
+	wfistr = wfistr2;
+        //wfistr = argv[1];
+        //printf("wfistr: %s\n", wfistr);
 
         // get wfimd.totalbytes
         FILE* imgfile = NULL;
