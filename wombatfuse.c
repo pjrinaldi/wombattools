@@ -203,6 +203,10 @@ int main(int argc, char* argv[])
         
         printf("command run: %s %s %s\n", argv[0], argv[1], argv[2]);
         
+	char* buffer = getcwd(NULL, 0);
+	if(buffer != NULL)
+	    printf("%s \tLength: %zu\n", buffer, strlen(buffer));
+	free(buffer);
         wfistr = argv[1];
         printf("wfistr: %s\n", wfistr);
 

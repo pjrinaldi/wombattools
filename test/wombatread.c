@@ -5,7 +5,7 @@
 #include <errno.h>
 #include <unistd.h>
 
-#include "common.h"
+#include "../common.h"
 #include <zstd.h>
 
 // ATTEMPT TO BUILD TEST CODE FOR THE FUSE WOMBAT_READ FUNCTION SO I CAN GET SOME
@@ -28,6 +28,11 @@ int main(int argc, char* argv[])
     {        
         
         //printf("command run: %s %s %s %s\n", argv[0], argv[1], argv[2], argv[3]);
+
+	char* buffer = getcwd(NULL, 0);
+	if(buffer != NULL)
+	    printf("%s \tLength: %zu\n", buffer, strlen(buffer));
+	free(buffer);
 
 	FILE* fout = NULL;
 	fout = fopen_orDie(argv[1], "rb");
