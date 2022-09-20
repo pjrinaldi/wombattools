@@ -102,13 +102,15 @@ void ShowUsage(int outtype)
 int main(int argc, char* argv[])
 {
     char* inputstr = NULL;
-    char* outputstr = NULL;
+    //char wfistr2[256];
+    char outputstr[256] = {0};
+    //char* outputstr = NULL;
     char* imgfilestr = NULL;
     char* logfilestr = NULL;
     char* extstr = NULL;
     uint8_t verify = 0;
 
-    printf("wfi_metadata struct size is %d\n", sizeof(struct wfi_metadata));
+    //printf("wfi_metadata struct size is %d\n", sizeof(struct wfi_metadata));
 
     if(argc == 1 || (argc == 2 && strcmp(argv[1], "-h") == 0))
     {
@@ -124,11 +126,11 @@ int main(int argc, char* argv[])
     {
         for(int i=3; i < argc; i++)
         {
-            printf("Command option %d, %s\n", i, argv[i]);
+            //printf("Command option %d, %s\n", i, argv[i]);
             if(strcmp(argv[i], "-v") == 0)
             {
                 verify=1;
-                printf("verification is set\n");
+                //printf("verification is set\n");
             }
             else if(strcmp(argv[i], "-c") == 0)
                 strcpy(wfimd.casenumber, argv[i+1]);
@@ -149,15 +151,18 @@ int main(int argc, char* argv[])
                 return 1;
             }
         }
-	printf("Command called: %s %s %s\n", argv[0], argv[1], argv[2]);
-        printf("wfimd.examiner: %s\n", wfimd.examiner);
+	//printf("Command called: %s %s %s\n", argv[0], argv[1], argv[2]);
+        //printf("wfimd.examiner: %s\n", wfimd.examiner);
         inputstr = argv[1];
 	if(inputstr == NULL)
 	{
 	    ShowUsage(0);
 	    return 1;
 	}
-        outputstr = argv[2];
+	//char wfistr2[256];
+	//realpath(argv[1], wfistr2);
+        realpath(argv[2], outputstr);
+        //outputstr = argv[2];
 	if(outputstr == NULL)
 	{
 	    ShowUsage(0);
@@ -198,9 +203,10 @@ int main(int argc, char* argv[])
             close(infile);
 	    fin = fopen_orDie(inputstr, "rb");
 	    fout = fopen_orDie(imgfilestr, "wb");
-	    printf("Sector Size: %u Total Bytes: %u\n", sectorsize, totalbytes);
+	    //printf("Sector Size: %u Total Bytes: %u\n", sectorsize, totalbytes);
             int64_t blocksize = GetBlockSize(&totalbytes);
-            printf("probed lz4 block size: %ld\n", blocksize);
+            // BLOCK SIZE IS FOR VERIFICATION SIZE TO READ, BUT THAT DOESN'T APPLY WITH ZSTD, SO I MAY WANT TO REMOVE THIS
+            //printf("probed zstd block size: %ld\n", blocksize);
             //uint64_t framecount = totalbytes / blocksize;
             //printf("frame count: %ld\n", framecount);
             //uint64_t* frameindex = NULL;
