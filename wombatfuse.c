@@ -16,7 +16,6 @@ struct wfi_metadata
     uint32_t skipframeheader; // skippable frame header
     uint32_t skipframesize; // skippable frame content size (not including header and this size
     uint16_t sectorsize; // raw forensic image sector size
-    int64_t blocksize; // block size used for uncompressed frames
     int64_t totalbytes; // raw forensic image total size
     char casenumber[24]; // 24 character string
     char evidencenumber[24]; // 24 character string
@@ -26,7 +25,6 @@ struct wfi_metadata
 } wfimd;
 
 static const char* wfistr = NULL;
-//static char wfistr[256];
 static off_t rawsize = 0;
 
 void ShowUsage(int outtype)
@@ -204,29 +202,18 @@ int main(int argc, char* argv[])
         
         printf("command run: %s %s %s\n", argv[0], argv[1], argv[2]);
         
-	/* only gets cwd, i want to use realpath("original path", resolved_path)
-	 * char wfistr[256];
-	 * realpath(argv[1], wfistr);
-	char* cwdbuf = getcwd(NULL, 0);
-	if(cwdbuf != NULL)
-	    printf("%s \tLength: %zu\n", buffer, strlen(cwdbuf));
-	free(cwdbuf);
-	*/
-
 	char wfistr2[256];
 	realpath(argv[1], wfistr2);
 	printf("wfistr: \"%s\"\n", wfistr2);
 	
 	wfistr = malloc(sizeof(char)*strlen(wfistr2));
 	wfistr = wfistr2;
-        //wfistr = argv[1];
-        //printf("wfistr: %s\n", wfistr);
 
         // get wfimd.totalbytes
         FILE* imgfile = NULL;
         imgfile = fopen(argv[1], "rb");
         fseek(imgfile, 0, SEEK_END);
-        fseek(imgfile, -264, SEEK_CUR);
+        fseek(imgfile, -256, SEEK_CUR);
         fread(&wfimd, sizeof(struct wfi_metadata), 1, imgfile);
         fclose(imgfile);
         rawsize = wfimd.totalbytes;

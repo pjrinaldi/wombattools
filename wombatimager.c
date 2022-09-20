@@ -23,7 +23,6 @@ struct wfi_metadata
     uint32_t skipframeheader; // skippable frame header
     uint32_t skipframesize; // skippable frame content size (not including header and this size
     uint16_t sectorsize; // raw forensic image sector size
-    int64_t blocksize; // block size used for uncompressed frames
     int64_t totalbytes; // raw forensic image total size
     char casenumber[24]; // 24 character string
     char evidencenumber[24]; // 24 character string
@@ -31,36 +30,6 @@ struct wfi_metadata
     char description[128]; // 128 character string
     uint8_t devhash[32]; // blake3 source hash
 } wfimd;
-
-// BLOCKSIZE FOR IMAGE VERIFICATION...
-int64_t GetBlockSize(int64_t* totalsize)
-{
-    int64_t blocksize = 512;
-    //if(*totalsize % 1073741824 == 0) // 1GB
-    //    blocksize = 1073741824;
-    if(*totalsize % 4194304 == 0) // 4MB
-        blocksize = 4194304;
-    else if(*totalsize % 1048576 == 0) // 1MB
-        blocksize = 1048576;
-    else if(*totalsize % 131072 == 0) // 128KB
-        blocksize = 131072;
-    else if(*totalsize % 65536 == 0) //64KB
-        blocksize = 65536;
-    else if(*totalsize % 32768 == 0) // 32KB
-        blocksize = 32768;
-    else if(*totalsize % 16384 == 0) //16KB
-        blocksize = 16384;
-    else if(*totalsize % 8192 == 0) // 8KB
-        blocksize = 8192;
-    else if(*totalsize % 4096 == 0) // 4KB
-        blocksize = 4096;
-    else if(*totalsize % 2048 == 0) // 2KB
-        blocksize = 2048;
-    else if(*totalsize % 1024 == 0) // 1KB
-        blocksize = 1024;
-
-    return blocksize;
-}
 
 static char* GetDateTime(char *buff)
 {
@@ -102,7 +71,6 @@ void ShowUsage(int outtype)
 int main(int argc, char* argv[])
 {
     char* inputstr = NULL;
-    //char wfistr2[256];
     char outputstr[256] = {0};
     //char* outputstr = NULL;
     char* imgfilestr = NULL;
@@ -110,7 +78,7 @@ int main(int argc, char* argv[])
     char* extstr = NULL;
     uint8_t verify = 0;
 
-    //printf("wfi_metadata struct size is %d\n", sizeof(struct wfi_metadata));
+    printf("wfi_metadata struct size is %d\n", sizeof(struct wfi_metadata));
 
     if(argc == 1 || (argc == 2 && strcmp(argv[1], "-h") == 0))
     {
@@ -204,19 +172,11 @@ int main(int argc, char* argv[])
 	    fin = fopen_orDie(inputstr, "rb");
 	    fout = fopen_orDie(imgfilestr, "wb");
 	    //printf("Sector Size: %u Total Bytes: %u\n", sectorsize, totalbytes);
-            int64_t blocksize = GetBlockSize(&totalbytes);
-            // BLOCK SIZE IS FOR VERIFICATION SIZE TO READ, BUT THAT DOESN'T APPLY WITH ZSTD, SO I MAY WANT TO REMOVE THIS
-            //printf("probed zstd block size: %ld\n", blocksize);
-            //uint64_t framecount = totalbytes / blocksize;
-            //printf("frame count: %ld\n", framecount);
-            //uint64_t* frameindex = NULL;
-            //frameindex = (uint64_t*)malloc(sizeof(uint64_t)*framecount);
 
 	    wfimd.skipframeheader = 0x184d2a5f;
             wfimd.skipframesize = 256;
 	    wfimd.sectorsize = sectorsize;
 	    wfimd.totalbytes = totalbytes;
-	    wfimd.blocksize = blocksize;
 
             time_t starttime = time(NULL);
             char dtbuf[35];
