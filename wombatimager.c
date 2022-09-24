@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <time.h>
 #include <string.h>
+#include <limits.h>
 #include <stdlib.h>
 
 #include "blake3.h"
@@ -20,16 +21,18 @@
 
 struct wfi_metadata
 {
-    uint32_t skipframeheader; // skippable frame header
-    uint32_t skipframesize; // skippable frame content size (not including header and this size
-    uint16_t sectorsize; // raw forensic image sector size
-    int64_t totalbytes; // raw forensic image total size
-    char casenumber[24]; // 24 character string
-    char evidencenumber[24]; // 24 character string
-    char examiner[24]; // 24 character string
-    char description[128]; // 128 character string
-    uint8_t devhash[32]; // blake3 source hash
-} wfimd;
+    uint32_t skipframeheader; // skippable frame header - 4
+    uint32_t skipframesize; // skippable frame content size (not including header and this size) - 4
+    uint16_t sectorsize; // raw forensic image sector size - 2
+    uint16_t reserved1; // reserved
+    uint32_t reserved2; // reserved
+    int64_t totalbytes; // raw forensic image total size - 8
+    char casenumber[24]; // 24 character string - 24
+    char evidencenumber[24]; // 24 character string - 24
+    char examiner[24]; // 24 character string - 24
+    char description[128]; // 128 character string - 128
+    uint8_t devhash[32]; // blake3 source hash - 32
+} wfimd; // 256
 
 static char* GetDateTime(char *buff)
 {
@@ -71,14 +74,14 @@ void ShowUsage(int outtype)
 int main(int argc, char* argv[])
 {
     char* inputstr = NULL;
-    char outputstr[256] = {0};
+    char outputstr[PATH_MAX] = {0};
     //char* outputstr = NULL;
     char* imgfilestr = NULL;
     char* logfilestr = NULL;
     char* extstr = NULL;
     uint8_t verify = 0;
 
-    printf("wfi_metadata struct size is %d\n", sizeof(struct wfi_metadata));
+    //printf("wfi_metadata struct size is %d\n", sizeof(struct wfi_metadata));
 
     if(argc == 1 || (argc == 2 && strcmp(argv[1], "-h") == 0))
     {
@@ -127,8 +130,6 @@ int main(int argc, char* argv[])
 	    ShowUsage(0);
 	    return 1;
 	}
-	//char wfistr2[256];
-	//realpath(argv[1], wfistr2);
         realpath(argv[2], outputstr);
         //outputstr = argv[2];
 	if(outputstr == NULL)
@@ -137,13 +138,19 @@ int main(int argc, char* argv[])
 	    return 1;
 	}
 
-        extstr = strstr(argv[2], ".wfi");
+        extstr = strstr(outputstr, ".wfi");
         if(extstr == NULL)
+        {
+            imgfilestr = malloc_orDie(strlen(outputstr)+4);
             imgfilestr = strcat(outputstr, ".wfi");
+        }
         else
+        {
+            imgfilestr = malloc_orDie(strlen(outputstr));
             imgfilestr = outputstr;
+        }
 
-        char* midname = strndup(outputstr, strlen(outputstr));
+        char* midname = strndup(outputstr, strlen(outputstr)+4);
         logfilestr = strcat(midname, ".log");
 
         //printf("img str: %s\tlog str: %s\n", imgfilestr, logfilestr);
@@ -174,13 +181,13 @@ int main(int argc, char* argv[])
 	    //printf("Sector Size: %u Total Bytes: %u\n", sectorsize, totalbytes);
 
 	    wfimd.skipframeheader = 0x184d2a5f;
-            wfimd.skipframesize = 256;
+            wfimd.skipframesize = 242;
 	    wfimd.sectorsize = sectorsize;
 	    wfimd.totalbytes = totalbytes;
 
             time_t starttime = time(NULL);
             char dtbuf[35];
-            fprintf(filelog, "wombatimager v0.1 LZ4 Compressed Raw Forensic Image started at: %s\n", GetDateTime(dtbuf));
+            fprintf(filelog, "wombatimager v0.1 zstd Compressed Raw Forensic Image started at: %s\n", GetDateTime(dtbuf));
             fprintf(filelog, "\nSource Device\n");
             fprintf(filelog, "-------------\n");
 
@@ -314,7 +321,7 @@ int main(int argc, char* argv[])
 	    {
 		//printf("Start Verification by decompressing...");
                 fprintf(filelog, "Verification started at: %s\n", GetDateTime(dtbuf));
-                //fprintf(filelog, "wombatimager v0.1 LZ4 Compressed Raw Forensic Image started at: %s\n", GetDateTime(dtbuf));
+                //fprintf(filelog, "wombatimager v0.1 zstd Compressed Raw Forensic Image started at: %s\n", GetDateTime(dtbuf));
                 printf("Verification Started\n");
                 uint8_t forimghash[BLAKE3_OUT_LEN];
                 blake3_hasher imghasher;
