@@ -74,8 +74,10 @@ void ShowUsage(int outtype)
 int main(int argc, char* argv[])
 {
     char* inputstr = NULL;
-    char outputstr[PATH_MAX] = {0};
-    //char* outputstr = NULL;
+    //char outputstr[PATH_MAX] = {0};
+    char wfistr[PATH_MAX] = {0};
+    //char* wfistr = NULL;
+    char* outputstr = NULL;
     char* imgfilestr = NULL;
     char* logfilestr = NULL;
     char* extstr = NULL;
@@ -130,7 +132,9 @@ int main(int argc, char* argv[])
 	    ShowUsage(0);
 	    return 1;
 	}
-        realpath(argv[2], outputstr);
+        realpath(argv[2], wfistr);
+        //realpath(argv[2], outputstr);
+        outputstr = &wfistr[0];
         //outputstr = argv[2];
 	if(outputstr == NULL)
 	{
@@ -141,16 +145,17 @@ int main(int argc, char* argv[])
         extstr = strstr(outputstr, ".wfi");
         if(extstr == NULL)
         {
-            imgfilestr = malloc_orDie(strlen(outputstr)+4);
+            //imgfilestr = malloc_orDie(strlen(outputstr)+4);
             imgfilestr = strcat(outputstr, ".wfi");
         }
         else
         {
-            imgfilestr = malloc_orDie(strlen(outputstr));
+            //imgfilestr = malloc_orDie(strlen(outputstr));
             imgfilestr = outputstr;
         }
 
-        char* midname = strndup(outputstr, strlen(outputstr)+4);
+        char* midname = strndup(outputstr, strlen(outputstr));
+        //char* midname = strndup(outputstr, strlen(outputstr)+4);
         logfilestr = strcat(midname, ".log");
 
         //printf("img str: %s\tlog str: %s\n", imgfilestr, logfilestr);
