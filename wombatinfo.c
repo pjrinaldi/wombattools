@@ -8,6 +8,7 @@ struct wfi_metadata
     uint32_t skipframeheader; // skippable frame header
     uint32_t skipframesize; // skippable frame content size (not including header and this size
     uint16_t sectorsize; // raw forensic image sector size
+    int64_t reserved; // reserved
     int64_t totalbytes; // raw forensic image total size
     char casenumber[24]; // 24 character string
     char evidencenumber[24]; // 24 character string
@@ -59,13 +60,13 @@ int main(int argc, char* argv[])
 	    FILE* imgfile = NULL;
 	    imgfile = fopen(argv[1], "rb");
 	    fseek(imgfile, 0, SEEK_END);
-	    fseek(imgfile, -256, SEEK_CUR);
+	    fseek(imgfile, -264, SEEK_CUR);
 	    fread(&wfimd, sizeof(struct wfi_metadata), 1, imgfile);
 	    fclose(imgfile);
 	    printf("\nwombatinfo v0.1\n\n");
-	    printf("Raw Media Size:  %llu bytes\n", wfimd.totalbytes);
-	    printf("Case Number:\t%s\n", wfimd.casenumber);
-	    printf("Examiner:\t\t%s\n", wfimd.examiner);
+	    printf("Raw Media Size: %llu bytes\n", wfimd.totalbytes);
+	    printf("Case Number:\t %s\n", wfimd.casenumber);
+	    printf("Examiner:\t %s\n", wfimd.examiner);
 	    printf("Evidence Number: %s\n", wfimd.evidencenumber);
 	    printf("Description:\t %s\n", wfimd.description);
 	    printf("BLAKE3 Hash:\t ");
