@@ -76,23 +76,10 @@ void ShowUsage(int outtype)
 
 int main(int argc, char* argv[])
 {
-    /*
-    char* inputstr = NULL;
-    //char outputstr[PATH_MAX] = {0};
-    char wfistr[PATH_MAX] = {0};
-    //char* wfistr = NULL;
-    char* outputstr = NULL;
-    char* imgfilestr = NULL;
-    char* logfilestr = NULL;
-    char* extstr = NULL;
-    */
     std::string devicepath;
-    //std::string outputstr;
     std::string imagepath;
     std::string logpath;
     uint8_t verify = 0;
-
-    //printf("wfi_metadata struct size is %d\n", sizeof(struct wfi_metadata));
 
     if(argc == 1 || (argc == 2 && strcmp(argv[1], "-h") == 0))
     {
@@ -108,12 +95,8 @@ int main(int argc, char* argv[])
     {
         for(int i=3; i < argc; i++)
         {
-            //printf("Command option %d, %s\n", i, argv[i]);
             if(strcmp(argv[i], "-v") == 0)
-            {
                 verify=1;
-                //printf("verification is set\n");
-            }
             else if(strcmp(argv[i], "-c") == 0)
                 strcpy(wfimd.casenumber, argv[i+1]);
             else if(strcmp(argv[i], "-e") == 0)
@@ -134,18 +117,14 @@ int main(int argc, char* argv[])
             }
         }
 	//printf("Command called: %s %s %s\n", argv[0], argv[1], argv[2]);
-        //printf("wfimd.examiner: %s\n", wfimd.examiner);
-        //inputstr = argv[1];
         devicepath = argv[1];
         std::string filestr = argv[2];
         std::size_t found = filestr.find_last_of("/");
         std::string pathname = filestr.substr(0, found);
         std::string filename = filestr.substr(found+1);
-        //std::cout << "pathname: " << pathname << " filename: " << filename << "\n";
         std::filesystem::path initpath = std::filesystem::canonical(pathname + "/");
         imagepath = initpath.string() + "/" + filename + ".wfi";
         logpath = imagepath + ".log";
-        //std::cout << "imagepath: " << imagepath << " logpath: " << logpath << "\n";
         if(devicepath.empty())
         {
             ShowUsage(0);
@@ -157,62 +136,20 @@ int main(int argc, char* argv[])
             return 1;
         }
 
-        /*
-	if(inputstr == NULL)
-	{
-	    ShowUsage(0);
-	    return 1;
-	}
-        */
-        //realpath(argv[2], wfistr);
-        //realpath(argv[2], outputstr);
-        //outputstr = &wfistr[0];
-        //outputstr = argv[2];
-        /*
-	if(outputstr == NULL)
-	{
-	    ShowUsage(0);
-	    return 1;
-	}
-        */
-
-        /*
-        extstr = strstr(outputstr, ".wfi");
-        if(extstr == NULL)
-        {
-            //imgfilestr = malloc_orDie(strlen(outputstr)+4);
-            imgfilestr = strcat(outputstr, ".wfi");
-        }
-        else
-        {
-            //imgfilestr = malloc_orDie(strlen(outputstr));
-            imgfilestr = outputstr;
-        }
-
-        char* midname = strndup(outputstr, strlen(outputstr));
-        //char* midname = strndup(outputstr, strlen(outputstr)+4);
-        logfilestr = strcat(midname, ".log");
-        */
-
-        //printf("img str: %s\tlog str: %s\n", imgfilestr, logfilestr);
-
         int64_t totalbytes = 0;
         int16_t sectorsize = 0;
         int64_t curpos = 0;
         int64_t errcnt = 0;
         int infile = open(devicepath.c_str(), O_RDONLY | O_NONBLOCK);
-        //int infile = open(inputstr, O_RDONLY | O_NONBLOCK);
 	FILE* fin = NULL;
 	FILE* fout = NULL;
         FILE* filelog = NULL;
         filelog = fopen(logpath.c_str(), "w+");
-        //filelog = fopen(logfilestr, "w+");
         if(filelog == NULL)
         {
             printf("Error opening log file.\n");
             return 1;
         }
-        //free(midname);
 
         if(infile >= 0)
         {
@@ -220,10 +157,7 @@ int main(int argc, char* argv[])
 	    ioctl(infile, BLKSSZGET, &sectorsize);
             close(infile);
 	    fin = fopen_orDie(devicepath.c_str(), "rb");
-	    //fin = fopen_orDie(inputstr, "rb");
 	    fout = fopen_orDie(imagepath.c_str(), "wb");
-	    //fout = fopen_orDie(imgfilestr, "wb");
-	    //printf("Sector Size: %u Total Bytes: %u\n", sectorsize, totalbytes);
 
 	    wfimd.skipframeheader = 0x184d2a5f;
             wfimd.skipframesize = 256;
@@ -258,7 +192,6 @@ int main(int argc, char* argv[])
                 if(strncmp(udev_device_get_devtype(dev), "partition", 9) != 0 && strncmp(udev_device_get_sysname(dev), "loop", 4) != 0)
                 {
                     tmp = udev_device_get_devnode(dev);
-                    //if(strcmp(tmp, inputstr) == 0)
                     if(strcmp(tmp, devicepath.c_str()) == 0)
                     {
                         fprintf(filelog, "Device:");
@@ -287,8 +220,6 @@ int main(int argc, char* argv[])
             
 	    fseek(fin, 0, SEEK_SET);
 	    fseek(fout, 0, SEEK_SET);
-            //lseek(infile, 0, SEEK_SET);
-            //lseek(outfile, 0, SEEK_SET);
 
             // BLAKE3_OUT_LEN IS 32 BYTES LONG
             uint8_t srchash[BLAKE3_OUT_LEN];
@@ -307,8 +238,6 @@ int main(int argc, char* argv[])
 	    ZSTD_CCtx* cctx = ZSTD_createCCtx();
 	    CHECK(cctx != NULL, "ZSTD_createCCtx() failed");
 
-	    //CHECK_ZSTD(ZSTD_CCtx_setParameter(
-	    //CHECK_ZSTD(ZSTD_CCtx_setParamter
 	    size_t toread = bufinsize;
 	    for(;;)
 	    {
@@ -342,13 +271,11 @@ int main(int argc, char* argv[])
             memcpy(wfimd.devhash, srchash, BLAKE3_OUT_LEN);
 	    // NEED TO WRITE SKIPPABLE FRAME CONTENT HERE
 	    fwrite_orDie(&wfimd, sizeof(struct wfi_metadata), fout);
-            //write(outfile, &wfimd, sizeof(struct wfi_metadata));
 	    
 	    time_t endtime = time(NULL);
             fprintf(filelog, "Wrote %llu out of %llu bytes\n", curpos, totalbytes);
             fprintf(filelog, "%llu blocks replaced with zeroes\n", errcnt);
             fprintf(filelog, "Forensic Image: %s\n", imagepath.c_str());
-            //fprintf(filelog, "Forensic Image: %s\n", outputstr+3);
             fprintf(filelog, "Forensic Image finished at: %s\n", GetDateTime(dtbuf));
             fprintf(filelog, "Forensic Image created in: %f seconds\n\n", difftime(endtime, starttime));
             printf("\nForensic Image Creation Finished\n");
@@ -367,16 +294,13 @@ int main(int argc, char* argv[])
 
 	    if(verify == 1) // start verification
 	    {
-		//printf("Start Verification by decompressing...");
                 fprintf(filelog, "Verification started at: %s\n", GetDateTime(dtbuf));
-                //fprintf(filelog, "wombatimager v0.1 zstd Compressed Raw Forensic Image started at: %s\n", GetDateTime(dtbuf));
                 printf("Verification Started\n");
                 uint8_t forimghash[BLAKE3_OUT_LEN];
                 blake3_hasher imghasher;
                 blake3_hasher_init(&imghasher);
                 
 		fout = fopen_orDie(imagepath.c_str(), "rb");
-		//fout = fopen_orDie(imgfilestr, "rb");
 		size_t bufinsize = ZSTD_DStreamInSize();
 		void* bufin = malloc_orDie(bufinsize);
 		size_t bufoutsize = ZSTD_DStreamOutSize();
@@ -461,7 +385,6 @@ int main(int argc, char* argv[])
 	    return 1;
 	}
 	fclose(filelog);
-        //*/
     }
     else
     {
