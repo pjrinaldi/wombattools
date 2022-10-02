@@ -9,4 +9,5 @@ wombatinfo
 wombatmount
 wombatverify
 wombatrestore
+wombatlogical
 test/wombatreader

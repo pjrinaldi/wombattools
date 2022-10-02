@@ -45,3 +45,6 @@ echo "Building wombatrestore"
 
 g++ -O3 -o wombatrestore wombatrestore.cpp -lzstd -lpthread -L. -lblake3
 
+echo "Building wombatlogical"
+
+g++ -O3 -o wombatlogical wombatlogical.cpp -ltar -lzstd -lpthread -L. -lblake3
