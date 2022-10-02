@@ -59,11 +59,11 @@ void ShowUsage(int outtype)
         printf("IMAGE_NAME\t: the file name for the forensic image without an extension.\n");
         printf("FILES\t: a device to image such as /dev/sdX\n");
         printf("Arguments :\n");
-	printf("-v\t: Perform image verification.\n");
+	//printf("-v\t: Perform image verification.\n");
         printf("-V\t: Prints Version information\n");
         printf("-h\t: Prints help information\n\n");
         printf("Example Usage :\n");
-        printf("wombatlogical /dev/sda item1 -v -c \"Case 1\" -e \"My Name\" -n \"Item 1\" -d \"Forensic Image of a 32MB SD Card\"\n");
+        printf("wombatlogical test.wli item1 dir/ file1 file2\n");
     }
     else if(outtype == 1)
     {
@@ -107,14 +107,14 @@ int main(int argc, char* argv[])
     filevector.clear();
 
     int i;
-    while((i=getopt(argc, argv, "hv")) != -1)
+    while((i=getopt(argc, argv, "hV")) != -1)
     {
         switch(i)
         {
             case 'h':
                 ShowUsage(0);
                 return 1;
-            case 'v':
+            case 'V':
                 ShowUsage(1);
                 return 1;
         }
