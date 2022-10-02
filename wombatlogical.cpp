@@ -17,7 +17,11 @@
 #include <filesystem>
 #include <iostream>
 
+#include <tar.h>
+#include <libtar.h>
+
 #include "blake3.h"
+
 #include "common.h"
 #include <zstd.h>
 
