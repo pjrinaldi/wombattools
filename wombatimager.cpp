@@ -28,7 +28,10 @@ struct wfi_metadata
     uint32_t skipframeheader; // skippable frame header - 4
     uint32_t skipframesize; // skippable frame content size (not including header and this size) - 4
     uint16_t sectorsize; // raw forensic image sector size - 2
-    int64_t reserved; // reserved
+    uint16_t version; // version # for forensic image format
+    uint16_t reserved1;
+    uint32_t reserved2;
+    //int64_t reserved; // reserved
     int64_t totalbytes; // raw forensic image total size - 8
     char casenumber[24]; // 24 character string - 24
     char evidencenumber[24]; // 24 character string - 24
@@ -162,7 +165,9 @@ int main(int argc, char* argv[])
 	    wfimd.skipframeheader = 0x184d2a5f;
             wfimd.skipframesize = 256;
 	    wfimd.sectorsize = sectorsize;
-            wfimd.reserved  = 0x0;
+	    wfimd.version = 0x01;
+            wfimd.reserved1 = 0x0;
+	    wfimd.reserved2 = 0x0;
 	    wfimd.totalbytes = totalbytes;
 
             time_t starttime = time(NULL);
