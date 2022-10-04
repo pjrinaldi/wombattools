@@ -59,6 +59,7 @@ void ShowUsage(int outtype)
         printf("IMAGE_NAME\t: the file name for the forensic image without an extension.\n");
         printf("FILES\t: a device to image such as /dev/sdX\n");
         printf("Arguments :\n");
+	printf("-c\t: calculate and store hash for each file in logical image.\n");
 	//printf("-v\t: Perform image verification.\n");
         printf("-V\t: Prints Version information\n");
         printf("-h\t: Prints help information\n\n");
