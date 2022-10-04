@@ -58,7 +58,7 @@ void ShowUsage(int outtype)
     {
         printf("Create logical forensic image IMAGE_NAME.wli, log file IMAGE_NAME.log from device FILES, automatically generates tar, applies zstd compression, and optionally validates forensic image.\n\n");
         printf("Usage :\n");
-        printf("\twombatlogical IMAGE_NAME [arg] FILES\n\n");
+        printf("\twombatlogical [args] IMAGE_NAME FILES\n\n");
         printf("IMAGE_NAME\t: the file name for the forensic image without an extension.\n");
         printf("FILES\t: a device to image such as /dev/sdX\n");
         printf("Arguments :\n");
@@ -110,8 +110,14 @@ int main(int argc, char* argv[])
     std::vector<std::filesystem::path> filevector;
     filevector.clear();
 
+    if(argc == 1)
+    {
+	ShowUsage(0);
+	return 1;
+    }
+
     int i;
-    while((i=getopt(argc, argv, "hV")) != -1)
+    while((i=getopt(argc, argv, "chV")) != -1)
     {
         switch(i)
         {
@@ -121,6 +127,9 @@ int main(int argc, char* argv[])
             case 'V':
                 ShowUsage(1);
                 return 1;
+	    case 'c':
+		printf("Calculate hash and store in logical image.\n");
+		break;
         }
     }
     for(int i=optind; i < argc; i++)
