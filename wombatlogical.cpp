@@ -80,6 +80,59 @@ void ShowUsage(int outtype)
 };
 
 /*
+ * GET LIST OF MOUNT POINTS BY DEVICE MNTPT
+#include <stdio.h>
+#include <stdlib.h>
+#include <mntent.h>
+
+int main(void)
+{
+  struct mntent *ent;
+  FILE *aFile;
+
+  aFile = setmntent("/proc/mounts", "r");
+  if (aFile == NULL) {
+    perror("setmntent");
+    exit(1);
+  }
+  while (NULL != (ent = getmntent(aFile))) {
+    printf("%s %s\n", ent->mnt_fsname, ent->mnt_dir);
+  }
+  endmntent(aFile);
+}
+*/
+
+/* c++ EXAMPLE TO GET MNTPT AND COMPARE TO PROVIDED PATH STRING
+ * CAN MODIFY THIS TO USE STRING.CONTAINS RATHER THAN ==
+
+#include <string_view>
+#include <fstream>
+#include <optional>
+
+std::optional<std::string> get_device_of_mount_point(std::string_view path)
+{
+   std::ifstream mounts{"/proc/mounts"};
+   std::string mountPoint;
+   std::string device;
+
+   while (mounts >> device >> mountPoint)
+   {
+      if (mountPoint == path)
+      {
+         return device;
+      }
+   }
+
+   return std::nullopt;
+}
+if (const auto device = get_device_of_mount_point("/"))
+   std::cout << *device << "\n";
+else
+   std::cout << "Not found\n";
+
+*/
+
+/*
  *
     // BEGIN TAR METHOD
     QString tmptar = casepath + "/" + wombatvariable.casename + ".wfc";
