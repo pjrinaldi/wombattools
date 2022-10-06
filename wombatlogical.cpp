@@ -16,6 +16,7 @@
 #include <vector>
 #include <filesystem>
 #include <iostream>
+#include <fstream>
 
 #include <tar.h>
 #include <libtar.h>
@@ -185,10 +186,81 @@ int main(int argc, char* argv[])
 		break;
         }
     }
+    // get all the input strings... then run parse directory to get the list of files...
     for(int i=optind; i < argc; i++)
     {
         filevector.push_back(std::filesystem::canonical(argv[i]));
     }
+    // when i replace vector with filelist, this works to get the device for reach file, so i can determine the
+    // filesystem and then get the forensic properties for the file.
+    for(int i=0; i < filevector.size(); i++)
+    {
+	std::ifstream mounts{"/proc/mounts"};
+	std::string mntpt;
+	std::string device;
+	std::string fileinfo;
+	while(mounts >> device >> mntpt)
+	{
+	    std::size_t found = filevector.at(i).string().find(mntpt);
+	    if(found != std::string::npos)
+	    {
+		fileinfo = filevector.at(i).string() + " file's mountpoint " + mntpt + " and subsequent device " + device;
+	    }
+	}
+	std::cout << fileinfo << "\n";
+    }
+/*
+ * GET LIST OF MOUNT POINTS BY DEVICE MNTPT
+#include <stdio.h>
+#include <stdlib.h>
+#include <mntent.h>
+
+int main(void)
+{
+  struct mntent *ent;
+  FILE *aFile;
+
+  aFile = setmntent("/proc/mounts", "r");
+  if (aFile == NULL) {
+    perror("setmntent");
+    exit(1);
+  }
+  while (NULL != (ent = getmntent(aFile))) {
+    printf("%s %s\n", ent->mnt_fsname, ent->mnt_dir);
+  }
+  endmntent(aFile);
+}
+*/
+
+/* c++ EXAMPLE TO GET MNTPT AND COMPARE TO PROVIDED PATH STRING
+ * CAN MODIFY THIS TO USE STRING.CONTAINS RATHER THAN ==
+
+#include <string_view>
+#include <fstream>
+#include <optional>
+
+std::optional<std::string> get_device_of_mount_point(std::string_view path)
+{
+   std::ifstream mounts{"/proc/mounts"};
+   std::string mountPoint;
+   std::string device;
+
+   while (mounts >> device >> mountPoint)
+   {
+      if (mountPoint == path)
+      {
+         return device;
+      }
+   }
+
+   return std::nullopt;
+}
+if (const auto device = get_device_of_mount_point("/"))
+   std::cout << *device << "\n";
+else
+   std::cout << "Not found\n";
+
+*/
 
 
     /*
