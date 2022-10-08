@@ -219,9 +219,162 @@ std::string ConvertBlocksToExtents(std::vector<uint32_t>* blocklist, uint32_t bl
     return extentstr;
 }
 
-// may want to replace filename with the current path array value and build the filename from the loop of this function
-void ParseExtForensics(std::string filename, std::string mntptstr, std::string devicestr, uint64_t curextinode)
+void ParseExtInit(std::ifstream* devicebuffer, extinfo* curextinfo, uint64_t curinode)
 {
+    uint64_t curextinode = 2;
+    // IF THERE IS COMMON ELEMENTS MOVE INTO ParseExtInit();
+    // MOVE A LOT OF THIS INTO ParseExtPath();
+    // MOVE A LOT OF THIS INTO ParseExtFile();
+    uint32_t blocksize = 0;
+    uint32_t bsizepow = 0;
+    uint8_t* bsize = new uint8_t[4];
+    devicebuffer->seekg(1048);
+    devicebuffer->read((char*)bsize, 4);
+    bsizepow = (uint32_t)bsize[0] | (uint32_t)bsize[1] << 8 | (uint32_t)bsize[2] << 16 | (uint32_t)bsize[3] << 24;
+    delete[] bsize;
+    blocksize = 1024 * pow(2, bsizepow);
+    curextinfo->blocksize = 1024 * pow(2, bsizepow);
+    //std::cout << "block size: " << bsizepow << std::endl;
+    std::cout << "blocksize: " << curextinfo->blocksize << std::endl;
+    uint8_t* isize = new uint8_t[2];
+    uint16_t inodesize = 0;
+    devicebuffer->seekg(1112);
+    devicebuffer->read((char*)isize, 2);
+    inodesize = (uint16_t)isize[0] | (uint16_t)isize[1] << 8;
+    curextinfo->inodesize = (uint16_t)isize[0] | (uint16_t)isize[1] << 8;
+    delete[] isize;
+    std::cout << "inode size: " << curextinfo->inodesize << std::endl;
+    uint32_t blkgrpinodecnt = 0;
+    uint8_t* bgicnt = new uint8_t[4];
+    devicebuffer->seekg(1064);
+    devicebuffer->read((char*)bgicnt, 4);
+    blkgrpinodecnt = (uint32_t)bgicnt[0] | (uint32_t)bgicnt[1] << 8 | (uint32_t)bgicnt[2] << 16 | (uint32_t)bgicnt[3] << 24;
+    delete[] bgicnt;
+    std::cout << "block group inode count: " << blkgrpinodecnt << std::endl;
+    uint32_t rootinodetableaddress = 0;
+    uint8_t* ritaddr = new uint8_t[4];
+    if(blkgrpinodecnt > 2)
+        devicebuffer->seekg(2056);
+    else
+        devicebuffer->seekg(2088);
+    devicebuffer->read((char*)ritaddr, 4);
+    rootinodetableaddress = (uint32_t)ritaddr[0] | (uint32_t)ritaddr[1] << 8 | (uint32_t)ritaddr[2] << 16 | (uint32_t)ritaddr[3] << 24;
+    delete[] ritaddr;
+    std::cout << "root inode table address: " << rootinodetableaddress << std::endl;
+    uint8_t exttype = 2;
+    uint8_t* extflags = new uint8_t[12];
+    devicebuffer->seekg(1116);
+    devicebuffer->read((char*)extflags, 12);
+    uint32_t compatflags = (uint32_t)extflags[0] | (uint32_t)extflags[1] << 8 | (uint32_t)extflags[2] << 16 | (uint32_t)extflags[3] << 24;
+    uint32_t incompatflags = (uint32_t)extflags[4] | (uint32_t)extflags[5] << 8 | (uint32_t)extflags[6] << 16 | (uint32_t)extflags[7] << 24;
+    uint32_t readonlyflags = (uint32_t)extflags[8] | (uint32_t)extflags[9] << 8 | (uint32_t)extflags[10] << 16 | (uint32_t)extflags[11] << 24;
+    delete[] extflags;
+    if((compatflags & 0x00000200UL != 0) || (incompatflags & 0x0001f7c0UL != 0) || (readonlyflags & 0x00000378UL != 0))
+        exttype = 4;
+    else if((compatflags & 0x00000004UL != 0) || (incompatflags & 0x0000000cUL != 0))
+        exttype = 3;
+    std::cout << "exttype: EXT" << (unsigned int)exttype << std::endl;
+    std::string revstr;
+    uint8_t* revbig = new uint8_t[4];
+    devicebuffer->seekg(1100);
+    devicebuffer->read((char*)revbig, 4);
+    revstr.append(std::to_string((uint32_t)revbig[0] | (uint32_t)revbig[1] << 8 | (uint32_t)revbig[2] << 16 | (uint32_t)revbig[3] << 24));
+    delete[] revbig;
+    revstr.append(".");
+    uint8_t* revsml = new uint8_t[2];
+    devicebuffer->seekg(1086);
+    devicebuffer->read((char*)revsml, 2);
+    revstr.append(std::to_string((uint16_t)revsml[0] | (uint16_t)revsml[1] << 8));
+    delete[] revsml;
+    float revision = std::stof(revstr);
+    std::cout << "revstr: " << revstr << std::endl;
+    std::cout << "rev float: " << revision << std::endl;
+    uint16_t grpdescsize = 32;
+    if(incompatflags & 0x80)
+    {
+        uint8_t* grpdesc = new uint8_t[2];
+        devicebuffer->seekg(1278);
+        devicebuffer->read((char*)grpdesc, 2);
+        grpdescsize = (uint16_t)grpdesc[0] | (uint16_t)grpdesc[1] << 8;
+        delete[] grpdesc;
+    }
+    std::cout << "group descriptor size: " << grpdescsize << std::endl;
+    uint8_t* fsblk = new uint8_t[4];
+    devicebuffer->seekg(1028);
+    devicebuffer->read((char*)fsblk, 4);
+    uint32_t fsblkcnt = (uint32_t)fsblk[0] | (uint32_t)fsblk[1] << 8 | (uint32_t)fsblk[2] << 16 | (uint32_t)fsblk[3] << 24;
+    delete[] fsblk;
+    std::cout << "fs block cnt:" << fsblkcnt << std::endl;
+    uint8_t* blkgrp = new uint8_t[4];
+    devicebuffer->seekg(1056);
+    devicebuffer->read((char*)blkgrp, 4);
+    uint32_t blkgrpblkcnt = (uint32_t)blkgrp[0] | (uint32_t)blkgrp[1] << 8 | (uint32_t)blkgrp[2] << 16 | (uint32_t)blkgrp[4] << 24;
+    delete[] blkgrp;
+    std::cout << "block group block count: " << blkgrpblkcnt << std::endl;
+    uint32_t blockgroupcount = fsblkcnt / blkgrpblkcnt;
+    unsigned int blkgrpcntrem = fsblkcnt % blkgrpblkcnt;
+    if(blkgrpcntrem > 0)
+        blockgroupcount++;
+    if(blockgroupcount == 0)
+        blockgroupcount = 1;
+    std::cout << "block group count: " << blockgroupcount << std::endl;
+    std::vector<uint32_t> inodeaddrtables;
+    inodeaddrtables.clear();
+    for(unsigned int i=0; i < blockgroupcount; i++)
+    {
+        uint8_t* iaddr = new uint8_t[4];
+        if(blocksize == 1024)
+            devicebuffer->seekg(2*blocksize + i * grpdescsize + 8);
+        else
+            devicebuffer->seekg(blocksize + i * grpdescsize + 8);
+        devicebuffer->read((char*)iaddr, 4);
+        inodeaddrtables.push_back((uint32_t)iaddr[0] | (uint32_t)iaddr[1] << 8 | (uint32_t)iaddr[2] << 16 | (uint32_t)iaddr[3] << 24);
+    }
+    uint8_t bgnumber = 0;
+    uint32_t inodestartingblock = 0;
+    for(int i=1; i <= inodeaddrtables.size(); i++)
+    {
+        if(curextinode < i*blkgrpinodecnt) // if i generalize function, then 2 would be replaced with curextinode as a passed variable
+        {
+            inodestartingblock = inodeaddrtables.at(i-1);
+            bgnumber = i-1;
+            break;
+        }
+    }
+    std::cout << "inode starting block: " << inodestartingblock << std::endl;
+    std::cout << "block group number: " << (unsigned int)bgnumber << std::endl;
+    uint64_t relcurinode = curextinode - 1  - (bgnumber * blkgrpinodecnt);
+    uint64_t curoffset = inodestartingblock * blocksize + inodesize * relcurinode;
+    curextinfo->curoffset = inodestartingblock * blocksize + inodesize * relcurinode;
+    std::cout << "relcurinode: " << relcurinode << std::endl;
+    std::cout << "curoffset: " << curextinfo->curoffset << std::endl;
+    std::vector<uint32_t> blocklist;
+    blocklist.clear();
+    GetContentBlocks(devicebuffer, blocksize, curoffset, &incompatflags, &blocklist);
+    std::string dirlayout = ConvertBlocksToExtents(&blocklist, blocksize);
+    std::cout << "dir layout: " << dirlayout << std::endl;
+    blocklist.clear();
+
+}
+
+uint64_t ParseExtPath(std::ifstream* devicebuffer, uint64_t nextinode)
+{
+    extinfo curextinfo;
+    ParseExtInit(devicebuffer, &curextinfo, nextinode);
+    nextinode = nextinode + 1;
+    return nextinode;
+}
+
+void ParseExtFile(std::ifstream* devicebuffer, uint64_t curextinode)
+{
+    std::cout << "do file stuff here...\n";
+}
+
+// may want to replace filename with the current path array value and build the filename from the loop of this function
+//void ParseExtForensics(std::string filename, std::string mntptstr, std::string devicestr, uint64_t curextinode)
+void ParseExtForensics(std::string filename, std::string mntptstr, std::string devicestr)
+{
+    uint64_t nextinode = 2;
     std::ifstream devicebuffer(devicestr.c_str(), std::ios::in|std::ios::binary);
     std::cout << filename << " " << mntptstr << " " << devicestr << std::endl;
     // MAY WANT THIS IN HERE TO LOOP AND PARSE THE RESPECTIVE DIRECTORIES TO GET TO THE FILE...
@@ -230,6 +383,30 @@ void ParseExtForensics(std::string filename, std::string mntptstr, std::string d
     std::string s;
     while(getline(iss, s, '/'))
         pathvector.push_back(s);
+    for(int i=0; i < pathvector.size(); i++)
+    {
+        std::cout << "current path:" << pathvector.at(i) << " ";
+        if(i == 0)
+        {
+            std::cout << i << " nextinode: " << nextinode << " Parse Ext Root Directory inode 2\n";
+            nextinode = ParseExtPath(&devicebuffer, nextinode);
+        }
+        else if(i == pathvector.size() - 1)
+        {
+            std::cout << i << " nextinode: " << nextinode << " Parse Ext File Forensics\n";
+            ParseExtFile(&devicebuffer, nextinode);
+        }
+        else
+        {
+            std::cout << i << " nextinode: " << nextinode << " Parse File's Next Directory\n";
+            nextinode = ParseExtPath(&devicebuffer, nextinode);
+        }
+    }
+    /*
+    uint64_t curextinode = 2;
+    // IF THERE IS COMMON ELEMENTS MOVE INTO ParseExtInit();
+    // MOVE A LOT OF THIS INTO ParseExtPath();
+    // MOVE A LOT OF THIS INTO ParseExtFile();
     uint32_t blocksize = 0;
     uint32_t bsizepow = 0;
     uint8_t* bsize = new uint8_t[4];
@@ -356,6 +533,8 @@ void ParseExtForensics(std::string filename, std::string mntptstr, std::string d
     std::string dirlayout = ConvertBlocksToExtents(&blocklist, blocksize);
     std::cout << "dir layout: " << dirlayout << std::endl;
     blocklist.clear();
+    */
+
 
 
     // IF IT's DIRECTORY, JUST GET VALUES I NEED TO RERUN PARSEEXTFORENSICS WITH THE NEW PATH VALUE

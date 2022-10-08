@@ -1389,7 +1389,8 @@ int main(int argc, char* argv[])
                 //std::string s;
                 //while(getline(iss, s, '/'))
                 //    pathvector.push_back(s);
-                ParseExtForensics(filename, mntptstr, devicestr, 2);
+                ParseExtForensics(filename, mntptstr, devicestr);
+                //ParseExtForensics(filename, mntptstr, devicestr, 2);
                 break;
             case 1:
                 std::cout << "FAT12\n";
