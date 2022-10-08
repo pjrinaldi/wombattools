@@ -368,12 +368,6 @@ void ParseExtForensics(std::string filename, std::string mntptstr, std::string d
 
     if(!parfilename.isEmpty())
 	inodecnt = parinode + 1;
-    QString dirlayout = "";
-        QList<uint32_t> blocklist;
-        blocklist.clear();
-        GetContentBlocks(curimg, curstartsector, blocksize, curoffset, &incompatflags, &blocklist);
-        dirlayout = ConvertBlocksToExtents(blocklist, blocksize);
-        blocklist.clear();
      */ 
 }
 
