@@ -7,7 +7,7 @@
 #include <unistd.h>
 #include <errno.h>
 #include <stdio.h>
-#include <time.h>
+//#include <time.h>
 #include <string.h>
 #include <limits.h>
 #include <stdlib.h>
@@ -23,9 +23,10 @@
 
 #include "blake3.h"
 
-#include "common.h"
+//#include "common.h"
 //#include <zstd.h>
 
+/*
 #define DTTMFMT "%F %T %z"
 #define DTTMSZ 35
 
@@ -52,7 +53,7 @@ static char* GetDateTime(char *buff)
     strftime(buff, DTTMSZ, DTTMFMT, localtime(&t));
     return buff;
 };
-
+*/
 void ShowUsage(int outtype)
 {
     if(outtype == 0)
