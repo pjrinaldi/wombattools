@@ -96,14 +96,20 @@ void DetermineFileSystem(std::string devicestring, int* fstype)
 {
     std::ifstream devicebuffer(devicestring.c_str(), std::ios::in|std::ios::binary);
     char* extsig = new char[2];
-    char extsig1, extsig2;
-    char winsig1, winsig2;
-    char refsig1, refsig2, refsig3, refsig4, refsig5, refsig6, refsig7, refsig8;
-    char f2fsig1, f2fsig2, f2fsig3, f2fsig4;
-    char zfssig1, zfssig2, zfssig3, zfssig4, zfssig5, zfssig6, zfssig7, zfssig8;
-    char bcfsig1, bcfsig2, bcfsig3, bcfsig4, bcfsig5, bcfsig6, bcfsig7, bcfsig8;
-    char bcfsig9, bcfsig10, bcfsig11, bcfsig12, bcfsig13, bcfsig14, bcfsig15, bcfsig16;
-    char zonsig1, zonsig2, zonsig3, zonsig4;
+    char* winsig = new char[2];
+    char* refsig = new char[8];
+    char* f2fsig = new char[4];
+    char* zfssig = new char[8];
+    char* bcfsig1 = new char[8];
+    char* bcfsig2 = new char[8];
+    char* bcfsig = new char[16];
+    char* zonsig = new char[4];
+    //char refsig1, refsig2, refsig3, refsig4, refsig5, refsig6, refsig7, refsig8;
+    //char f2fsig1, f2fsig2, f2fsig3, f2fsig4;
+    //char zfssig1, zfssig2, zfssig3, zfssig4, zfssig5, zfssig6, zfssig7, zfssig8;
+    //char bcfsig1, bcfsig2, bcfsig3, bcfsig4, bcfsig5, bcfsig6, bcfsig7, bcfsig8;
+    //char bcfsig9, bcfsig10, bcfsig11, bcfsig12, bcfsig13, bcfsig14, bcfsig15, bcfsig16;
+    //char zonsig1, zonsig2, zonsig3, zonsig4;
     char* bfssig = new char[4];
     char* apfsig = new char[4];
     char* hfssig = new char[2];
@@ -114,66 +120,73 @@ void DetermineFileSystem(std::string devicestring, int* fstype)
     char* udfsig = new char[5];
     // get ext2,3,4 signature
     devicebuffer.seekg(1080);
-    devicebuffer.get(extsig1); // 0x53
-    devicebuffer.get(extsig2); // 0xef
-    devicebuffer.seekg(1080);
-    devicebuffer.read(extsig, 2);
-    std::string extsigstr(extsig);
-    std::cout << "extsig0 array: " << std::hex << static_cast<int>((unsigned char)extsig[0]) << std::endl;
-    std::cout << "extsig1 array: " << std::hex << static_cast<int>((unsigned char)extsig[1]) << std::endl;
-    //std::cout << "extsig1 " << std::hex << static_cast<int>((unsigned char)extsig1) << std::endl;
+    devicebuffer.read(extsig, 2); // 0x53, 0xef
     // get windows mbr signature (FAT, NTFS, BFS)
     devicebuffer.seekg(510);
-    devicebuffer.get(winsig1); // 0x55
-    devicebuffer.get(winsig2); // 0xaa
+    devicebuffer.read(winsig, 2); // 0x55, 0xaa
     // get BFS signature
     devicebuffer.seekg(544);
     devicebuffer.read(bfssig, 4);
     std::string bfsigstr(bfssig);
     delete[] bfssig;
+    // get apfs signature
     devicebuffer.seekg(32);
     devicebuffer.read(apfsig, 4);
     std::string apfsigstr(apfsig);
     delete[] apfsig;
+    // get hfs signature
     devicebuffer.seekg(1024);
     devicebuffer.read(hfssig, 2);
     std::string hfssigstr(hfssig);
     delete[] hfssig;
+    // get xfs signature
     devicebuffer.seekg(0);
     devicebuffer.read(xfssig, 4);
     std::string xfssigstr(xfssig);
     delete[] xfssig;
+    // get btrfs signature
     devicebuffer.seekg(65600);
     devicebuffer.read(btrsig, 8);
     std::string btrsigstr(btrsig);
     delete[] btrsig;
+    // get bitlocker signature
     devicebuffer.seekg(0);
     devicebuffer.read(btlsig, 8);
     std::string btlsigstr(btlsig);
     delete[] btlsig;
+    // get iso signature
     devicebuffer.seekg(32769);
     devicebuffer.read(isosig, 5);
     std::string isosigstr(isosig);
     delete[] isosig;
+    // get udf signature
     devicebuffer.seekg(40961);
     devicebuffer.read(udfsig, 5);
     std::string udfsigstr(udfsig);
     delete[] udfsig;
-
-    //uint64_t refsig = qFromLittleEndian<uint64_t>(curimg->ReadContent(curstartsector*512 + 3, 8)); // should be 0x00 00 00 00 53 46 65 52 (0 0 0 0 S F e R) prior to endian flip
-    //uint32_t f2fsig = qFromLittleEndian<uint32_t>(curimg->ReadContent(curstartsector*512 + 1024, 4));
-    //quint64 zfssig = qFromLittleEndian<quint64>(curimg->ReadContent(curstartsector*512 + 135168, 8));
-    //quint64 bcfsig1 = qFromBigEndian<quint64>(curimg->ReadContent(curstartsector*512 + 4120, 8));
-    //quint64 bcfsig2 = qFromBigEndian<quint64>(curimg->ReadContent(curstartsector*512 + 4128, 8));
-    //uint32_t zonesig = qFromBigEndian<uint32_t>(curimg->ReadContent(0, 4));
+    // get refs signature
+    devicebuffer.seekg(3);
+    devicebuffer.read(refsig, 8);
+    // get f2fs signature
+    devicebuffer.seekg(1024);
+    devicebuffer.read(f2fsig, 4);
+    // get zfs signature
+    devicebuffer.seekg(135168);
+    devicebuffer.read(zfssig, 8);
+    // get bcachefs signature
+    devicebuffer.seekg(4120);
+    devicebuffer.read(bcfsig, 16);
+    // get zonefs signature
+    devicebuffer.seekg(0);
+    devicebuffer.read(zonsig, 4);
     //std::cout << "compare:" << bfsigstr.substr(0,4).compare("1SFB") << std::endl;
+    //std::cout << "extsig1 array: " << std::hex << static_cast<int>((unsigned char)extsig[1]) << std::endl;
     //std::cout << "extsig1 " << std::hex << static_cast<int>((unsigned char)extsig1) << std::endl;
-    //std::cout << "extsig2 " << std::hex << static_cast<int>((unsigned char)extsig2) << std::endl;
-    if((unsigned char)extsig1 == 0x53 && (unsigned char)extsig2 == 0xef) // EXT2,3,4 SIGNATURE == 0
+    if((unsigned char)extsig[0] == 0x53 && (unsigned char)extsig[1] == 0xef) // EXT2,3,4 SIGNATURE == 0
     {
         *fstype = 0;
     }
-    else if((unsigned char)winsig1 == 0x55 && (unsigned char)winsig2 == 0xaa && bfsigstr.find("1SFB") == std::string::npos) // FAT NTFS, BFS SIGNATURE
+    else if((unsigned char)winsig[0] == 0x55 && (unsigned char)winsig[1] == 0xaa && bfsigstr.find("1SFB") == std::string::npos) // FAT NTFS, BFS SIGNATURE
     {
         char* exfatbuf = new char[5];
         char* fatbuf = new char[5];
