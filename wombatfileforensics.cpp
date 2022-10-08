@@ -95,15 +95,9 @@ void ParseDirectory(std::filesystem::path dirpath, std::vector<std::filesystem::
 void DetermineFileSystem(std::string devicestring, int* fstype)
 {
     std::ifstream devicebuffer(devicestring.c_str(), std::ios::in|std::ios::binary);
+    char* extsig = new char[2];
     char extsig1, extsig2;
     char winsig1, winsig2;
-    //char apfsig1, apfsig2, apfsig3, apfsig4;
-    //char hfssig1, hfssig2;
-    //char xfssig1, xfssig2, xfssig3, xfssig4;
-    //char btrsig1, btrsig2, btrsig3, btrsig4, btrsig5, btrsig6, btrsig7, btrsig8;
-    //char btlsig1, btlsig2, btlsig3, btlsig4, btlsig5, btlsig6, btlsig7, btlsig8;
-    //char isosig1, isosig2, isosig3, isosig4, isosig5;
-    //char udfsig1, udfsig2, udfsig3, udfsig4, udfsig5;
     char refsig1, refsig2, refsig3, refsig4, refsig5, refsig6, refsig7, refsig8;
     char f2fsig1, f2fsig2, f2fsig3, f2fsig4;
     char zfssig1, zfssig2, zfssig3, zfssig4, zfssig5, zfssig6, zfssig7, zfssig8;
@@ -122,6 +116,12 @@ void DetermineFileSystem(std::string devicestring, int* fstype)
     devicebuffer.seekg(1080);
     devicebuffer.get(extsig1); // 0x53
     devicebuffer.get(extsig2); // 0xef
+    devicebuffer.seekg(1080);
+    devicebuffer.read(extsig, 2);
+    std::string extsigstr(extsig);
+    std::cout << "extsig0 array: " << std::hex << static_cast<int>((unsigned char)extsig[0]) << std::endl;
+    std::cout << "extsig1 array: " << std::hex << static_cast<int>((unsigned char)extsig[1]) << std::endl;
+    //std::cout << "extsig1 " << std::hex << static_cast<int>((unsigned char)extsig1) << std::endl;
     // get windows mbr signature (FAT, NTFS, BFS)
     devicebuffer.seekg(510);
     devicebuffer.get(winsig1); // 0x55
@@ -159,6 +159,13 @@ void DetermineFileSystem(std::string devicestring, int* fstype)
     devicebuffer.read(udfsig, 5);
     std::string udfsigstr(udfsig);
     delete[] udfsig;
+
+    //uint64_t refsig = qFromLittleEndian<uint64_t>(curimg->ReadContent(curstartsector*512 + 3, 8)); // should be 0x00 00 00 00 53 46 65 52 (0 0 0 0 S F e R) prior to endian flip
+    //uint32_t f2fsig = qFromLittleEndian<uint32_t>(curimg->ReadContent(curstartsector*512 + 1024, 4));
+    //quint64 zfssig = qFromLittleEndian<quint64>(curimg->ReadContent(curstartsector*512 + 135168, 8));
+    //quint64 bcfsig1 = qFromBigEndian<quint64>(curimg->ReadContent(curstartsector*512 + 4120, 8));
+    //quint64 bcfsig2 = qFromBigEndian<quint64>(curimg->ReadContent(curstartsector*512 + 4128, 8));
+    //uint32_t zonesig = qFromBigEndian<uint32_t>(curimg->ReadContent(0, 4));
     //std::cout << "compare:" << bfsigstr.substr(0,4).compare("1SFB") << std::endl;
     //std::cout << "extsig1 " << std::hex << static_cast<int>((unsigned char)extsig1) << std::endl;
     //std::cout << "extsig2 " << std::hex << static_cast<int>((unsigned char)extsig2) << std::endl;
@@ -210,6 +217,17 @@ void DetermineFileSystem(std::string devicestring, int* fstype)
         *fstype = 11;
     else if(bfsigstr.find("1SFB") != std::string::npos) // BFS
         *fstype = 12;
+    else if(hfssigstr.find("BD") != std::string::npos) // Legacy HFS
+        *fstype = 16;
+    //else if(f2fsig == 0xf2f52010) // F2FS 13
+    //else if(isosig == "CD001" && udfsig != "BEA01") // ISO9660 14
+    //else if(isosig == "CD001" && udfsig == "BEA01") // UDF 15
+    //else if(hfssig == "BD") // legacy HFS 16
+    //else if(zfssig == 0x00bab10c) // ZFS 17
+    //else if(refsig == 0x5265465300000000) // ReFS 18
+    //else if(f2fsig == 0xe0f5e1e2) // EROFS 19
+    //else if(bcfsig1 == 0xc68573f64e1a45ca && bcfsig2 == 0x8265f57f48ba6d81) // BCACHEFS 20
+    //else if(zonesig == 0x5a4f4653) // ZONEFSa 21
     else // UNKNOWN FILE SYSTEM SO FAR
         *fstype = 50; 
     devicebuffer.close();
