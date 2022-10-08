@@ -95,21 +95,13 @@ void ParseDirectory(std::filesystem::path dirpath, std::vector<std::filesystem::
 void DetermineFileSystem(std::string devicestring, int* fstype)
 {
     std::ifstream devicebuffer(devicestring.c_str(), std::ios::in|std::ios::binary);
-    char* extsig = new char[2];
-    char* winsig = new char[2];
-    char* refsig = new char[8];
-    char* f2fsig = new char[4];
-    char* zfssig = new char[8];
-    char* bcfsig1 = new char[8];
-    char* bcfsig2 = new char[8];
-    char* bcfsig = new char[16];
-    char* zonsig = new char[4];
-    //char refsig1, refsig2, refsig3, refsig4, refsig5, refsig6, refsig7, refsig8;
-    //char f2fsig1, f2fsig2, f2fsig3, f2fsig4;
-    //char zfssig1, zfssig2, zfssig3, zfssig4, zfssig5, zfssig6, zfssig7, zfssig8;
-    //char bcfsig1, bcfsig2, bcfsig3, bcfsig4, bcfsig5, bcfsig6, bcfsig7, bcfsig8;
-    //char bcfsig9, bcfsig10, bcfsig11, bcfsig12, bcfsig13, bcfsig14, bcfsig15, bcfsig16;
-    //char zonsig1, zonsig2, zonsig3, zonsig4;
+    unsigned char* extsig = new unsigned char[2];
+    unsigned char* winsig = new unsigned char[2];
+    unsigned char* refsig = new unsigned char[8];
+    unsigned char* f2fsig = new unsigned char[4];
+    unsigned char* zfssig = new unsigned char[8];
+    unsigned char* bcfsig = new unsigned char[16];
+    unsigned char* zonsig = new unsigned char[4];
     char* bfssig = new char[4];
     char* apfsig = new char[4];
     char* hfssig = new char[2];
@@ -120,10 +112,10 @@ void DetermineFileSystem(std::string devicestring, int* fstype)
     char* udfsig = new char[5];
     // get ext2,3,4 signature
     devicebuffer.seekg(1080);
-    devicebuffer.read(extsig, 2); // 0x53, 0xef
+    devicebuffer.read((char*)extsig, 2); // 0x53, 0xef
     // get windows mbr signature (FAT, NTFS, BFS)
     devicebuffer.seekg(510);
-    devicebuffer.read(winsig, 2); // 0x55, 0xaa
+    devicebuffer.read((char*)winsig, 2); // 0x55, 0xaa
     // get BFS signature
     devicebuffer.seekg(544);
     devicebuffer.read(bfssig, 4);
@@ -166,27 +158,27 @@ void DetermineFileSystem(std::string devicestring, int* fstype)
     delete[] udfsig;
     // get refs signature
     devicebuffer.seekg(3);
-    devicebuffer.read(refsig, 8);
+    devicebuffer.read((char*)refsig, 8);
     // get f2fs signature
     devicebuffer.seekg(1024);
-    devicebuffer.read(f2fsig, 4);
+    devicebuffer.read((char*)f2fsig, 4);
     // get zfs signature
     devicebuffer.seekg(135168);
-    devicebuffer.read(zfssig, 8);
+    devicebuffer.read((char*)zfssig, 4);
     // get bcachefs signature
     devicebuffer.seekg(4120);
-    devicebuffer.read(bcfsig, 16);
+    devicebuffer.read((char*)bcfsig, 16);
     // get zonefs signature
     devicebuffer.seekg(0);
-    devicebuffer.read(zonsig, 4);
+    devicebuffer.read((char*)zonsig, 4);
     //std::cout << "compare:" << bfsigstr.substr(0,4).compare("1SFB") << std::endl;
     //std::cout << "extsig1 array: " << std::hex << static_cast<int>((unsigned char)extsig[1]) << std::endl;
     //std::cout << "extsig1 " << std::hex << static_cast<int>((unsigned char)extsig1) << std::endl;
-    if((unsigned char)extsig[0] == 0x53 && (unsigned char)extsig[1] == 0xef) // EXT2,3,4 SIGNATURE == 0
+    if(extsig[0] == 0x53 && extsig[1] == 0xef) // EXT2,3,4 SIGNATURE == 0
     {
         *fstype = 0;
     }
-    else if((unsigned char)winsig[0] == 0x55 && (unsigned char)winsig[1] == 0xaa && bfsigstr.find("1SFB") == std::string::npos) // FAT NTFS, BFS SIGNATURE
+    else if(winsig[0] == 0x55 && winsig[1] == 0xaa && bfsigstr.find("1SFB") == std::string::npos) // FAT NTFS, BFS SIGNATURE
     {
         char* exfatbuf = new char[5];
         char* fatbuf = new char[5];
@@ -194,12 +186,15 @@ void DetermineFileSystem(std::string devicestring, int* fstype)
         devicebuffer.seekg(3);
         devicebuffer.read(exfatbuf, 5);
         std::string exfatstr(exfatbuf);
+        delete[] exfatbuf;
         devicebuffer.seekg(54);
         devicebuffer.read(fatbuf, 5);
         std::string fatstr(fatbuf);
+        delete[] fatbuf;
         devicebuffer.seekg(82);
         devicebuffer.read(fat32buf, 5);
         std::string fat32str(fat32buf);
+        delete[] fat32buf;
         if(fatstr.find("FAT12") != std::string::npos)
             *fstype = 1;
         else if(fatstr.find("FAT16") != std::string::npos)
@@ -212,9 +207,6 @@ void DetermineFileSystem(std::string devicestring, int* fstype)
             *fstype = 5;
         //std::cout << "exfat:" << exfatstr << std::endl;
         //std::cout << "fat:" << fatstr << ":" << std::endl;
-        delete[] exfatbuf;
-        delete[] fatbuf;
-        delete[] fat32buf;
     }
     else if(apfsigstr.find("NXSB") != std::string::npos) // APFS
         *fstype = 6;
@@ -230,29 +222,36 @@ void DetermineFileSystem(std::string devicestring, int* fstype)
         *fstype = 11;
     else if(bfsigstr.find("1SFB") != std::string::npos) // BFS
         *fstype = 12;
+    else if(f2fsig[0] == 0x10 && f2fsig[1] == 0x20 && f2fsig[3] == 0xf5 && f2fsig[3] == 0xf2) // F2FS
+        *fstype = 13;
+    else if(isosigstr.find("CD001") != std::string::npos && udfsigstr.find("BEA01") == std::string::npos) // ISO9660
+        *fstype = 14;
+    else if(isosigstr.find("CD001") != std::string::npos && udfsigstr.find("BEA01") != std::string::npos) // UDF
+        *fstype = 15;
     else if(hfssigstr.find("BD") != std::string::npos) // Legacy HFS
         *fstype = 16;
-    //else if(f2fsig == 0xf2f52010) // F2FS 13
-    //else if(isosig == "CD001" && udfsig != "BEA01") // ISO9660 14
-    //else if(isosig == "CD001" && udfsig == "BEA01") // UDF 15
-    //else if(hfssig == "BD") // legacy HFS 16
-    //else if(zfssig == 0x00bab10c) // ZFS 17
-    //else if(refsig == 0x5265465300000000) // ReFS 18
-    //else if(f2fsig == 0xe0f5e1e2) // EROFS 19
-    //else if(bcfsig1 == 0xc68573f64e1a45ca && bcfsig2 == 0x8265f57f48ba6d81) // BCACHEFS 20
-    //else if(zonesig == 0x5a4f4653) // ZONEFSa 21
+    else if(zfssig[0] == 0x0c && zfssig[1] == 0xb1 && zfssig[2] == 0xba && zfssig[3] == 0x00) // ZFS
+        *fstype = 17;
+    else if(refsig[0] == 0x00 && refsig[1] == 0x00 && refsig[2] == 0x00 && refsig[3] == 0x00 && refsig[4] == 0x53 && refsig[5] == 0x46 && refsig[6] == 0x65 && refsig[7] == 0x52) // ReFS
+        *fstype = 18;
+    else if(f2fsig[0] == 0xe2 && f2fsig[1] == 0xe1 && f2fsig[2] == 0x5e && f2fsig[3] == 0x0f) // EROFS
+        *fstype = 19;
+    else if(bcfsig[0] == 0xc6 && bcfsig[1] == 0x85 && bcfsig[2] == 0x73 && bcfsig[3] == 0xf6 && bcfsig[4] == 0x4e && bcfsig[5] == 0x1a && bcfsig[6] == 0x45 && bcfsig[7] == 0xca && bcfsig[8] == 0x82 && bcfsig[9] == 0x65 && bcfsig[10] == 0xf5 && bcfsig[11] == 0x7f && bcfsig[12] == 0x48 && bcfsig[13] == 0xba && bcfsig[14] == 0x6d && bcfsig[15] == 0x81) // BCACHEFS
+        *fstype = 20;
+    else if(zonsig[0] == 0x5a && zonsig[1] == 0x4f && zonsig[2] == 0x46 && zonsig[3] == 0x53) // ZONEFS
+        *fstype = 21;
     else // UNKNOWN FILE SYSTEM SO FAR
         *fstype = 50; 
     devicebuffer.close();
+    delete[] extsig;
+    delete[] winsig;
+    delete[] refsig;
+    delete[] f2fsig;
+    delete[] zfssig;
+    delete[] bcfsig;
+    delete[] zonsig;
+}
     /*
-    uint64_t refsig = qFromLittleEndian<uint64_t>(curimg->ReadContent(curstartsector*512 + 3, 8)); // should be 0x00 00 00 00 53 46 65 52 (0 0 0 0 S F e R) prior to endian flip
-    uint32_t f2fsig = qFromLittleEndian<uint32_t>(curimg->ReadContent(curstartsector*512 + 1024, 4));
-    quint64 zfssig = qFromLittleEndian<quint64>(curimg->ReadContent(curstartsector*512 + 135168, 8));
-    quint64 bcfsig1 = qFromBigEndian<quint64>(curimg->ReadContent(curstartsector*512 + 4120, 8));
-    quint64 bcfsig2 = qFromBigEndian<quint64>(curimg->ReadContent(curstartsector*512 + 4128, 8));
-    uint32_t zonesig = qFromBigEndian<uint32_t>(curimg->ReadContent(0, 4));
-    // zonefs magic number = 0x5a4f4653 // ZOFS
-    //0xE0F5E1E2
     // WILL WRITE FILE SYSTEM INFORMATION IN THIS FUNCTION AND ONLY RETURN THE QSTRING(FILESYSTEMNAME,FILESYSTEMTYPE) TO BE USED BY THE PARTITION
     if(winsig == 0xaa55 && bfssig != "1SFB") // FAT OR NTFS OR BFS
     {
@@ -1225,7 +1224,6 @@ void DetermineFileSystem(std::string devicestring, int* fstype)
 
      *
      */ 
-}
 
 /*
 void HashFile(std::string filename, std::string whlfile)
@@ -1422,10 +1420,82 @@ int main(int argc, char* argv[])
 	std::size_t rfound = fileinfovector.at(i).rfind("|");
         mntptstr = fileinfovector.at(i).substr(lfound+1, rfound - lfound);
 	devicestr = fileinfovector.at(i).substr(rfound+1);
+        // GET FILE SYSTEM TYPE
 	DetermineFileSystem(devicestr, &fstype);
-        std::cout << filename << " " << fstype << std::endl;
+        //std::cout << filename << " " << fstype << std::endl;
+        switch(fstype)
+        {
+            case 0:
+                std::cout << "EXTFS\n";
+                break;
+            case 1:
+                std::cout << "FAT12\n";
+                break;
+            case 2:
+                std::cout << "FAT16\n";
+                break;
+            case 3:
+                std::cout << "FAT32\n";
+                break;
+            case 4:
+                std::cout << "EXFAT\n";
+                break;
+            case 5:
+                std::cout << "NTFS\n";
+                break;
+            case 6:
+                std::cout << "APFS\n";
+                break;
+            case 7:
+                std::cout << "HFS+\n";
+                break;
+            case 8:
+                std::cout << "HFSX\n";
+                break;
+            case 9:
+                std::cout << "XFS\n";
+                break;
+            case 10:
+                std::cout << "BTRFS\n";
+                break;
+            case 11:
+                std::cout << "BITLOCKER\n";
+                break;
+            case 12:
+                std::cout << "BFS\n";
+                break;
+            case 13:
+                std::cout << "F2FS\n";
+                break;
+            case 14:
+                std::cout << "ISO9660\n";
+                break;
+            case 15:
+                std::cout << "UDF\n";
+                break;
+            case 16:
+                std::cout << "Legacy HFS\n";
+                break;
+            case 17:
+                std::cout << "ZFS\n";
+                break;
+            case 18:
+                std::cout << "ReFS\n";
+                break;
+            case 19:
+                std::cout << "EROFS\n";
+                break;
+            case 20:
+                std::cout << "BCACHEFS\n";
+                break;
+            case 21:
+                std::cout << "ZONEFS\n";
+                break;
+            default:
+                std::cout << "UNKNOWN SO FAR\n";
+                break;
+        }
     }
-
 
     /*
         devicepath = argv[1];
