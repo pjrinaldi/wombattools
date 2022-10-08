@@ -36,135 +36,188 @@ void GetContentBlocks(std::ifstream* devicebuffer, uint32_t blocksize, uint64_t 
         }
         else // use ext4_extent_idx
         {
+            std::vector<uint32_t> leafnodes;
+            leafnodes.clear();
+            for(uint16_t i=0; i < extententries; i++)
+            {
+                uint8_t* lnode = new uint8_t[4];
+                devicebuffer->seekg(curoffset + 56 + i*12);
+                devicebuffer->read((char*)lnode, 4);
+                leafnodes.push_back((uint32_t)lnode[0] | (uint32_t)lnode[1] << 8 | (uint32_t)lnode[2] << 16 | (uint32_t)lnode[3] << 24);
+                delete[] lnode;
+            }
+            for(int i=0; i < leafnodes.size(); i++)
+            {
+                uint8_t* lentry = new uint8_t[2];
+                devicebuffer->seekg(leafnodes.at(i) * blocksize + 2);
+                devicebuffer->read((char*)lentry, 2);
+                uint16_t lextententries = (uint16_t)lentry[0] | (uint16_t)lentry[1] << 8;
+                delete[] lentry;
+                uint8_t* ldepth = new uint8_t[2];
+                devicebuffer->seekg(leafnodes.at(i) * blocksize + 6);
+                devicebuffer->read((char*)ldepth, 2);
+                uint16_t lextentdepth = (uint16_t)ldepth[0] | (uint16_t)ldepth[1] << 8;
+                delete[] ldepth;
+                if(extentdepth == 0) // use ext4_extent
+                {
+                    for(uint16_t j=0; j < lextententries; j++)
+                    {
+                        uint8_t* strtblk = new uint8_t[6];
+                        devicebuffer->seekg(leafnodes.at(i) * blocksize + 18 + j*12);
+                        devicebuffer->read((char*)strtblk, 6);
+                        uint16_t starthi = (uint16_t)strtblk[0] | (uint16_t)strtblk[1] << 8;
+                        uint32_t startlo = (uint32_t)strtblk[2] | (uint32_t)strtblk[3] << 8 | (uint32_t)strtblk[4] << 16 | (uint32_t)strtblk[5] << 24;
+                        delete[] strtblk;
+                        std::cout << "start block: " << ((uint64_t)starthi >> 32) + startlo << std::endl;
+                        blocklist->push_back(((uint64_t)starthi >> 32) + startlo); // block #, not bytes
+                    }
+                }
+                else // use ext4_extent_idx
+                {
+                    std::cout << "repeat leafnode execise here...";
+                }
+            }
         }
     }
     else // USES DIRECT AND INDIRECT BLOCKS
     {
-        std::cout << "uses direct and indirect blocks\n";
-    }
-}
-/*
-{
-    if(incompatflags->contains("Files use Extents,") && inodeflags & 0x80 000) // FS USES EXTENTS AND INODE USES EXTENTS
-    {
-        //qDebug() << "extententries:" << extententries << "extentdepth:" << extentdepth;
-        else // use ext4_extent_idx
+        //std::cout << "uses direct and indirect blocks\n";
+        for(int i=0; i < 12; i++)
         {
-	    QList<uint32_t> leafnodes;
-	    leafnodes.clear();
-	    for(uint16_t i=0; i < extententries; i++)
-		leafnodes.append(qFromLittleEndian<uint32_t>(curimg->ReadContent(curoffset + 56 + i*12, 4)));
-	    for(int i=0; i < leafnodes.count(); i++)
-	    {
-		uint16_t lextententries = qFromLittleEndian<uint16_t>(curimg->ReadContent(curstartsector * 512 + leafnodes.at(i) * blocksize + 2, 2));
-		uint16_t lextentdepth = qFromLittleEndian<uint16_t>(curimg->ReadContent(curstartsector * 512 + leafnodes.at(i) * blocksize + 6, 2));
-		if(extentdepth == 0) // use ext4_extent
-		{
-		    for(uint16_t j=0; j < lextententries; j++)
-		    {
-			uint16_t blocklength = qFromLittleEndian<uint16_t>(curimg->ReadContent(curstartsector * 512 + leafnodes.at(i) * blocksize + 16 + j*12, 2));
-			uint16_t starthi = qFromLittleEndian<uint16_t>(curimg->ReadContent(curstartsector * 512 + leafnodes.at(i) * blocksize + 18 + j*12, 2));
-			uint32_t startlo = qFromLittleEndian<uint32_t>(curimg->ReadContent(curstartsector * 512 + leafnodes.at(i) * blocksize + 20 + j*12, 4));
-			quint64 startblock = (((uint64_t)starthi >> 32) + startlo); // block #, not bytes
-			blocklist->append(startblock);
-		    }
-		}
-		else // use ext4_extent_idx
-		{
-		    qDebug() << "repeat leafnode exercise here...";
-		}
-		//qDebug() << "leaf header:" << QString::number(qFromLittleEndian<uint16_t>(leafnode.mid(0, 2)), 16);
-		//qDebug() << "extent entries:" << qFromLittleEndian<uint16_t>(leafnode.mid(2, 2));
-		//qDebug() << "max extent entries:" << qFromLittleEndian<uint16_t>(leafnode.mid(4, 2));
-		//qDebug() << "extent depth:" << qFromLittleEndian<uint16_t>(leafnode.mid(6, 2));
-	    }
-	    //qDebug() << "extent header:" << QString::number(qFromLittleEndian<uint16_t>(curinodebuf.mid(40, 2)), 16);
-	    //qDebug() << "extent entries:" << qFromLittleEndian<uint16_t>(curinodebuf.mid(42, 2));
-	    //qDebug() << "max extent entries:" << qFromLittleEndian<uint16_t>(curinodebuf.mid(44, 2));
-	    //qDebug() << "extent depth:" << qFromLittleEndian<uint16_t>(curinodebuf.mid(46, 2));
-	    
-	    //qDebug() << "ei_block:" << qFromLittleEndian<uint32_t>(curinodebuf.mid(52, 4));
-	    //qDebug() << "ei_leaf_lo:" << qFromLittleEndian<uint32_t>(curinodebuf.mid(56, 4));
-	    //qDebug() << "ei_leaf_hi:" << qFromLittleEndian<uint16_t>(curinodebuf.mid(60, 2));
-	    //qDebug() << "use extent idx";
+            uint8_t* dirblk = new uint8_t[4];
+            devicebuffer->seekg(curoffset + 40 + i*4);
+            devicebuffer->read((char*)dirblk, 4);
+            uint32_t curdirblk = (uint32_t)dirblk[0] | (uint32_t)dirblk[1] << 8 | (uint32_t)dirblk[2] << 16 | (uint32_t)dirblk[3] << 24;
+            delete[] dirblk;
+            if(curdirblk > 0)
+                blocklist->push_back(curdirblk);
         }
-    }
-    else // direct and indirect blocks
-    {
-	for(int i=0; i < 12; i++)
-	{
-	    uint32_t curdirectblock = qFromLittleEndian<uint32_t>(curimg->ReadContent(curoffset + 40 + i*4, 4));
-	    if(curdirectblock > 0)
-		blocklist->append(curdirectblock);
-	}
-	//qDebug() << "blocklist before indirects:" << *blocklist;
-	uint32_t singleindirect = qFromLittleEndian<uint32_t>(curimg->ReadContent(curoffset + 88, 4));
-	uint32_t doubleindirect = qFromLittleEndian<uint32_t>(curimg->ReadContent(curoffset + 92, 4));
-	uint32_t tripleindirect = qFromLittleEndian<uint32_t>(curimg->ReadContent(curoffset + 96, 4));
-        if(singleindirect > 0)
+        uint8_t* indirect = new uint8_t[12];
+        devicebuffer->seekg(curoffset + 88);
+        devicebuffer->read((char*)indirect, 12);
+        uint32_t sindirect = (uint32_t)indirect[0] | (uint32_t)indirect[1] << 8 | (uint32_t)indirect[2] << 16 | (uint32_t)indirect[3] << 24;
+        uint32_t dindirect = (uint32_t)indirect[4] | (uint32_t)indirect[5] << 8 | (uint32_t)indirect[6] << 16 | (uint32_t)indirect[7] << 24;
+        uint32_t tindirect = (uint32_t)indirect[8] | (uint32_t)indirect[9] << 8 | (uint32_t)indirect[10] << 16 | (uint32_t)indirect[11] << 24;
+        delete[] indirect;
+        if(sindirect > 0)
         {
-            for(uint i=0; i < blocksize / 4; i++)
+            for(unsigned int i=0; i < blocksize / 4; i++)
             {
-                uint32_t cursingledirect = qFromLittleEndian<uint32_t>(curimg->ReadContent(curstartsector * 512 + singleindirect * blocksize + i*4, 4));
-                if(cursingledirect > 0)
-                    blocklist->append(cursingledirect);
+                uint8_t* csd = new uint8_t[4];
+                devicebuffer->seekg(sindirect * blocksize + i*4);
+                devicebuffer->read((char*)csd, 4);
+                uint32_t cursdirect = (uint32_t)csd[0] | (uint32_t)csd[1] << 8 | (uint32_t)csd[2] << 16 | (uint32_t)csd[3] << 24;
+                delete[] csd;
+                if(cursdirect > 0)
+                    blocklist->push_back(cursdirect);
             }
         }
-        if(doubleindirect > 0)
+        if(dindirect > 0)
         {
-            QList<uint32_t> sinlist;
+            std::vector<uint32_t> sinlist;
             sinlist.clear();
-            for(uint i=0; i < blocksize / 4; i++)
+            for(unsigned int i=0; i < blocksize / 4; i++)
             {
-                uint32_t sindirect = qFromLittleEndian<uint32_t>(curimg->ReadContent(curstartsector * 512 + doubleindirect * blocksize + i*4, 4));
+                uint8_t* sind = new uint8_t[4];
+                devicebuffer->seekg(dindirect * blocksize + i*4);
+                devicebuffer->read((char*)sind, 4);
+                uint32_t sindirect = (uint32_t)sind[0] | (uint32_t)sind[1] << 8 | (uint32_t)sind[2] << 16 | (uint32_t)sind[3] << 24;
+                delete[] sind;
                 if(sindirect > 0)
-                    sinlist.append(sindirect);
+                    sinlist.push_back(sindirect);
             }
-            for(int i=0; i < sinlist.count(); i++)
+            for(int i=0; i < sinlist.size(); i++)
             {
-                for(uint j=0; j < blocksize / 4; j++)
+                for(unsigned int j=0; j < blocksize / 4; j++)
                 {
-                    uint32_t sdirect = qFromLittleEndian<uint32_t>(curimg->ReadContent(curstartsector * 512 + sinlist.at(i) * blocksize + j*4, 4));
+                    uint8_t* sd = new uint8_t[4];
+                    devicebuffer->seekg(sinlist.at(i) * blocksize + j*4);
+                    devicebuffer->read((char*)sd, 4);
+                    uint32_t sdirect = (uint32_t)sd[0] | (uint32_t)sd[1] << 8 | (uint32_t)sd[2] << 16 | (uint32_t)sd[3] << 24;
+                    delete[] sd;
                     if(sdirect > 0)
-                        blocklist->append(sdirect);
+                        blocklist->push_back(sdirect);
                 }
             }
             sinlist.clear();
         }
-        if(tripleindirect > 0)
+        if(tindirect > 0)
         {
-            QList<uint32_t> dinlist;
-            QList<uint32_t> sinlist;
+            std::vector<uint32_t> dinlist;
+            std::vector<uint32_t> sinlist;
             dinlist.clear();
             sinlist.clear();
-            for(uint i=0; i < blocksize / 4; i++)
+            for(unsigned int i=0; i < blocksize / 4; i++)
             {
-                uint32_t dindirect = qFromLittleEndian<uint32_t>(curimg->ReadContent(curstartsector * 512 + tripleindirect * blocksize + i*4, 4));
+                uint8_t* did = new uint8_t[4];
+                devicebuffer->seekg(tindirect * blocksize + i*4);
+                devicebuffer->read((char*)did, 4);
+                uint32_t dindirect = (uint32_t)did[0] | (uint32_t)did[1] << 8 | (uint32_t)did[2] << 16 | (uint32_t)did[3] << 24;
+                delete[] did;
                 if(dindirect > 0)
-                    dinlist.append(dindirect);
+                    dinlist.push_back(dindirect);
             }
-            for(int i=0; i < dinlist.count(); i++)
+            for(int i=0; i < dinlist.size(); i++)
             {
-                for(uint j=0; j < blocksize / 4; j++)
+                for(unsigned int j=0; j < blocksize / 4; j++)
                 {
-                    uint32_t sindirect = qFromLittleEndian<uint32_t>(curimg->ReadContent(curstartsector * 512 + dinlist.at(i) * blocksize + j*4, 4));
+                    uint8_t* sid = new uint8_t[4];
+                    devicebuffer->seekg(dinlist.at(i) * blocksize + j*4);
+                    devicebuffer->read((char*)sid, 4);
+                    uint32_t sindirect = (uint32_t)sid[0] | (uint32_t)sid[1] << 8 | (uint32_t)sid[2] << 16 | (uint32_t)sid[3] << 24;
+                    delete[] sid;
                     if(sindirect > 0)
-                        sinlist.append(sindirect);
+                        sinlist.push_back(sindirect);
                 }
-                for(int j=0; j < sinlist.count(); j++)
+                for(int j=0; j < sinlist.size(); j++)
                 {
-                    for(uint k=0; k < blocksize / 4; k++)
+                    for(unsigned int k=0; k < blocksize / 4; k++)
                     {
-                        uint32_t sdirect = qFromLittleEndian<uint32_t>(curimg->ReadContent(curstartsector * 512 + sinlist.at(j) * blocksize + k*4, 4));
+                        uint8_t* sd = new uint8_t[4];
+                        devicebuffer->seekg(sinlist.at(j) * blocksize + k*4);
+                        devicebuffer->read((char*)sd, 4);
+                        uint32_t sdirect = (uint32_t)sd[0] | (uint32_t)sd[1] << 8 | (uint32_t)sd[2] << 16 | (uint32_t)sd[3] << 24;
+                        delete[] sd;
                         if(sdirect > 0)
-                            blocklist->append(sdirect);
+                            blocklist->push_back(sdirect);
                     }
                 }
             }
         }
     }
 }
-*/
+
+std::string ConvertBlocksToExtents(std::vector<uint32_t>* blocklist, uint32_t blocksize)
+{
+    std::string extentstr = "";
+    int blkcnt = 1;
+    unsigned int startvalue = blocklist->at(0);
+    for(int i=1; i < blocklist->size(); i++)
+    {
+        unsigned int oldvalue = blocklist->at(i-1);
+        unsigned int newvalue = blocklist->at(i);
+        if(newvalue - oldvalue == 1)
+            blkcnt++;
+        else
+        {
+            extentstr += std::to_string(startvalue * blocksize) + "," + std::to_string(blkcnt * blocksize) + ";";
+            startvalue = blocklist->at(i);
+            blkcnt = 1;
+        }
+        if(i == blocklist->size() - 1)
+        {
+            extentstr += std::to_string(startvalue * blocksize) + "," + std::to_string(blkcnt * blocksize) + ";";
+            startvalue = blocklist->at(i);
+            blkcnt = 1;
+        }
+    }
+    if(blocklist->size() == 1)
+    {
+        extentstr += std::to_string(startvalue * blocksize) + "," + std::to_string(blkcnt * blocksize) + ";";
+    }
+
+    return extentstr;
+}
 
 void ParseExtForensics(std::string filename, std::string mntptstr, std::string devicestr, uint64_t curextinode)
 {
@@ -298,6 +351,9 @@ void ParseExtForensics(std::string filename, std::string mntptstr, std::string d
     std::vector<uint32_t> blocklist;
     blocklist.clear();
     GetContentBlocks(&devicebuffer, blocksize, curoffset, &incompatflags, &blocklist);
+    std::string dirlayout = ConvertBlocksToExtents(&blocklist, blocksize);
+    std::cout << "dir layout: " << dirlayout << std::endl;
+    blocklist.clear();
 
 
     devicebuffer.close();
