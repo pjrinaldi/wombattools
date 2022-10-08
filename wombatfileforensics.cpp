@@ -92,61 +92,128 @@ void ParseDirectory(std::filesystem::path dirpath, std::vector<std::filesystem::
     }
 }
 
-void DetermineFileSystem(std::string devicestring)
+void DetermineFileSystem(std::string devicestring, int* fstype)
 {
-    printf("devicestring: %s\n", devicestring.c_str());
-    /*
-    FILE* fin = NULL;
-    fin = fopen_orDie(devicestring.c_str(), "rb");
-    char* sigbuf;
-    sigbuf = (char*) malloc(sizeof(char)*8);
-    fseek(fin, 512, SEEK_SET);
-    size_t read = 0;
-    read = fread(sigbuf, 1, 8, fin);
-    //read = fread_orDie(sigbuf, 1, 8, fin);
-    std::cout << "winsig: " << std::hex << (uint8_t)sigbuf[0] << (int)sigbuf[1] << "\n";
-    fseek(fin, 1592, SEEK_SET);
-    read = fread(sigbuf, 1, 8, fin);
-    //read = fread_orDie(sigbuf, 8, fin);
-    std::cout << "extsig: " << std::hex << (int)sigbuf[0] << (int)sigbuf[1] << "\n";
-    fclose(fin);
-    */
-
     std::ifstream devicebuffer(devicestring.c_str(), std::ios::in|std::ios::binary);
+    char extsig1, extsig2;
+    char winsig1, winsig2;
+    //char apfsig1, apfsig2, apfsig3, apfsig4;
+    //char hfssig1, hfssig2;
+    //char xfssig1, xfssig2, xfssig3, xfssig4;
+    //char btrsig1, btrsig2, btrsig3, btrsig4, btrsig5, btrsig6, btrsig7, btrsig8;
+    //char btlsig1, btlsig2, btlsig3, btlsig4, btlsig5, btlsig6, btlsig7, btlsig8;
+    //char isosig1, isosig2, isosig3, isosig4, isosig5;
+    //char udfsig1, udfsig2, udfsig3, udfsig4, udfsig5;
+    char refsig1, refsig2, refsig3, refsig4, refsig5, refsig6, refsig7, refsig8;
+    char f2fsig1, f2fsig2, f2fsig3, f2fsig4;
+    char zfssig1, zfssig2, zfssig3, zfssig4, zfssig5, zfssig6, zfssig7, zfssig8;
+    char bcfsig1, bcfsig2, bcfsig3, bcfsig4, bcfsig5, bcfsig6, bcfsig7, bcfsig8;
+    char bcfsig9, bcfsig10, bcfsig11, bcfsig12, bcfsig13, bcfsig14, bcfsig15, bcfsig16;
+    char zonsig1, zonsig2, zonsig3, zonsig4;
+    char* bfssig = new char[4];
+    char* apfsig = new char[4];
+    char* hfssig = new char[2];
+    char* xfssig = new char[4];
+    char* btrsig = new char[8];
+    char* btlsig = new char[8];
+    char* isosig = new char[5];
+    char* udfsig = new char[5];
+    // get ext2,3,4 signature
     devicebuffer.seekg(1080);
-    char s1, s2;
-    devicebuffer.get(s1);
-    std::cout << std::hex << static_cast<int>((unsigned char)s1) << std::endl;
-    devicebuffer.get(s2);
-    if((unsigned char)s1 == 0x53)
-	std::cout << "s1 works, it's 0x53\n";
-    else
-	std::cout << "s1 fails, need to fix\n";
-    if((unsigned char)s2 == 0xef)
-	std::cout << "s2 works, its 0xef\n";
-    else
-	std::cout << "s2 fails, need to fix\n";
-    std::cout << std::hex << static_cast<int>((unsigned char)s2) << std::endl;
-    char sigbuf[8];
-	// FAT OR NTFS OR BFS
-	devicebuffer.seekg(512, std::ios::beg);
-	devicebuffer.getline(sigbuf, 8);
-	std::cout << std::hex << (int)sigbuf[0] << (int)sigbuf[1] << "\n";
-	devicebuffer.seekg(1080, std::ios::beg);
-	devicebuffer.getline(sigbuf, 8);
-	std::cout << std::hex << (int)sigbuf[0] << (int)sigbuf[1] << "\n";
-    //uint16_t
+    devicebuffer.get(extsig1); // 0x53
+    devicebuffer.get(extsig2); // 0xef
+    // get windows mbr signature (FAT, NTFS, BFS)
+    devicebuffer.seekg(510);
+    devicebuffer.get(winsig1); // 0x55
+    devicebuffer.get(winsig2); // 0xaa
+    // get BFS signature
+    devicebuffer.seekg(544);
+    devicebuffer.read(bfssig, 4);
+    std::string bfsigstr(bfssig);
+    delete[] bfssig;
+    devicebuffer.seekg(32);
+    devicebuffer.read(apfsig, 4);
+    std::string apfsigstr(apfsig);
+    delete[] apfsig;
+    devicebuffer.seekg(1024);
+    devicebuffer.read(hfssig, 2);
+    std::string hfssigstr(hfssig);
+    delete[] hfssig;
+    devicebuffer.seekg(0);
+    devicebuffer.read(xfssig, 4);
+    std::string xfssigstr(xfssig);
+    delete[] xfssig;
+    devicebuffer.seekg(65600);
+    devicebuffer.read(btrsig, 8);
+    std::string btrsigstr(btrsig);
+    delete[] btrsig;
+    devicebuffer.seekg(0);
+    devicebuffer.read(btlsig, 8);
+    std::string btlsigstr(btlsig);
+    delete[] btlsig;
+    devicebuffer.seekg(32769);
+    devicebuffer.read(isosig, 5);
+    std::string isosigstr(isosig);
+    delete[] isosig;
+    devicebuffer.seekg(40961);
+    devicebuffer.read(udfsig, 5);
+    std::string udfsigstr(udfsig);
+    delete[] udfsig;
+    //std::cout << "compare:" << bfsigstr.substr(0,4).compare("1SFB") << std::endl;
+    //std::cout << "extsig1 " << std::hex << static_cast<int>((unsigned char)extsig1) << std::endl;
+    //std::cout << "extsig2 " << std::hex << static_cast<int>((unsigned char)extsig2) << std::endl;
+    if((unsigned char)extsig1 == 0x53 && (unsigned char)extsig2 == 0xef) // EXT2,3,4 SIGNATURE == 0
+    {
+        *fstype = 0;
+    }
+    else if((unsigned char)winsig1 == 0x55 && (unsigned char)winsig2 == 0xaa && bfsigstr.find("1SFB") == std::string::npos) // FAT NTFS, BFS SIGNATURE
+    {
+        char* exfatbuf = new char[5];
+        char* fatbuf = new char[5];
+        char* fat32buf = new char[5];
+        devicebuffer.seekg(3);
+        devicebuffer.read(exfatbuf, 5);
+        std::string exfatstr(exfatbuf);
+        devicebuffer.seekg(54);
+        devicebuffer.read(fatbuf, 5);
+        std::string fatstr(fatbuf);
+        devicebuffer.seekg(82);
+        devicebuffer.read(fat32buf, 5);
+        std::string fat32str(fat32buf);
+        if(fatstr.find("FAT12") != std::string::npos)
+            *fstype = 1;
+        else if(fatstr.find("FAT16") != std::string::npos)
+            *fstype = 2;
+        else if(fat32str.find("FAT32") != std::string::npos)
+            *fstype = 3;
+        else if(exfatstr.find("EXFAT") != std::string::npos)
+            *fstype = 4;
+        else if(exfatstr.find("NTFS") != std::string::npos)
+            *fstype = 5;
+        //std::cout << "exfat:" << exfatstr << std::endl;
+        //std::cout << "fat:" << fatstr << ":" << std::endl;
+        delete[] exfatbuf;
+        delete[] fatbuf;
+        delete[] fat32buf;
+    }
+    else if(apfsigstr.find("NXSB") != std::string::npos) // APFS
+        *fstype = 6;
+    else if(hfssigstr.find("H+") != std::string::npos) // HFS+
+        *fstype = 7;
+    else if(hfssigstr.find("HX") != std::string::npos) // HFSX
+        *fstype = 8;
+    else if(xfssigstr.find("XFSB") != std::string::npos) // XFS
+        *fstype = 9;
+    else if(btrsigstr.find("_BHRfS_M") != std::string::npos) // BTRFS
+        *fstype = 10;
+    else if(btlsigstr.find("-FVE-FS-") != std::string::npos) // BTILOCKER
+        *fstype = 11;
+    else if(bfsigstr.find("1SFB") != std::string::npos) // BFS
+        *fstype = 12;
+    else // UNKNOWN FILE SYSTEM SO FAR
+        *fstype = 50; 
+    devicebuffer.close();
     /*
-    uint16_t winsig = qFromLittleEndian<uint16_t>(curimg->ReadContent(curstartsector*512 + 510, 2));
-    uint16_t extsig = qFromLittleEndian<uint16_t>(curimg->ReadContent(curstartsector*512 + 1080, 2));
-    QString apfsig = QString::fromStdString(curimg->ReadContent(curstartsector*512 + 32, 4).toStdString());
-    QString hfssig = QString::fromStdString(curimg->ReadContent(curstartsector*512 + 1024, 2).toStdString());
-    QString xfssig = QString::fromStdString(curimg->ReadContent(curstartsector*512, 4).toStdString());
-    QString btrsig = QString::fromStdString(curimg->ReadContent(curstartsector*512 + 65600, 8).toStdString());
-    QString btlsig = QString::fromStdString(curimg->ReadContent(curstartsector*512, 8).toStdString());
-    QString bfssig = QString::fromStdString(curimg->ReadContent(curstartsector*512 + 544, 4).toStdString());
-    QString isosig = QString::fromStdString(curimg->ReadContent(curstartsector*512 + 32769, 5).toStdString());
-    QString udfsig = QString::fromStdString(curimg->ReadContent(curstartsector*512 + 40961, 5).toStdString());
     uint64_t refsig = qFromLittleEndian<uint64_t>(curimg->ReadContent(curstartsector*512 + 3, 8)); // should be 0x00 00 00 00 53 46 65 52 (0 0 0 0 S F e R) prior to endian flip
     uint32_t f2fsig = qFromLittleEndian<uint32_t>(curimg->ReadContent(curstartsector*512 + 1024, 4));
     quint64 zfssig = qFromLittleEndian<quint64>(curimg->ReadContent(curstartsector*512 + 135168, 8));
@@ -1315,13 +1382,17 @@ int main(int argc, char* argv[])
     // Begin forensic parsing for each file
     for(int i=0; i < fileinfovector.size(); i++)
     {
+        int fstype = -1;
+        std::string filename;
 	std::string devicestr;
-	//std::cout << fileinfovector.at(i) << "\n";
+        std::string mntptstr;
+        std::size_t lfound = fileinfovector.at(i).find("|");
+        filename = fileinfovector.at(i).substr(0, lfound);
 	std::size_t rfound = fileinfovector.at(i).rfind("|");
-	//std::cout << "rfound:" << rfound << "\n";
-	if(rfound != std::string::npos)
-	    devicestr = fileinfovector.at(i).substr(rfound+1);
-	DetermineFileSystem(devicestr);
+        mntptstr = fileinfovector.at(i).substr(lfound+1, rfound - lfound);
+	devicestr = fileinfovector.at(i).substr(rfound+1);
+	DetermineFileSystem(devicestr, &fstype);
+        std::cout << filename << " " << fstype << std::endl;
     }
 
 
