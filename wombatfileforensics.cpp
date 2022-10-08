@@ -9,7 +9,7 @@
 #include <stdio.h>
 //#include <time.h>
 #include <string.h>
-#include <limits.h>
+//#include <limits.h>
 #include <stdlib.h>
 
 #include <string>
@@ -17,6 +17,8 @@
 #include <filesystem>
 #include <iostream>
 #include <fstream>
+#include <sstream>
+#include <cmath>
 
 #include <tar.h>
 #include <libtar.h>
@@ -251,6 +253,151 @@ void DetermineFileSystem(std::string devicestring, int* fstype)
     delete[] bcfsig;
     delete[] zonsig;
 }
+
+void ParseExtForensics(std::string filename, std::string mntptstr, std::string devicestr)
+{
+    std::ifstream devicebuffer(devicestr.c_str(), std::ios::in|std::ios::binary);
+    std::cout << filename << " " << mntptstr << " " << devicestr << std::endl;
+    std::vector<std::string> pathvector;
+    std::istringstream iss(filename);
+    std::string s;
+    while(getline(iss, s, '/'))
+        pathvector.push_back(s);
+    uint32_t blocksize = 0;
+    uint32_t bsizepow = 0;
+    uint8_t* bsize = new uint8_t[4];
+    uint8_t* isize = new uint8_t[2];
+    uint16_t inodesize = 0;
+    devicebuffer.seekg(1048);
+    devicebuffer.read((char*)bsize, 4);
+    bsizepow = (uint32_t)bsize[0] | (uint32_t)bsize[1] << 8 | (uint32_t)bsize[2] << 16 | (uint32_t)bsize[3] << 24;
+    delete[] bsize;
+    blocksize = 1024 * pow(2, bsizepow);
+    //std::cout << "block size: " << bsizepow << std::endl;
+    //std::cout << "real blocksize: " << blocksize << std::endl;
+    devicebuffer.seekg(1112);
+    devicebuffer.read((char*)isize, 2);
+    inodesize = (uint16_t)isize[0] | (uint16_t)isize[1] << 8;
+    delete[] isize;
+    //std::cout << "inode size: " << inodesize << std::endl;
+    uint32_t blkgrpinodecnt = 0;
+    uint8_t* bgicnt = new uint8_t[4];
+    devicebuffer.seekg(1064);
+    devicebuffer.read((char*)bgicnt, 4);
+    blkgrpinodecnt = (uint32_t)bgicnt[0] | (uint32_t)bgicnt[1] << 8 | (uint32_t)bgicnt[2] << 16 | (uint32_t)bgicnt[3] << 24;
+    delete[] bgicnt;
+    //std::cout << "block group inode count: " << blkgrpinodecnt << std::endl;
+    uint32_t rootinodetableaddress = 0;
+    uint8_t* ritaddr = new uint8_t[4];
+    if(blkgrpinodecnt > 2)
+        devicebuffer.seekg(2056);
+    else
+        devicebuffer.seekg(2088);
+    devicebuffer.read((char*)ritaddr, 4);
+    rootinodetableaddress = (uint32_t)ritaddr[0] | (uint32_t)ritaddr[1] << 8 | (uint32_t)ritaddr[2] << 16 | (uint32_t)ritaddr[3] << 24;
+    delete[] ritaddr;
+    //std::cout << "root inode table addresss: " << rootinodetableaddress << std::endl;
+
+
+    devicebuffer.close();
+    //for(int i=0; i < pathvector.size(); i++)
+    //    std::cout << "path part: " << pathvector.at(i) << "\n";
+    // Parse Root Directory to find the file
+    // root directory inode is 2
+
+        //quint64 ParseExtDirectory(ForImg* curimg, uint32_t curstartsector, uint8_t ptreecnt, quint64 curextinode, quint64 parinode, QString parfilename, QString parlayout)
+    /*  EXT FILE SYSTEM ARTIFACTS - PICK WHAT I NEED
+    uint32_t rootinodetableaddress = 0;
+    QString incompatflags = "";
+    QString readonlyflags = "";
+    QString inodeaddresstable = "";
+    QString fstype = "";
+    QString layout = "";
+    float revision = 0.0;
+        uint32_t compatflags = qFromLittleEndian<uint32_t>(curimg->ReadContent(curstartsector*512 + 1116, 4));
+        uint32_t incompatflags = qFromLittleEndian<uint32_t>(curimg->ReadContent(curstartsector*512 + 1120, 4));
+        uint32_t readonlyflags = qFromLittleEndian<uint32_t>(curimg->ReadContent(curstartsector*512 + 1124, 4));
+
+        if(((compatflags & 0x00000200UL) != 0) || ((incompatflags & 0x0001f7c0UL) != 0) || ((readonlyflags & 0x00000378UL) != 0))
+        {
+            out << "EXT4";
+        }
+        else if(((compatflags & 0x00000004UL) != 0) || ((incompatflags & 0x0000000cUL) != 0))
+        {
+            out << "EXT3";
+        }
+        else
+        {
+            out << "EXT2";
+        }
+        uint16_t grpdescsize = 32;
+	if(incompatflags & 0x80)
+        {
+            grpdescsize = qFromLittleEndian<uint16_t>(curimg->ReadContent(curstartsector * 512 + 1278, 2));
+        }
+        //qDebug() << "grpdescsize:" << grpdescsize;
+        out << "Block Group Descriptor Size|" << QString::number(grpdescsize) << "|Size in bytes of the block group descriptor table entry." << Qt::endl;
+	uint32_t fsblockcnt = qFromLittleEndian<uint32_t>(curimg->ReadContent(curstartsector * 512 + 1028, 4));
+	uint32_t blkgrpblkcnt = qFromLittleEndian<uint32_t>(curimg->ReadContent(curstartsector * 512 + 1056, 4));
+	uint32_t blocksize = 1024 * pow(2, qFromLittleEndian<uint32_t>(curimg->ReadContent(curstartsector * 512 + 1048, 4)));
+        uint32_t blkgrp0startblk = qFromLittleEndian<uint32_t>(curimg->ReadContent(curstartsector * 512 + 1044, 4));
+        out << "File System Inode Count|" << QString::number(qFromLittleEndian<uint32_t>(curimg->ReadContent(curstartsector * 512 + 1024, 4))) << "|Number of inodes within the file system." << Qt::endl;
+        out << "File System Block Count|" << QString::number(fsblockcnt) << "|Number of blocks within the file system." << Qt::endl;
+        out << "Block Group 0 Start Block|" << QString::number(blkgrp0startblk) << "|Starting block number for block group 0." << Qt::endl;
+        out << "Block Size|" << QString::number(blocksize) << "|Block size in bytes." << Qt::endl;
+	out << "Fragment Size|" << QString::number(1024 * pow(2, qFromLittleEndian<uint32_t>(curimg->ReadContent(curstartsector * 512 + 1052, 4)))) << "|Fragment size in bytes." << Qt::endl;
+	out << "Block Group Block Count|" << QString::number(blkgrpblkcnt) << "|Number of blocks within a block group." << Qt::endl;
+	out << "Block Group Fragment Count|" << QString::number(qFromLittleEndian<uint32_t>(curimg->ReadContent(curstartsector * 512 + 1060, 4))) << "|Number of fragments within a block group." << Qt::endl;
+	uint32_t blkgrpinodecnt = qFromLittleEndian<uint32_t>(curimg->ReadContent(curstartsector * 512 + 1064, 4));
+	out << "Block Group Inode Count|" << QString::number(blkgrpinodecnt) << "|Number of inodes within a block group." << Qt::endl;
+	uint32_t creatoros = qFromLittleEndian<uint32_t>(curimg->ReadContent(curstartsector * 512 + 1096, 4));
+	out << "Creator OS|";
+	if(creatoros == 0x00)
+	    out << "Linux";
+	else if(creatoros == 0x03)
+	    out << "FreeBSD";
+	out << "|Operating System used to create the file system." << Qt::endl;
+	out << "Inode Size|" << QString::number(qFromLittleEndian<uint16_t>(curimg->ReadContent(curstartsector * 512 + 1112, 2))) << "|Size of an inode in bytes." << Qt::endl;
+	out << "Last Mounted Path|" << QString::fromStdString(curimg->ReadContent(curstartsector * 512 + 1160, 64).toStdString()) << "|Path where file system was last mounted." << Qt::endl;
+	uint32_t blockgroupcount = fsblockcnt / blkgrpblkcnt;
+	uint blkgrpcntrem = fsblockcnt % blkgrpblkcnt;
+	if(blkgrpcntrem > 0)
+	    blockgroupcount++;
+	if(blockgroupcount == 0)
+	    blockgroupcount = 1;
+        //qDebug() << "curstartsector:" << curstartsector;
+        //qDebug() << "blkgrp0startblock:" << blkgrp0startblk;
+	QString inodeaddresstable = "";
+        //qDebug() << "blockgroupcount:" << blockgroupcount;
+        //qDebug() << "blocksize:" << blocksize;
+	for(uint i=0; i < blockgroupcount; i++)
+	{
+	    if(blocksize == 1024)
+		inodeaddresstable += QString::number(qFromLittleEndian<uint32_t>(curimg->ReadContent(curstartsector * 512 + 2 * blocksize + i * grpdescsize + 8, 4))) + ",";
+	    else
+		inodeaddresstable += QString::number(qFromLittleEndian<uint32_t>(curimg->ReadContent(curstartsector * 512 + blocksize + i * grpdescsize + 8, 4))) + ",";
+	}
+	//qDebug() << "inodeaddresstable:" << inodeaddresstable;
+	out << "Inode Address Table|" << inodeaddresstable << "|Table of the Inode addresses for a block group." << Qt::endl;
+	out << "Root Inode Table Address|";
+	if(blkgrpinodecnt > 2)
+	    out << QString::number(qFromLittleEndian<uint32_t>(curimg->ReadContent(curstartsector * 512 + 2056, 4)));
+	else
+	    out << QString::number(qFromLittleEndian<uint32_t>(curimg->ReadContent(curstartsector * 512 + 2088, 4)));
+	out << "|Starting address for the Root Directory Inode Table." << Qt::endl;
+	out << "Revision Level|" << QString::number(qFromLittleEndian<uint32_t>(curimg->ReadContent(curstartsector * 512 + 1100, 4))) + "." + QString::number(qFromLittleEndian<uint16_t>(curimg->ReadContent(curstartsector * 512 + 1086, 2))) << "|File system revision level." << Qt::endl;
+	// NEED TO IMPLEMENT THESE FS PROPERTIES SO I CAN USE THEM WHEN I PARSE THE EXT2/3/4 FS
+        fsinfo.insert("partoffset", QVariant((qulonglong)(512 * partoffset)));
+        //qDebug() << "INODE SIZE ACCORDING TO SUPERBLOCK:" << fsinfo.value("inodesize").toUInt();
+        //qDebug() << "compatflags:" << fsinfo.value("compatflags").toUInt() << "incompatflags:" << fsinfo.value("incompatflags").toUInt() << "readonlyflags:" << fsinfo.value("readonlyflags").toUInt();
+        //if(fsinfo.value("incompatflags").toUInt() & 0x40)
+        //    qDebug() << "fs uses extents.";
+        
+	//qDebug() << "blocks for group descriptor table:" << (32 * (fsinfo.value("fsblockcnt").toUInt() / fsinfo.value("blockgroupblockcnt").toUInt())) / fsinfo.value("blocksize").toUInt();
+
+     */ 
+}
+
     /*
     // WILL WRITE FILE SYSTEM INFORMATION IN THIS FUNCTION AND ONLY RETURN THE QSTRING(FILESYSTEMNAME,FILESYSTEMTYPE) TO BE USED BY THE PARTITION
     if(winsig == 0xaa55 && bfssig != "1SFB") // FAT OR NTFS OR BFS
@@ -1418,7 +1565,7 @@ int main(int argc, char* argv[])
         std::size_t lfound = fileinfovector.at(i).find("|");
         filename = fileinfovector.at(i).substr(0, lfound);
 	std::size_t rfound = fileinfovector.at(i).rfind("|");
-        mntptstr = fileinfovector.at(i).substr(lfound+1, rfound - lfound);
+        mntptstr = fileinfovector.at(i).substr(lfound+1, rfound - lfound-1);
 	devicestr = fileinfovector.at(i).substr(rfound+1);
         // GET FILE SYSTEM TYPE
 	DetermineFileSystem(devicestr, &fstype);
@@ -1427,6 +1574,7 @@ int main(int argc, char* argv[])
         {
             case 0:
                 std::cout << "EXTFS\n";
+                ParseExtForensics(filename, mntptstr, devicestr);
                 break;
             case 1:
                 std::cout << "FAT12\n";
