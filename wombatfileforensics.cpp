@@ -1,11 +1,11 @@
 #include <stdint.h>
-#include <fcntl.h>
-#include <linux/fs.h>
-#include <sys/ioctl.h>
-#include <libudev.h>
+//#include <fcntl.h>
+//#include <linux/fs.h>
+//#include <sys/ioctl.h>
+//#include <libudev.h>
 #include <stdio.h>
 #include <unistd.h>
-#include <errno.h>
+//#include <errno.h>
 #include <stdio.h>
 //#include <time.h>
 #include <string.h>
