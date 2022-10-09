@@ -229,7 +229,7 @@ void ParseExtInit(std::ifstream* devicebuffer, extinfo* curextinfo)
     //uint32_t blocksize = 0;
     uint32_t bsizepow = 0;
     uint8_t* bsize = new uint8_t[4];
-    devicebuffer->seekg(1048);
+    devicebuffer->seekg(1024 + 24);
     devicebuffer->read((char*)bsize, 4);
     bsizepow = (uint32_t)bsize[0] | (uint32_t)bsize[1] << 8 | (uint32_t)bsize[2] << 16 | (uint32_t)bsize[3] << 24;
     delete[] bsize;
@@ -239,7 +239,7 @@ void ParseExtInit(std::ifstream* devicebuffer, extinfo* curextinfo)
     //std::cout << "blocksize: " << curextinfo->blocksize << std::endl;
     uint8_t* isize = new uint8_t[2];
     //uint16_t inodesize = 0;
-    devicebuffer->seekg(1112);
+    devicebuffer->seekg(1024 + 88);
     devicebuffer->read((char*)isize, 2);
     //inodesize = (uint16_t)isize[0] | (uint16_t)isize[1] << 8;
     curextinfo->inodesize = (uint16_t)isize[0] | (uint16_t)isize[1] << 8;
@@ -247,7 +247,7 @@ void ParseExtInit(std::ifstream* devicebuffer, extinfo* curextinfo)
     //std::cout << "inode size: " << curextinfo->inodesize << std::endl;
     //uint32_t blkgrpinodecnt = 0;
     uint8_t* bgicnt = new uint8_t[4];
-    devicebuffer->seekg(1064);
+    devicebuffer->seekg(1024 + 40);
     devicebuffer->read((char*)bgicnt, 4);
     curextinfo->blkgrpinodecnt = (uint32_t)bgicnt[0] | (uint32_t)bgicnt[1] << 8 | (uint32_t)bgicnt[2] << 16 | (uint32_t)bgicnt[3] << 24;
     delete[] bgicnt;
@@ -255,16 +255,16 @@ void ParseExtInit(std::ifstream* devicebuffer, extinfo* curextinfo)
     uint32_t rootinodetableaddress = 0;
     uint8_t* ritaddr = new uint8_t[4];
     if(curextinfo->blkgrpinodecnt > 2)
-        devicebuffer->seekg(2056);
+        devicebuffer->seekg(1024 + 1032);
     else
-        devicebuffer->seekg(2088);
+        devicebuffer->seekg(1024 + 1064);
     devicebuffer->read((char*)ritaddr, 4);
     rootinodetableaddress = (uint32_t)ritaddr[0] | (uint32_t)ritaddr[1] << 8 | (uint32_t)ritaddr[2] << 16 | (uint32_t)ritaddr[3] << 24;
     delete[] ritaddr;
     //std::cout << "root inode table address: " << rootinodetableaddress << std::endl;
     uint8_t exttype = 2;
     uint8_t* extflags = new uint8_t[12];
-    devicebuffer->seekg(1116);
+    devicebuffer->seekg(1024 + 92);
     devicebuffer->read((char*)extflags, 12);
     uint32_t compatflags = (uint32_t)extflags[0] | (uint32_t)extflags[1] << 8 | (uint32_t)extflags[2] << 16 | (uint32_t)extflags[3] << 24;
     curextinfo->incompatflags = (uint32_t)extflags[4] | (uint32_t)extflags[5] << 8 | (uint32_t)extflags[6] << 16 | (uint32_t)extflags[7] << 24;
@@ -294,20 +294,20 @@ void ParseExtInit(std::ifstream* devicebuffer, extinfo* curextinfo)
     if(curextinfo->incompatflags & 0x80)
     {
         uint8_t* grpdesc = new uint8_t[2];
-        devicebuffer->seekg(1278);
+        devicebuffer->seekg(1024 + 254);
         devicebuffer->read((char*)grpdesc, 2);
         grpdescsize = (uint16_t)grpdesc[0] | (uint16_t)grpdesc[1] << 8;
         delete[] grpdesc;
     }
     //std::cout << "group descriptor size: " << grpdescsize << std::endl;
     uint8_t* fsblk = new uint8_t[4];
-    devicebuffer->seekg(1028);
+    devicebuffer->seekg(1024 + 4);
     devicebuffer->read((char*)fsblk, 4);
     uint32_t fsblkcnt = (uint32_t)fsblk[0] | (uint32_t)fsblk[1] << 8 | (uint32_t)fsblk[2] << 16 | (uint32_t)fsblk[3] << 24;
     delete[] fsblk;
     std::cout << "fs block cnt:" << fsblkcnt << std::endl;
     uint8_t* blkgrp = new uint8_t[4];
-    devicebuffer->seekg(1056);
+    devicebuffer->seekg(1024 + 32);
     devicebuffer->read((char*)blkgrp, 4);
     uint32_t blkgrpblkcnt = (uint32_t)blkgrp[0] | (uint32_t)blkgrp[1] << 8 | (uint32_t)blkgrp[2] << 16 | (uint32_t)blkgrp[3] << 24;
     delete[] blkgrp;
@@ -320,7 +320,7 @@ void ParseExtInit(std::ifstream* devicebuffer, extinfo* curextinfo)
         blockgroupcount = 1;
     std::cout << "block group count: " << blockgroupcount << std::endl;
     //std::vector<uint32_t> inodeaddrtables;
-    curextinfo->inodeaddrtables.clear();
+    //curextinfo->inodeaddrtables.clear();
     for(unsigned int i=0; i < blockgroupcount; i++)
     {
         uint8_t* iaddr = new uint8_t[4];
@@ -329,8 +329,12 @@ void ParseExtInit(std::ifstream* devicebuffer, extinfo* curextinfo)
         else
             devicebuffer->seekg(curextinfo->blocksize + i * grpdescsize + 8);
         devicebuffer->read((char*)iaddr, 4);
-        curextinfo->inodeaddrtables.push_back((uint32_t)iaddr[0] | (uint32_t)iaddr[1] << 8 | (uint32_t)iaddr[2] << 16 | (uint32_t)iaddr[3] << 24);
+        curextinfo->inodeaddrtables += std::to_string((uint32_t)iaddr[0] | (uint32_t)iaddr[1] << 8 | (uint32_t)iaddr[2] << 16 | (uint32_t)iaddr[3] << 24);
+        if(i < blockgroupcount - 1)
+            curextinfo->inodeaddrtables += ",";
+        //curextinfo->inodeaddrtables.push_back((uint32_t)iaddr[0] | (uint32_t)iaddr[1] << 8 | (uint32_t)iaddr[2] << 16 | (uint32_t)iaddr[3] << 24);
     }
+    //std::cout << "inode address tables:" << curextinfo->inodeaddrtables << std::endl;
     /*
     //uint8_t bgnumber = 0;
     //uint32_t inodestartingblock = 0;
@@ -363,23 +367,33 @@ void ParseExtInode()
 }
 uint64_t ParseExtPath(std::ifstream* devicebuffer, extinfo* curextinfo, uint64_t nextinode, std::string childpath)
 {
-    uint8_t bgnumber = 0;
+    unsigned int bgnumber = 0;
     uint64_t inodestartingblock = 0;
     std::cout << "curinode: " << nextinode << std::endl;
-    std::cout << "inodeaddrtables size: " << curextinfo->inodeaddrtables.size() << std::endl;
-    for(int i=1; i <= curextinfo->inodeaddrtables.size(); i++)
+    std::vector<uint32_t> inodeaddrlist;
+    inodeaddrlist.clear();
+    std::istringstream ial(curextinfo->inodeaddrtables);
+    std::string iaddr;
+    while(getline(ial, iaddr, ','))
+            inodeaddrlist.push_back(stoull(iaddr));
+    std::cout << "inode address table size:" << inodeaddrlist.size() << std::endl;
+    for(int i=1; i < inodeaddrlist.size(); i++)
     {
-        if(nextinode < i*curextinfo->blkgrpinodecnt) // if i generalize function, then 2 would be replaced with curextinode as a passed variable
+        if(nextinode < i*curextinfo->blkgrpinodecnt)
         {
-            inodestartingblock = curextinfo->inodeaddrtables.at(i-1);
+            std::cout << "curinode: " << nextinode << " blkgrp: " << i << " inode count: " << i*curextinfo->blkgrpinodecnt << std::endl;
+            //inodestartingblock = inodeaddrlist.at(i);
+            inodestartingblock = inodeaddrlist.at(i-1);
             bgnumber = i-1;
+            //bgnumber = i;
             break;
         }
     }
     std::cout << "inode starting block: " << inodestartingblock << std::endl;
-    //std::cout << "block group number: " << (unsigned int)bgnumber << std::endl;
+    std::cout << "block group number: " << (unsigned int)bgnumber << std::endl;
     std::cout << "blkgrpinodecnt: " << curextinfo->blkgrpinodecnt << std::endl;
     uint64_t relcurinode = nextinode - 1  - (bgnumber * curextinfo->blkgrpinodecnt);
+    //quint64 curoffset = curstartsector * 512 + inodestartingblock * blocksize + inodesize * relcurinode;
     uint64_t curoffset = inodestartingblock * curextinfo->blocksize + curextinfo->inodesize * relcurinode;
     std::cout << "relcurinode: " << relcurinode << std::endl;
     std::cout << "curoffset: " << curoffset << std::endl;
@@ -395,7 +409,7 @@ uint64_t ParseExtPath(std::ifstream* devicebuffer, extinfo* curextinfo, uint64_t
     std::cout << "nextinode: " << nextinode << " child path to match: " << childpath << std::endl;
     //std::cout << "dirlayout: " << curextinfo.dirlayout << std::endl;
     uint8_t* iflags = new uint8_t[4];
-    devicebuffer->seekg(curextinfo->curoffset + 32);
+    devicebuffer->seekg(curoffset + 32);
     devicebuffer->read((char*)iflags, 4);
     uint32_t inodeflags = (uint32_t)iflags[0] | (uint32_t)iflags[1] << 8 | (uint32_t)iflags[2] << 16 | (uint32_t)iflags[3] << 24;
     delete[] iflags;
@@ -412,6 +426,7 @@ uint64_t ParseExtPath(std::ifstream* devicebuffer, extinfo* curextinfo, uint64_t
         std::size_t found = dirlaylist.at(i).find(",");
         uint64_t curdiroffset = std::stoull(dirlaylist.at(i).substr(0, found));
         uint64_t curdirlength = std::stoull(dirlaylist.at(i).substr(found+1));
+        std::cout << "curdir offset: " << curdiroffset << " curdir length: " << curdirlength << std::endl;
         uint64_t coffset = curdiroffset + 24; // SKIP THE . AND .. ENTRIES WHICH ARE ALWAYS THE 1ST TWO ENTRIES AND 12 BYTES EACH
         std::cout << "coffset: " << coffset << std::endl;
         if(inodeflags & 0x1000) // hash trees in use
@@ -422,31 +437,20 @@ uint64_t ParseExtPath(std::ifstream* devicebuffer, extinfo* curextinfo, uint64_t
         while(coffset < curdiroffset + curdirlength - 8)
         {
             //std::cout << "coffset: " << coffset << std::endl;
-            uint16_t entrylength = 0;
-            int8_t* lengthd = new int8_t[1];
-            devicebuffer->seekg(coffset + 6);
-            devicebuffer->read((char*)lengthd, 1);
-            int lengthdiv = (8 + (int)lengthd[0]) / 4;
-            int lengthrem = (8 + (int)lengthd[0]) % 4;
-            //std::cout << "lengthdiv: " << lengthdiv << " lengthrem: " << lengthrem << std::endl;
-            int newlength = 0;
-            if(lengthrem == 0)
-                newlength = lengthdiv * 4;
-            else
-                newlength = lengthdiv * 4 + 4;
-            //std::cout << "new length: " << newlength << std::endl;
+            uint16_t entrylength = 4;
             uint8_t* ei = new uint8_t[4];
             devicebuffer->seekg(coffset);
             devicebuffer->read((char*)ei, 4);
             uint32_t extinode = (uint32_t)ei[0] | (uint32_t)ei[1] << 8 | (uint32_t)ei[2] << 16 | (uint32_t)ei[3] << 24;
             delete[] ei;
-            //std::cout << "extinode: " << extinode << std::endl;
+            std::cout << "extinode: " << extinode << std::endl;
             if(extinode > 0)
             {
                 uint8_t* el = new uint8_t[2];
                 devicebuffer->seekg(coffset + 4);
                 devicebuffer->read((char*)el, 2);
-                uint16_t entrylength = (uint16_t)el[0] | (uint16_t)el[1] << 8;
+                entrylength = (uint16_t)el[0] | (uint16_t)el[1] << 8;
+                std::cout << "entry length: " << entrylength << std::endl;
                 delete[] el;
 
                 uint16_t namelength = 0;
@@ -456,7 +460,7 @@ uint64_t ParseExtPath(std::ifstream* devicebuffer, extinfo* curextinfo, uint64_t
                     //std::cout << "name length is 1 byte long.\n";
                     uint8_t* nl = new uint8_t[1];
                     devicebuffer->read((char*)nl, 1);
-                    namelength = (unsigned int)nl[0];
+                    namelength = (uint16_t)nl[0];
                     delete[] nl;
                 }
                 else
@@ -467,16 +471,22 @@ uint64_t ParseExtPath(std::ifstream* devicebuffer, extinfo* curextinfo, uint64_t
                     namelength = (uint16_t)nl[0] | (uint16_t)nl[1] << 8;
                     delete[] nl;
                 }
-                //std::cout << "namelength: " << namelength << std::endl;
+                std::cout << "namelength: " << namelength << std::endl;
                 char* fname = new char[namelength];
                 devicebuffer->seekg(coffset + 8);
                 devicebuffer->read(fname, namelength);
                 std::string filename(fname);
-                //std::cout << "filename: " << filename << std::endl;
+                std::cout << "filename: " << filename << std::endl;
                 if(filename.find(childpath) != std::string::npos)
                     return extinode;
             }
-            coffset += newlength;
+            else
+            {
+                break;
+                //entrylength = 4;
+            }
+            coffset += entrylength;
+            //coffset += newlength;
         }
     }
     return 0;
@@ -804,24 +814,29 @@ void ParseExtForensics(std::string filename, std::string mntptstr, std::string d
     std::string s;
     while(getline(iss, s, '/'))
         pathvector.push_back(s);
-    for(int i=0; i < pathvector.size(); i++)
+    std::cout << "i: 0 " << "root inode:" << 2 << " parse root directory." << std::endl;
+    nextinode = ParseExtPath(&devicebuffer, &curextinfo, 2, pathvector.at(1));
+    std::cout << "next inode: " << nextinode << std::endl;
+    for(int i=1; i < pathvector.size(); i++)
     {
         if(nextinode == 0)
             break;
-        std::cout << "current path:" << pathvector.at(i) << " ";
+        std::cout << "current path: " << pathvector.at(i) << std::endl;
+        /*
         if(i == 0)
         {
             std::cout << i << " nextinode: " << nextinode << " Parse Ext Root Directory inode 2\n";
-            nextinode = ParseExtPath(&devicebuffer, &curextinfo, nextinode, pathvector.at(i+1));
+            //nextinode = ParseExtPath(&devicebuffer, &curextinfo, nextinode, pathvector.at(i+1));
         }
-        else if(i == pathvector.size() - 1)
+        */
+        if(i == pathvector.size() - 1)
         {
             std::cout << i << " nextinode: " << nextinode << " Parse Ext File Forensics\n";
-            ParseExtFile(&devicebuffer, nextinode);
+            //ParseExtFile(&devicebuffer, nextinode);
         }
         else
         {
-            std::cout << i << " nextinode: " << nextinode << " Parse File's Next Directory\n";
+            std::cout << i << " nextinode: " << nextinode << " Parse File's Next Directory " << pathvector.at(i+1) << std::endl;
             nextinode = ParseExtPath(&devicebuffer, &curextinfo, nextinode, pathvector.at(i+1));
         }
     }

@@ -16,14 +16,15 @@ struct extinfo
 {
     uint32_t blocksize = 0;
     uint16_t inodesize = 0;
-    uint64_t curoffset = 0;
+    //uint64_t curoffset = 0;
     uint32_t incompatflags = 0;
-    uint32_t inodestartingblock = 0;
-    uint8_t bgnumber = 0;
+    //uint32_t inodestartingblock = 0;
+    //uint8_t bgnumber = 0;
     uint32_t blkgrpinodecnt = 0;
     float revision = 0.0;
-    std::vector<uint64_t> inodeaddrtables;
-    std::string dirlayout = "";
+    std::string inodeaddrtables = "";
+    //std::vector<uint64_t> inodeaddrtables;
+    //std::string dirlayout = "";
 };
 
 void ParseExtInit(std::ifstream* devicebuffer, extinfo* curextinfo);

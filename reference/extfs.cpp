@@ -144,7 +144,7 @@ quint64 ParseExtDirectory(ForImg* curimg, uint32_t curstartsector, uint8_t ptree
                 uint16_t namelength = 0;
                 int filetype =  -1;
                 entrylength = qFromLittleEndian<uint16_t>(curimg->ReadContent(coffset + 4, 2));
-                if(incompatflags.contains("Directory Entries record file type,") || revision > 0.4)
+                if(incompatflags.contains("Directory entries record file type,") || revision > 0.4)
                 {
                     namelength = qFromLittleEndian<uint8_t>(curimg->ReadContent(coffset + 6, 1));
                     filetype = qFromLittleEndian<uint8_t>(curimg->ReadContent(coffset + 7, 1));
