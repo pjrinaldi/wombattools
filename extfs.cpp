@@ -74,7 +74,8 @@ void GetContentBlocks(std::ifstream* devicebuffer, uint32_t blocksize, uint64_t 
                 }
                 else // use ext4_extent_idx
                 {
-                    std::cout << "repeat leafnode execise here...";
+                    break;
+                    //std::cout << "repeat leafnode execise here...";
                 }
             }
         }
@@ -547,9 +548,16 @@ uint64_t ParseExtPath(std::ifstream* rawcontent, sbinfo* cursb, uint64_t curinod
         ReturnUint16(&groupdescriptorentrysize, gdes);
         delete[] gdes;
     }
+    // GET TO THE GROUP DESCRIPTOR BLOCK TABLE STARTING POINT, WHICH IS 4096 + groupdescriptorentrysize * curinodeblockgroup
+    // +8 get's the inode table block...
     std::cout << "group descriptor entry size: " << groupdescriptorentrysize << std::endl;
     // GET GROUP DESCRIPTOR ENTRY FOR CURRENT BLOCK GROUP... (group descriptor table starts at byte offset 4096)
-    uint64_t curblockgroupoffset = curblockgroup * cursb->blockspergroup * cursb->blocksize;
+    // THIS IS WRONG, I NEED TO BE WITHIN THE GROUP DESCRIPTOR TABLE... AND FIND THE OFFSET TO THE WRITE BLOCK GROUP, THEN
+    // GET THE 8 BYTES I NEED...TO GET THE INODE TABLE BLOCK
+    uint64_t curblockdescripttableentryoffset = cursb->blocksize + groupdescriptorentrysize * curblockgroup + 8;
+    std::cout << "curblockdescriptortableentryoffset: " << curblockdescripttableentryoffset << std::endl;
+    uint64_t curblockgroupoffset = curblockdescripttableentryoffset;
+    //uint64_t curblockgroupoffset = curblockgroup * cursb->blockspergroup;
     if(curblockgroup == 0)
     {
         curblockgroupoffset = cursb->blocksize;
