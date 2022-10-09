@@ -5,11 +5,7 @@
 #include <sstream>
 #include <cmath>
 
-void GetContentBlocks(std::ifstream* devicebuffer, uint32_t blocksize, uint64_t curoffset, uint32_t incompatflags, std::vector<uint32_t>* blocklist);
-
 void ParseExtForensics(std::string filename, std::string mntptstr, std::string devicestr);
-//void ParseExtForensics(std::string filename, std::string mntptstr, std::string devicestr, uint64_t curextinode);
-std::string ConvertBlocksToExtents(std::vector<uint32_t>* blocklist, uint32_t blocksize);
 
 // MAYBE PUT INITIAL INFORMATION IN A STRUCT, THAT I POPULATE AND CAN USE FROM RUNNING THE ParseExtInit();
 struct extinfo
@@ -27,10 +23,35 @@ struct extinfo
     //std::string dirlayout = "";
 };
 
-void ParseExtInit(std::ifstream* devicebuffer, extinfo* curextinfo);
-//void ParseExtInit(std::ifstream* devicebuffer, extinfo* curextinfo, uint64_t curinode);
+struct sbinfo
+{
+    uint32_t blocksize;
+    uint16_t inodesize;
+    uint32_t inodesperblockgroup;
+    uint32_t cflags;
+    uint32_t icflags;
+    uint32_t roflags;
+    uint8_t extversion;
+    float revision;
+    uint32_t fsblockcount;
+    uint32_t blockspergroup;
+    uint32_t blockgroupcount;
+};
 
-uint64_t ParseExtPath(std::ifstream* devicebuffer, extinfo* curextinfo, uint64_t nextinode, std::string childpath);
+void ReadContent(std::ifstream* rawcontent, uint8_t* tmpbuf, uint64_t offset, uint64_t size);
+void ReturnUint32(uint32_t* tmp32, uint8_t* tmp8);
+void ReturnUint16(uint16_t* tmp16, uint8_t* tmp8);
+
+void GetContentBlocks(std::ifstream* devicebuffer, uint32_t blocksize, uint64_t curoffset, uint32_t incompatflags, std::vector<uint32_t>* blocklist);
+std::string ConvertBlocksToExtents(std::vector<uint32_t>* blocklist, uint32_t blocksize);
+void ReturnChildInode(std::ifstream* rawcontent, sbinfo* cursb, std::string* dirlayout, uint64_t* childinode, std::string* childpath, uint64_t* inodeoffset);
+
+//void ParseExtInit(std::ifstream* devicebuffer, extinfo* curextinfo);
+
+void ParseSuperBlock(std::ifstream* rawcontent, sbinfo* cursb);
+
+uint64_t ParseExtPath(std::ifstream* devicebuffer, sbinfo* cursb, uint64_t curinode, std::string childpath);
+//uint64_t ParseExtPath(std::ifstream* devicebuffer, extinfo* curextinfo, uint64_t curinode, std::string childpath);
 
 void ParseExtFile(std::ifstream* devicebuffer, uint64_t curextinode);
 

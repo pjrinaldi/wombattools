@@ -1381,16 +1381,8 @@ int main(int argc, char* argv[])
         switch(fstype)
         {
             case 0:
-                std::cout << "EXTFS\n";
-                // MAY WANT THIS OUT HERE TO LOOP AND PARSE THE RESPECTIVE DIRECTORIES TO GET TO THE FILE...
-                //std::vector<std::string> pathvector;
-                //pathvector.clear();
-                //std::istringstream iss(filename);
-                //std::string s;
-                //while(getline(iss, s, '/'))
-                //    pathvector.push_back(s);
+                //std::cout << "EXTFS\n";
                 ParseExtForensics(filename, mntptstr, devicestr);
-                //ParseExtForensics(filename, mntptstr, devicestr, 2);
                 break;
             case 1:
                 std::cout << "FAT12\n";
