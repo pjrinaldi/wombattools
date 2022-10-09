@@ -5,7 +5,7 @@
 #include <sstream>
 #include <cmath>
 
-void GetContentBlocks(std::ifstream* devicebuffer, uint32_t blocksize, uint64_t curoffset, uint32_t* incompatflags, std::vector<uint32_t>* blocklist);
+void GetContentBlocks(std::ifstream* devicebuffer, uint32_t blocksize, uint64_t curoffset, uint32_t incompatflags, std::vector<uint32_t>* blocklist);
 
 void ParseExtForensics(std::string filename, std::string mntptstr, std::string devicestr);
 //void ParseExtForensics(std::string filename, std::string mntptstr, std::string devicestr, uint64_t curextinode);
@@ -17,11 +17,19 @@ struct extinfo
     uint32_t blocksize = 0;
     uint16_t inodesize = 0;
     uint64_t curoffset = 0;
+    uint32_t incompatflags = 0;
+    uint32_t inodestartingblock = 0;
+    uint8_t bgnumber = 0;
+    uint32_t blkgrpinodecnt = 0;
+    float revision = 0.0;
+    std::vector<uint64_t> inodeaddrtables;
+    std::string dirlayout = "";
 };
 
-void ParseExtInit(std::ifstream* devicebuffer, extinfo* curextinfo, uint64_t curinode);
+void ParseExtInit(std::ifstream* devicebuffer, extinfo* curextinfo);
+//void ParseExtInit(std::ifstream* devicebuffer, extinfo* curextinfo, uint64_t curinode);
 
-uint64_t ParseExtPath(std::ifstream* devicebuffer, uint64_t nextinode);
+uint64_t ParseExtPath(std::ifstream* devicebuffer, extinfo* curextinfo, uint64_t nextinode, std::string childpath);
 
 void ParseExtFile(std::ifstream* devicebuffer, uint64_t curextinode);
 
