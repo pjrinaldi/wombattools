@@ -13,6 +13,7 @@
 #include "blake3.h"
 
 #include "extfs.h"
+#include "fatfs.h"
 
 void ShowUsage(int outtype)
 {
@@ -1386,6 +1387,7 @@ int main(int argc, char* argv[])
                 break;
             case 1:
                 std::cout << "FAT12\n";
+                ParseFatForensics(filename, mntptstr, devicestr, 1);
                 break;
             case 2:
                 std::cout << "FAT16\n";

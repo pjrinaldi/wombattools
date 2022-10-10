@@ -51,5 +51,5 @@ g++ -O3 -o wombatlogical wombatlogical.cpp -ltar -lzstd -lpthread -L. -lblake3
 
 echo "Building wombatfileforensics"
 
-g++ -O3 -o wombatfileforensics extfs.cpp wombatfileforensics.cpp -lpthread -L. -lblake3
+g++ -O3 -o wombatfileforensics fatfs.cpp extfs.cpp wombatfileforensics.cpp -lpthread -L. -lblake3
 
