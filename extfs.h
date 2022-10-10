@@ -1,9 +1,4 @@
-#include <string>
-#include <vector>
-#include <iostream>
-#include <fstream>
-#include <sstream>
-#include <cmath>
+#include "common.h"
 
 void ParseExtForensics(std::string filename, std::string mntptstr, std::string devicestr);
 
@@ -38,9 +33,6 @@ struct sbinfo
     uint32_t blockgroupcount;
 };
 
-void ReadContent(std::ifstream* rawcontent, uint8_t* tmpbuf, uint64_t offset, uint64_t size);
-void ReturnUint32(uint32_t* tmp32, uint8_t* tmp8);
-void ReturnUint16(uint16_t* tmp16, uint8_t* tmp8);
 
 void GetContentBlocks(std::ifstream* devicebuffer, uint32_t blocksize, uint64_t curoffset, uint32_t incompatflags, std::vector<uint32_t>* blocklist);
 std::string ConvertBlocksToExtents(std::vector<uint32_t>* blocklist, uint32_t blocksize);

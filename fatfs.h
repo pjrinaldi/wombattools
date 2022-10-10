@@ -1,9 +1,4 @@
-#include <string>
-#include <vector>
-#include <iostream>
-#include <fstream>
-#include <sstream>
-#include <cmath>
+#include "common.h"
 
 //void GetNextCluster(ForImg* curimg, uint32_t clusternum, uint8_t fstype, qulonglong fatoffset, QList<uint>* clusterlist);
 
@@ -13,11 +8,12 @@ struct fatinfo
 {
     uint16_t bytespersector = 0;
     uint8_t sectorspercluster = 0;
-    std::string dootdirlayout = "";
     uint32_t fatoffset = 0;
-    uint16_t fatsize16 = 0;
-    uint32_t fatsize32 = 0;
+    //uint16_t fatsize16 = 0;
+    //uint32_t fatsize32 = 0;
+    uint32_t fatsize = 0;
     uint64_t clusterareastart = 0;
+    std::string rootdirlayout = "";
     /*
     out << "FAT Offset|" << QString::number((qulonglong)(curstartsector*512 + reservedareasize * bytespersector)) << "|Byte offset to the start of the first FAT" << Qt::endl;
     uint16_t fatsize = qFromLittleEndian<uint16_t>(curimg->ReadContent(curstartsector*512 + 22, 2));

@@ -175,8 +175,61 @@ else if(exfatstr == "EXFAT")
 
  */
 
-void ParseFatInfo(std::ifstream* rawcontent, fatinfo* cfat16, uint8_t ftype)
+void ParseFatInfo(std::ifstream* rawcontent, fatinfo* curfat, uint8_t ftype)
 {
+    if(ftype == 1 || ftype == 2)
+    {
+        uint8_t* bps = new uint8_t[2];
+        uint16_t bytespersector = 0;
+        ReadContent(rawcontent, bps, 11, 2);
+        ReturnUint16(&bytespersector, bps);
+        delete[] bps;
+        curfat->bytespersector = bytespersector;
+        std::cout << "Bytes Per Sector: " << bytespersector << std::endl;
+        uint8_t* fc = new uint8_t[1];
+        uint8_t fatcount = 0;
+        ReadContent(rawcontent, fc, 16, 1);
+        fatcount = (uint8_t)fc[0];
+        delete[] fc;
+        std::cout << "Fat Count: " << (unsigned int)fatcount << std::endl;
+        uint8_t* spc = new uint8_t[1];
+        uint8_t sectorspercluster = 0;
+        ReadContent(rawcontent, spc, 13, 1);
+        sectorspercluster = (uint8_t)spc[0];
+        delete[] spc;
+        curfat->sectorspercluster = sectorspercluster;
+        std::cout << "Sectors per cluster: " << (unsigned int)sectorspercluster << std::endl;
+        uint8_t* ras = new uint8_t[2];
+        uint16_t reservedareasize = 0;
+        ReadContent(rawcontent, ras, 14, 2);
+        ReturnUint16(&reservedareasize, ras);
+        delete[] ras;
+        std::cout << "Reserved Area Size: " << reservedareasize << std::endl;
+        curfat->fatoffset = reservedareasize * bytespersector;
+        std::cout << "Fat Offset: " << curfat->fatoffset << std::endl;
+        uint8_t* fs = new uint8_t[2];
+        uint16_t fatsize = 0;
+        ReadContent(rawcontent, fs, 22, 2);
+        ReturnUint16(&fatsize, fs);
+        delete[] fs;
+        curfat->fatsize = fatsize;
+        std::cout << "Fat Size: " << fatsize << std::endl;
+        uint8_t* rdmf = new uint8_t[2];
+        uint16_t rootdirmaxfiles = 0;
+        ReadContent(rawcontent, rdmf, 17, 2);
+        ReturnUint16(&rootdirmaxfiles, rdmf);
+        delete[] rdmf;
+        std::cout << "Root Dir Max Files: " << rootdirmaxfiles << std::endl;
+        std::cout << "Cluster Area Start: " << reservedareasize + fatcount * fatsize + ((rootdirmaxfiles * 32) + (bytespersector - 1)) / bytespersector << std::endl;
+        curfat->rootdirlayout = std::to_string((reservedareasize + fatcount * fatsize) * bytespersector) + "," + std::to_string(rootdirmaxfiles * 32 + bytespersector - 1) + ";";
+        std::cout << "Root Directory Layout: " << curfat->rootdirlayout << std::endl;
+    }
+
+    /*
+            uint16_t rootdirmaxfiles = qFromLittleEndian<uint16_t>(curimg->ReadContent(curstartsector*512 + 17, 2));
+            out << "Cluster Area Start|" << curstartsector + reservedareasize + fatcount * fatsize + ((rootdirmaxfiles * 32) + (bytespersector - 1)) / bytespersector << "|Byte offset to the start of the cluster area." << Qt::endl;
+            out << "Root Directory Layout|" << QString(QString::number((qulonglong)(curstartsector*512 + (reservedareasize + fatcount * fatsize) * bytespersector)) + "," + QString::number((rootdirmaxfiles * 32) + (bytespersector - 1)) + ";") << "|Layout for the root directory." << Qt::endl;
+    */
 }
 
 void ParseFatForensics(std::string filename, std::string mntptstr, std::string devicestr, uint8_t ftype)
@@ -186,7 +239,26 @@ void ParseFatForensics(std::string filename, std::string mntptstr, std::string d
     // FTYPE = 1 (FAT12) = 2 (FAT16) = 3 (FAT32) = 4 (EXFAT)
     
     fatinfo curfat;
+    // GET FAT FILESYSTEM INFO
     ParseFatInfo(&devicebuffer, &curfat, ftype);
+    std::string pathstring = "";
+    if(mntptstr.compare("/") == 0)
+        pathstring = filename;
+    else
+    {
+        std::size_t initpos = filename.find(mntptstr);
+        pathstring = filename.substr(initpos + mntptstr.size());
+    }
+    std::cout << "pathstring: " << pathstring << std::endl;
+    // SPLIT CURRENT FILE PATH INTO DIRECTORY STEPS
+    std::vector<std::string> pathvector;
+    std::istringstream iss(pathstring);
+    std::string pp;
+    while(getline(iss, pp, '/'))
+        pathvector.push_back(pp);
+
+    std::cout << "path vector size: " << pathvector.size() << std::endl;
+    uint32_t
 
 
     // PARSE ROOT DIRECTORY, WHICH IS ZERO I GUESS
