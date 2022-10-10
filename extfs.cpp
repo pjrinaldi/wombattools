@@ -68,14 +68,14 @@ void GetContentBlocks(std::ifstream* devicebuffer, uint32_t blocksize, uint64_t 
                         uint16_t starthi = (uint16_t)strtblk[0] | (uint16_t)strtblk[1] << 8;
                         uint32_t startlo = (uint32_t)strtblk[2] | (uint32_t)strtblk[3] << 8 | (uint32_t)strtblk[4] << 16 | (uint32_t)strtblk[5] << 24;
                         delete[] strtblk;
-                        std::cout << "start block: " << ((uint64_t)starthi >> 32) + startlo << std::endl;
+                        //std::cout << "start block: " << ((uint64_t)starthi >> 32) + startlo << std::endl;
                         blocklist->push_back(((uint64_t)starthi >> 32) + startlo); // block #, not bytes
                     }
                 }
                 else // use ext4_extent_idx
                 {
+                    std::cout << "repeat leafnode execise here...";
                     break;
-                    //std::cout << "repeat leafnode execise here...";
                 }
             }
         }
@@ -549,11 +549,38 @@ uint64_t ParseExtPath(std::ifstream* rawcontent, sbinfo* cursb, uint64_t curinod
         delete[] gdes;
     }
     // GET TO THE GROUP DESCRIPTOR BLOCK TABLE STARTING POINT, WHICH IS 4096 + groupdescriptorentrysize * curinodeblockgroup
-    // +8 get's the inode table block...
     std::cout << "group descriptor entry size: " << groupdescriptorentrysize << std::endl;
+    uint64_t curblockdescriptortableentryoffset = cursb->blocksize + groupdescriptorentrysize * curblockgroup;
+    std::cout << "cur block descriptor table entry offset: " << curblockdescriptortableentryoffset << std::endl;
+    // +8 get's the inode table block...
+    uint8_t* sbit = new uint8_t[4];
+    uint32_t startingblockforinodetable = 0;
+    ReadContent(rawcontent, sbit, curblockdescriptortableentryoffset + 8, 4);
+    ReturnUint32(&startingblockforinodetable, sbit);
+    delete[] sbit;
+    std::cout << "Starting block for inode table: " << startingblockforinodetable << std::endl;
+    uint64_t curoffset = startingblockforinodetable * cursb->blocksize + cursb->inodesize * localinode;
+    std::cout << "Current Offset to Inode Table Entry for Current Directory: " << curoffset << std::endl;
+    // GET INODE CONTENT BLOCKS
+    std::vector<uint32_t> blocklist;
+    blocklist.clear();
+    std::cout << "get content blocks\n";
+    GetContentBlocks(rawcontent, cursb->blocksize, curoffset, cursb->icflags, &blocklist);
+    std::cout << "blocklist count: " << blocklist.size() << std::endl;
+    std::cout << "convert blocks to extents\n";
+    std::string dirlayout = ConvertBlocksToExtents(&blocklist, cursb->blocksize);
+    std::cout << "dir layout: " << dirlayout << std::endl;
+    blocklist.clear();
+    // 4571136 or 4571392 is byte offset to the root directory inode
+    // 38125568 is byte offset to the root directory content
+    ReturnChildInode(rawcontent, cursb, &dirlayout, &childinode, &childpath, &curoffset);
+
+
     // GET GROUP DESCRIPTOR ENTRY FOR CURRENT BLOCK GROUP... (group descriptor table starts at byte offset 4096)
     // THIS IS WRONG, I NEED TO BE WITHIN THE GROUP DESCRIPTOR TABLE... AND FIND THE OFFSET TO THE WRITE BLOCK GROUP, THEN
     // GET THE 8 BYTES I NEED...TO GET THE INODE TABLE BLOCK
+    
+    /*
     uint64_t curblockdescripttableentryoffset = cursb->blocksize + groupdescriptorentrysize * curblockgroup + 8;
     std::cout << "curblockdescriptortableentryoffset: " << curblockdescripttableentryoffset << std::endl;
     uint64_t curblockgroupoffset = curblockdescripttableentryoffset;
@@ -565,15 +592,15 @@ uint64_t ParseExtPath(std::ifstream* rawcontent, sbinfo* cursb, uint64_t curinod
     }
     std::cout << "cur offset to block group: " << curblockgroupoffset << std::endl;
     // GET STARTING BLOCK FOR INODE TABLE FOR THIS BLOCK GROUP
-    std::cout << "starting block for inode table for this block group: " << curblockgroupoffset + 8 << std::endl;
+    std::cout << "starting block for inode table for this block group: " << curblockgroupoffset << std::endl;
     uint8_t* sbit = new uint8_t[4];
     uint32_t startingblockforinodetable = 0;
-    ReadContent(rawcontent, sbit, curblockgroupoffset + 8, 4);
+    ReadContent(rawcontent, sbit, curblockgroupoffset, 4);
     ReturnUint32(&startingblockforinodetable, sbit);
     delete[] sbit;
     std::cout << "Starting block for inode table: " << startingblockforinodetable << std::endl;
     //GET INODE ENTRY TO DETERMINE THE DIRECTORY CONTENTS
-    uint64_t curoffset = startingblockforinodetable * cursb->blocksize + cursb->inodesize * localinode;
+    uint64_t curoffset = startingblockforinodetable * cursb->blocksize * cursb->blockspergroup + cursb->inodesize * localinode;
     std::cout << "Current Offset to Inode Table Entry for Current Directory: " << curoffset << std::endl;
     // GET INODE CONTENT BLOCKS
     std::vector<uint32_t> blocklist;
@@ -587,6 +614,7 @@ uint64_t ParseExtPath(std::ifstream* rawcontent, sbinfo* cursb, uint64_t curinod
     // 4571136 or 4571392 is byte offset to the root directory inode
     // 38125568 is byte offset to the root directory content
     ReturnChildInode(rawcontent, cursb, &dirlayout, &childinode, &childpath, &curoffset);
+    */
 
     return childinode;
 }
@@ -1018,10 +1046,15 @@ uint64_t ParseExtPath(std::ifstream* rawcontent, sbinfo* cursb, uint64_t curinod
 }
      */
 
-void ParseExtFile(std::ifstream* devicebuffer, uint64_t curextinode)
+void ParseExtFile(std::ifstream* rawcontent, sbinfo* cursb, uint64_t curinode, std::string filename)
 {
-    std::cout << "do file stuff here...\n";
+    std::cout << "parse forensic contents for " << filename << std::endl;
 }
+
+//void ParseExtFile(std::ifstream* devicebuffer, uint64_t curextinode)
+//{
+//    std::cout << "do file stuff here...\n";
+//}
 
 // may want to replace filename with the current path array value and build the filename from the loop of this function
 //void ParseExtForensics(std::string filename, std::string mntptstr, std::string devicestr, uint64_t curextinode)
@@ -1034,13 +1067,25 @@ void ParseExtForensics(std::string filename, std::string mntptstr, std::string d
     extinfo curextinfo;
     sbinfo cursb;
     ParseSuperBlock(&devicebuffer, &cursb);
+    // NEED TO DETERMINE STARINT DIRECTORY BASED ON MOUNT POINT AND FILENAME
+    std::string pathstring = "";
+    if(mntptstr.compare("/") != 0)
+    {
+        std::size_t initdir = filename.find(mntptstr);
+        pathstring = filename.substr(initdir + mntptstr.size());
+        std::cout << "initdir: " << initdir << " new path: " << pathstring << std::endl;
+    }
+    else
+        pathstring = filename;
     // SPLIT CURRENT FILE PATH INTO DIRECTORIES
     std::vector<std::string> pathvector;
-    std::istringstream iss(filename);
+    std::istringstream iss(pathstring);
+    //std::istringstream iss(filename);
     std::string s;
     while(getline(iss, s, '/'))
         pathvector.push_back(s);
 
+    std::cout << "path vector size: " << pathvector.size() << std::endl;
     // PARSE ROOT DIRECTORY AND GET INODE FOR THE NEXT DIRECTORY IN PATH VECTOR
     uint32_t returninode = 0;
     returninode = ParseExtPath(&devicebuffer, &cursb, 2, pathvector.at(1));
@@ -1048,13 +1093,14 @@ void ParseExtForensics(std::string filename, std::string mntptstr, std::string d
     std::cout << "Inode for " << pathvector.at(1) << ": " << returninode << std::endl;
     std::cout << "Loop Over the Remaining Paths\n";
 
-    for(int i=1; i < pathvector.size() - 1; i++)
+    for(int i=1; i < pathvector.size() - 2; i++)
     {
-        returninode = ParseExtPath(&devicebuffer, &cursb, returninode, pathvector.at(i+1));
-        std::cout << "Inode for " << pathvector.at(i+1) << ": " << returninode << std::endl;
+        returninode = ParseExtPath(&devicebuffer, &cursb, returninode, pathvector.at(i));
+        std::cout << "Inode for " << pathvector.at(i) << ": " << returninode << std::endl;
         //std::cout << "i: " << i << " Next Directory to Parse: " << pathvector.at(i+1) << std::endl;
     }
-
+    
+    ParseExtFile(&devicebuffer, &cursb, returninode, pathvector.at(pathvector.size() - 1));
 
     //ParseExtInit(&devicebuffer, &curextinfo);
     /*

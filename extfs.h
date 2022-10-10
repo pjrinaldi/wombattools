@@ -53,7 +53,8 @@ void ParseSuperBlock(std::ifstream* rawcontent, sbinfo* cursb);
 uint64_t ParseExtPath(std::ifstream* devicebuffer, sbinfo* cursb, uint64_t curinode, std::string childpath);
 //uint64_t ParseExtPath(std::ifstream* devicebuffer, extinfo* curextinfo, uint64_t curinode, std::string childpath);
 
-void ParseExtFile(std::ifstream* devicebuffer, uint64_t curextinode);
+//void ParseExtFile(std::ifstream* devicebuffer, uint64_t curextinode);
+void ParseExtFile(std::ifstream* rawcontent, sbinfo* cursb, uint64_t curinode, std::string filename);
 
 /*
 struct wfi_metadata
