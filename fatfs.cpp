@@ -75,6 +75,9 @@ void ParseFatForensics(std::string filename, std::string mntptstr, std::string d
     std::ifstream devicebuffer(devicestr.c_str(), std::ios::in|std::ios::binary);
     std::cout << filename << " || " << mntptstr << " || " << devicestr  << " || " << ftype << std::endl;
     // FTYPE = 1 (FAT12) = 2 (FAT16) = 3 (FAT32) = 4 (EXFAT)
+    
+    // PARSE ROOT DIRECTORY, WHICH IS ZERO I GUESS
+    // curinode = ParseFatDirectory(curimg, curstartsector, ptreecnt, 0, "", "");
     /*
     std::ifstream devicebuffer(devicestr.c_str(), std::ios::in|std::ios::binary);
     std::cout << filename << " || " << mntptstr << " || " << devicestr << std::endl;
