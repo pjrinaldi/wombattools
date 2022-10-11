@@ -5,7 +5,7 @@
 #include <errno.h>
 #include <unistd.h>
 
-#include "common.h"
+#include "zstdcommon.h"
 #include <zstd.h>
 
 #define FUSE_USE_VERSION 31

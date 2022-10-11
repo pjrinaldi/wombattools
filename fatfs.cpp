@@ -258,7 +258,7 @@ void ParseFatForensics(std::string filename, std::string mntptstr, std::string d
         pathvector.push_back(pp);
 
     std::cout << "path vector size: " << pathvector.size() << std::endl;
-    uint32_t
+    //uint32_t
 
 
     // PARSE ROOT DIRECTORY, WHICH IS ZERO I GUESS

@@ -17,7 +17,7 @@
 #include <iostream>
 
 #include "blake3.h"
-#include "common.h"
+#include "zstdcommon.h"
 #include <zstd.h>
 
 #define DTTMFMT "%F %T %z"
