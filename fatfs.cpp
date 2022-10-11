@@ -330,7 +330,41 @@ uint32_t ParseFatPath(std::ifstream* rawcontent, fatinfo* curfat, std::string ch
                     // long name is 260 / 13, so no more than 20 names
                     unsigned int lsn = ((int)firstchar & 0x4f);
                     if(lsn <= 20)
+                    {
                         std::cout << "lfn sequence number: " << ((int)firstchar & 0x4f) << std::endl;
+                        // process long file name part here... then add to the long file name...
+                        std::string longname = "";
+                        int arr[13] = {1, 3, 5, 7, 9, 14, 16, 18, 20, 22, 24, 28, 30};
+                        for(int k=0; k < 13; k++)
+                        {
+                            uint16_t longletter = 0;
+                            uint8_t* ll = new uint8_t[3];
+                            ReadContent(rawcontent, ll, rootdiroffset + j*32 + arr[k], 2);
+                            ReturnUint16(&longletter, ll);
+                            delete[] ll;
+                            if(longletter < 0xFFFF)
+                            {
+                                longname += (char)longletter;
+                                //std::cout << "long letter "<< arr[k] << " has value: " << (char)longletter << std::endl;
+                            }
+                        }
+		        //std::cout << "long name: " << l1 << "|" << std::endl;
+                        longnamestring.insert(0, longname);
+		        //longnamestring.insert(0, l1);
+                        if(lsn == 1)
+                        {
+                            // add long file name part here, then store in string and then
+                            // reset to empty so i can get the next one.
+                            //longnamestring = longname;
+                            longname = "";
+                            std::cout << "long name: " << longnamestring << "|" << std::endl;
+                        }
+                    }
+                }
+                if(fileattr == 0x10) // directory type, so do get name now
+                {
+                    std::cout << "long name: " << longnamestring << "|" << std::endl;
+                    longnamestring = "";
                 }
             }
             /*
