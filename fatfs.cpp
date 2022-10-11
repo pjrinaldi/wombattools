@@ -313,13 +313,27 @@ uint32_t ParseFatPath(std::ifstream* rawcontent, fatinfo* curfat, std::string ch
 	    ReadContent(rawcontent, fc, rootdiroffset + j*32, 1);
 	    firstchar = (uint8_t)fc[0];
 	    delete[] fc;
-	    if(firstchar == 0x00) // entry is free and all remaining are free
-		break;
-	    uint8_t* fa = new uint8_t[1];
-	    uint8_t fileattr = 0;
-	    ReadContent(rawcontent, fa, rootdiroffset + j*32 + 11, 1);
-	    fileattr = (uint8_t)fa[0];
-	    delete[] fa;
+            if(firstchar == 0xe5) // deleted entry, skip
+            {
+            }
+            else if(firstchar == 0x00) // entry is free and all remaining are free
+                break;
+            else
+            {
+                uint8_t* fa = new uint8_t[1];
+                uint8_t fileattr = 0;
+                ReadContent(rawcontent, fa, rootdiroffset + j*32 + 11, 1);
+                fileattr = (uint8_t)fa[0];
+                delete[] fa;
+                if(fileattr == 0x0f || fileattr == 0x3f)
+                {
+                    // long name is 260 / 13, so no more than 20 names
+                    unsigned int lsn = ((int)firstchar & 0x4f);
+                    if(lsn <= 20)
+                        std::cout << "lfn sequence number: " << ((int)firstchar & 0x4f) << std::endl;
+                }
+            }
+            /*
             if(fileattr == 0x0f || fileattr == 0x3f) // long directory entry for succeeding short entry...
 	    {
 		//std::cout << "get long directory name here, which should come after short entry..." << std::endl;
@@ -388,6 +402,7 @@ uint32_t ParseFatPath(std::ifstream* rawcontent, fatinfo* curfat, std::string ch
 		else
 		    std::cout << "alias name: " << (char)firstchar << restname << std::endl;
 	    }
+            */
 	}
     }
 
