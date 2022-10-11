@@ -258,40 +258,18 @@ void ParseFatForensics(std::string filename, std::string mntptstr, std::string d
         pathvector.push_back(pp);
 
     std::cout << "path vector size: " << pathvector.size() << std::endl;
-    //uint32_t
+    // PARSE ROOT DIRECTORY OF THE MOUNTED FILE SYSTEM
+    uint32_t returninode = 0;
+    returninode = ParseFatPath(&devicebuffer, &curfat, pathvector.at(1));
+    std::cout << "next inode to traverse: " << returninode << std::endl;
 
 
     // PARSE ROOT DIRECTORY, WHICH IS ZERO I GUESS
     // curinode = ParseFatDirectory(curimg, curstartsector, ptreecnt, 0, "", "");
     /*
-    std::ifstream devicebuffer(devicestr.c_str(), std::ios::in|std::ios::binary);
-    std::cout << filename << " || " << mntptstr << " || " << devicestr << std::endl;
     // MAY WANT THIS IN HERE TO LOOP AND PARSE THE RESPECTIVE DIRECTORIES TO GET TO THE FILE...
-    extinfo curextinfo;
-    sbinfo cursb;
-    ParseSuperBlock(&devicebuffer, &cursb);
-    // NEED TO DETERMINE STARINT DIRECTORY BASED ON MOUNT POINT AND FILENAME
-    std::string pathstring = "";
-    if(mntptstr.compare("/") != 0)
-    {
-        std::size_t initdir = filename.find(mntptstr);
-        pathstring = filename.substr(initdir + mntptstr.size());
-        std::cout << "initdir: " << initdir << " new path: " << pathstring << std::endl;
-    }
-    else
-        pathstring = filename;
-    // SPLIT CURRENT FILE PATH INTO DIRECTORIES
-    std::vector<std::string> pathvector;
-    std::istringstream iss(pathstring);
-    //std::istringstream iss(filename);
-    std::string s;
-    while(getline(iss, s, '/'))
-        pathvector.push_back(s);
-
     std::cout << "path vector size: " << pathvector.size() << std::endl;
     // PARSE ROOT DIRECTORY AND GET INODE FOR THE NEXT DIRECTORY IN PATH VECTOR
-    uint32_t returninode = 0;
-    returninode = ParseExtPath(&devicebuffer, &cursb, 2, pathvector.at(1));
 
     std::cout << "Inode for " << pathvector.at(1) << ": " << returninode << std::endl;
     std::cout << "Loop Over the Remaining Paths\n";
@@ -307,85 +285,137 @@ void ParseFatForensics(std::string filename, std::string mntptstr, std::string d
     */
 }
 
+uint32_t ParseFatPath(std::ifstream* rawcontent, fatinfo* curfat, std::string childpath)
+{
+    // NEED TO DETERMINE IF IT'S ROOT DIRECTORY OR NOT AND HANDLE ACCORDINGLY
+    std::cout << "child path to find: " << childpath << std::endl;
+    // GET THE DIRECTORY CONTENT OFFSETS/LENGTHS AND THEN LOOP OVER THEM
+    std::vector<std::string> rootdirlayoutlist;
+    rootdirlayoutlist.clear();
+    std::istringstream rdll(curfat->rootdirlayout);
+    std::string rdls;
+    while(getline(rdll, rdls, ';'))
+	rootdirlayoutlist.push_back(rdls);
+    for(int i=0; i < rootdirlayoutlist.size(); i++)
+    {
+	std::size_t layoutsplit = rootdirlayoutlist.at(i).find(",");
+	uint64_t rootdiroffset = std::stoull(rootdirlayoutlist.at(i).substr(0, layoutsplit));
+	uint64_t rootdirlength = std::stoull(rootdirlayoutlist.at(i).substr(layoutsplit+1));
+	std::cout << "root dir offset: " << rootdiroffset << " root dir length: " << rootdirlength << std::endl;
+	unsigned int rootdirentrycount = rootdirlength / 32;
+	std::cout << "root dir entry count: " << rootdirentrycount << std::endl;
+	// PARSE DIRECTORY ENTRIES
+	std::string longnamestring = "";
+	for(unsigned int j=0; j < rootdirentrycount; j++)
+	{
+	    uint8_t* fc = new uint8_t[1];
+	    uint8_t firstchar = 0;
+	    ReadContent(rawcontent, fc, rootdiroffset + j*32, 1);
+	    firstchar = (uint8_t)fc[0];
+	    delete[] fc;
+	    if(firstchar == 0x00) // entry is free and all remaining are free
+		break;
+	    uint8_t* fa = new uint8_t[1];
+	    uint8_t fileattr = 0;
+	    ReadContent(rawcontent, fa, rootdiroffset + j*32 + 11, 1);
+	    fileattr = (uint8_t)fa[0];
+	    delete[] fa;
+            if(fileattr == 0x0f || fileattr == 0x3f) // long directory entry for succeeding short entry...
+	    {
+		//std::cout << "get long directory name here, which should come after short entry..." << std::endl;
+		std::string l3 = "";
+		std::string l2 = "";
+		std::string l1 = "";
+		//for(int k=0; k < int array.size(); k++) int array [28, 30, 14, 16, 18, 20, 22, 24, 1, 3, 5, 7, 9]
+		//int arr[13] =  {28, 30, 14, 16, 18, 20, 22, 24, 1, 3, 5, 7, 9};
+		int arr2[13] = {1, 3, 5, 7, 9, 14, 16, 18, 20, 22, 24, 28, 30};
+		for(int k=0; k < 13; k++)
+		{
+		    uint16_t longletter = 0;
+		    uint8_t* ll = new uint8_t[3];
+		    ReadContent(rawcontent, ll, rootdiroffset + j*32 + arr2[k], 2);
+		    ReturnUint16(&longletter, ll);
+		    delete[] ll;
+		    if(longletter < 0xFFFF)
+		    {
+			l1 += (char)longletter;
+			//std::cout << "long letter "<< arr[k] << " has value: " << (char)longletter << std::endl;
+		    }
+		}
+		//std::cout << "long name: " << l1 << "|" << std::endl;
+		longnamestring.insert(0, l1);
+
+	    }
+            if(fileattr & 0x10)
+	    {
+		if(!longnamestring.empty())
+		{
+		    std::cout << "long name: " << longnamestring << "|" << std::endl;
+		    longnamestring = "";
+		}
+                //if(!longnamestring.isEmpty())
+		std::cout << "first char: " << std::hex << (int)firstchar << std::endl;
+		std::cout << "File Attribute: " << std::hex << (int)fileattr << std::endl;
+                std::cout << " Current Directory Entry is a Sub Directory, get name and see if it matches childpath\n";
+		if(firstchar == 0xe5 || firstchar == 0x05) // was allocated but now free
+		{
+		    std::cout << "deleted, so skip..\n";
+		}
+		uint8_t* rname = new uint8_t[8];
+		ReadContent(rawcontent, rname, rootdiroffset + j*32 + 1, 7);
+		rname[7] = '\0';
+		std::string restname((char*)rname);
+		delete[] rname;
+		std::cout << "file name: " << (char)firstchar << restname << std::endl;
+		uint8_t* ename = new uint8_t[4];
+		ReadContent(rawcontent, ename, rootdiroffset + j*32 + 8, 3);
+		ename[3] = '\0';
+		std::string extname((char*)ename);
+		delete[] ename;
+		std::size_t findempty = 0;
+		while(extname.size() > 0)
+		{
+		    findempty = extname.find(" ", 0);
+		    if(findempty != std::string::npos)
+			extname.erase(findempty, 1);
+		    else
+			break;
+		}
+		std::cout << "extname after find/erase loop: " << extname << "|" << std::endl;
+
+		if(extname.size() > 0)
+		    std::cout << "alias name: " << (char)firstchar << restname + "." + extname << std::endl;
+		else
+		    std::cout << "alias name: " << (char)firstchar << restname << std::endl;
+	    }
+	}
+    }
+
+    return 2;
+}
+
 /*
 qulonglong ParseFatDirectory(ForImg* curimg, uint32_t curstartsector, uint8_t ptreecnt, qulonglong parinode, QString parfilename, QString dirlayout)
 {
-    qulonglong inodecnt = 0;
-    //uint32_t fatsize = 0;
-    qulonglong fatoffset = 0;
-    uint16_t bytespersector = 0;
-    uint8_t sectorspercluster = 0;
-    uint8_t fstype = 0;
-    qulonglong clusterareastart = 0;
-    QString rootdirlayout = "";
-    QFile propfile(curimg->MountPath() + "/p" + QString::number(ptreecnt) + "/prop");
-    if(!propfile.isOpen())
-	propfile.open(QIODevice::ReadOnly | QIODevice::Text);
-    if(propfile.isOpen())
-    {
-        while(!propfile.atEnd())
-        {
-            QString line = propfile.readLine();
-            if(line.startsWith("Bytes Per Sector|"))
-                bytespersector = line.split("|").at(1).toUInt();
-            else if(line.startsWith("Sectors Per Cluster|"))
-                sectorspercluster = line.split("|").at(1).toUInt();
-            else if(line.startsWith("Root Directory Layout|"))
-                rootdirlayout = line.split("|").at(1);
-            else if(line.startsWith("FAT Offset|"))
-                fatoffset = line.split("|").at(1).toULongLong();
-            //else if(line.startsWith("FAT Size|"))
-            //    fatsize = line.split("|").at(1).toUInt();
-            else if(line.startsWith("Cluster Area Start|"))
-                clusterareastart = line.split("|").at(1).toULongLong();
-	    else if(line.startsWith("File System Type Int|"))
-		fstype = line.split("|").at(1).toUInt();
-        }
-        propfile.close();
-    }
     if(!dirlayout.isEmpty())
 	rootdirlayout = dirlayout;
-    //qDebug() << "rootdirlayout:" << rootdirlayout;
-    //qDebug() << "bps:" << bytespersector << "fo:" << fatoffset << "fs:" << fatsize << "rdl:" << rootdirlayout;
     for(int i=0; i < rootdirlayout.split(";", Qt::SkipEmptyParts).count(); i++)
     {
-        //qDebug() << "root dir entry:" << i;
-	qulonglong rootdiroffset = 0;
-	qulonglong rootdirsize = 0;
 	if(i == 0)
-	{
 	    if(dirlayout.isEmpty()) // root directory
-	    {
 	        rootdiroffset = rootdirlayout.split(";", Qt::SkipEmptyParts).at(i).split(",").at(0).toULongLong();
 		rootdirsize = rootdirlayout.split(";", Qt::SkipEmptyParts).at(i).split(",").at(1).toULongLong();
-	    }
 	    else // sub directory
-	    {
 		rootdiroffset = rootdirlayout.split(";", Qt::SkipEmptyParts).at(i).split(",").at(0).toULongLong() + 64; // skip . and .. directories
 		rootdirsize = rootdirlayout.split(";", Qt::SkipEmptyParts).at(i).split(",").at(1).toULongLong() - 64; // adjust read size for the 64 byte skip
-	    }
-	}
         uint rootdirentrycount = rootdirsize / 32;
-        //qDebug() << "current rootdirentrycount:" << rootdirentrycount;
 	if(parinode == 0)
 	    inodecnt = 0;
 	else
 	    inodecnt = parinode + 1;
-	//qDebug() << "inodecnt at start of parent comparison:" << inodecnt;
-        QString longnamestring = "";
         for(uint j=0; j < rootdirentrycount; j++)
         {
 	    QString longname = "";
-            QTextStream out;
-            QFile fileprop(curimg->MountPath() + "/p" + QString::number(ptreecnt) + "/f" + QString::number(inodecnt) + ".prop");
-            if(!fileprop.isOpen())
-                fileprop.open(QIODevice::Append | QIODevice::Text);
-            out.setDevice(&fileprop);
-
-            uint8_t firstchar = qFromLittleEndian<uint8_t>(curimg->ReadContent(rootdiroffset + j*32, 1));
-            if(firstchar == 0x00) // entry is free and all remaining are free
-                break;
-            uint8_t fileattr = qFromLittleEndian<uint8_t>(curimg->ReadContent(rootdiroffset + j*32 + 11, 1));
             //qDebug() << "firstchar:" << QString::number(firstchar, 16) << "fileattr:" << QString::number(fileattr, 16);
             if(fileattr != 0x0f && fileattr != 0x00 && fileattr != 0x3f) // need to process differently // 0x3f is ATTR_LONG_NAME_MASK which is a long name entry sub component
             {
@@ -397,36 +427,7 @@ qulonglong ParseFatDirectory(ForImg* curimg, uint32_t curstartsector, uint8_t pt
                 }
                 else
                     out << "Long Name| |Long name for the file." << Qt::endl;
-                out << "File Attributes|";
-                if(fileattr & 0x01)
-                    out << "Read Only,";
-                if(fileattr & 0x02)
-                    out << "Hidden File,";
-                if(fileattr & 0x04)
-                    out << "System File,";
-                if(fileattr & 0x08)
-                    out << "Volume ID,";
-                if(fileattr & 0x10)
-                    out << "SubDirectory,";
-                if(fileattr & 0x20)
-                    out << "Archive File,";
-                out << "|File attributes." << Qt::endl;
-                uint8_t isdeleted = 0;
-                if(firstchar == 0xe5 || firstchar == 0x05) // was allocated but now free
-                    isdeleted = 1;
-                QString restname = QString::fromStdString(curimg->ReadContent(rootdiroffset + j*32 + 1, 7).toStdString()).replace(" ", "");
-                QString extname = QString::fromStdString(curimg->ReadContent(rootdiroffset + j*32 + 8, 3).toStdString()).replace(" ", "");
-                QString aliasname = QString(char(firstchar));
-                out << "Alias Name|";
-                if(extname.count() > 0)
-                {
-                    aliasname += QString(restname.toUtf8() + "." + extname.toUtf8());
-                }
-                else
-                {
-                    aliasname += QString(restname.toUtf8());
-                }
-                out << aliasname << "|8.3 file name." << Qt::endl;
+
 		//uint8_t createtenth = rootdirbuf.at(i*32 + 13); // NOT GOING TO USE RIGHT NOW...
                 qint64 createdate = ConvertDosTimeToUnixTime(qFromLittleEndian<uint8_t>(curimg->ReadContent(rootdiroffset + j*32 + 15, 1)), qFromLittleEndian<uint8_t>(curimg->ReadContent(rootdiroffset + j*32 + 14, 1)), qFromLittleEndian<uint8_t>(curimg->ReadContent(rootdiroffset + j*32 + 17, 1)), qFromLittleEndian<uint8_t>(curimg->ReadContent(rootdiroffset + j*32 + 16, 1)));
                 qint64 accessdate = ConvertDosTimeToUnixTime(0x00, 0x00, qFromLittleEndian<uint8_t>(curimg->ReadContent(rootdiroffset + j*32 + 19, 1)), qFromLittleEndian<uint8_t>(curimg->ReadContent(rootdiroffset + j*32 + 18, 1)));

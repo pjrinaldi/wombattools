@@ -39,3 +39,5 @@ struct fatinfo
 
 
 void ParseFatInfo(std::ifstream* rawcontent, fatinfo* cfat16, uint8_t ftype);
+
+uint32_t ParseFatPath(std::ifstream* rawcontent, fatinfo* curfat, std::string childpath);
