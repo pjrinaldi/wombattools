@@ -40,6 +40,40 @@ void GetNextCluster(std::ifstream* rawcontent, uint32_t clusternum, uint8_t ftyp
 std::string ConvertClustersToExtents(std::vector<uint32_t>* clusterlist, uint32_t clustersize, uint64_t rootdiroffset)
 {
     std::string extentstring = "";
+    int blkcnt = 1;
+    uint32_t startvalue = clusterlist->at(0);
+    for(int i=1; i < clusterlist->size(); i++)
+    {
+	uint32_t oldvalue = clusterlist->at(i-1);
+	uint32_t newvalue = clusterlist->at(i);
+	if(newvalue - oldvalue == 1)
+	    blkcnt++;
+	else
+	{
+	    if(rootdiroffset > 0)
+		extentstring += std::to_string(rootdiroffset + ((startvalue - 2) * clustersize)) + "," + std::to_string(blkcnt * clustersize) + ";";
+	    else
+		extentstring += std::to_string(startvalue * clustersize) + "," + std::to_string(blkcnt * clustersize) + ";";
+	    startvalue = clusterlist->at(i);
+	    blkcnt = 1;
+	}
+	if(i == clusterlist->size() - 1)
+	{
+	    if(rootdiroffset > 0)
+		extentstring += std::to_string(rootdiroffset + ((startvalue - 2) * clustersize)) + "," + std::to_string(blkcnt * clustersize) + ";";
+	    else
+		extentstring += std::to_string(startvalue * clustersize) + "," + std::to_string(blkcnt * clustersize) + ";";
+	    startvalue = clusterlist->at(i);
+	    blkcnt = 1;
+	}
+    }
+    if(clusterlist->size() == 1)
+    {
+	if(rootdiroffset > 0)
+	    extentstring += std::to_string(rootdiroffset + ((startvalue - 2) * clustersize)) + "," + std::to_string(blkcnt * clustersize) + ";";
+	else
+	    extentstring += std::to_string(startvalue * clustersize) + "," + std::to_string(blkcnt * clustersize) + ";";
+    }
 
     return extentstring;
 }
@@ -47,8 +81,6 @@ std::string ConvertClustersToExtents(std::vector<uint32_t>* clusterlist, uint32_
 /*
 QString ConvertBlocksToExtents(QList<uint> blocklist, uint blocksize, qulonglong rootdiroffset)
 {
-    // FirstSectorOfCluster = ((N-2) * sectorspercluster) + firstdatasector [rootdirstart];
-    //QString rootdirlayout = QString::number(rootdiroffset + ((rootdircluster - 2) * sectorspercluster * bytespersector)) + "," + QString::number(sectorspercluster * bytespersector) + ";";
     QString extentstring = "";
     int blkcnt = 1;
     uint startvalue = blocklist.at(0);
@@ -310,6 +342,7 @@ void ParseFatInfo(std::ifstream* rawcontent, fatinfo* curfat)
         //std::cout << "Root Dir Max Files: " << rootdirmaxfiles << std::endl;
         //std::cout << "Cluster Area Start: " << reservedareasize + fatcount * fatsize + ((rootdirmaxfiles * 32) + (bytespersector - 1)) / bytespersector << std::endl;
         curfat->rootdirlayout = std::to_string((reservedareasize + fatcount * fatsize) * bytespersector) + "," + std::to_string(rootdirmaxfiles * 32 + bytespersector - 1) + ";";
+	curfat->curdirlayout = curfat->rootdirlayout;
         //std::cout << "Root Directory Layout: " << curfat->rootdirlayout << std::endl;
     }
 
@@ -323,7 +356,7 @@ void ParseFatInfo(std::ifstream* rawcontent, fatinfo* curfat)
 void ParseFatForensics(std::string filename, std::string mntptstr, std::string devicestr, uint8_t ftype)
 {
     std::ifstream devicebuffer(devicestr.c_str(), std::ios::in|std::ios::binary);
-    std::cout << filename << " || " << mntptstr << " || " << devicestr  << " || " << ftype << std::endl;
+    std::cout << filename << " || " << mntptstr << " || " << devicestr  << " || " << (int)ftype << std::endl;
     // FTYPE = 1 (FAT12) = 2 (FAT16) = 3 (FAT32) = 4 (EXFAT)
     
     fatinfo curfat;
@@ -346,60 +379,77 @@ void ParseFatForensics(std::string filename, std::string mntptstr, std::string d
     while(getline(iss, pp, '/'))
         pathvector.push_back(pp);
 
-    //std::cout << "path vector size: " << pathvector.size() << std::endl;
-    // PARSE ROOT DIRECTORY OF THE MOUNTED FILE SYSTEM
-    uint32_t returninode = 0;
-    returninode = ParseFatPath(&devicebuffer, &curfat, pathvector.at(1));
-    std::cout << "next inode to traverse: " << returninode << std::endl;
+    std::string nextdirlayout = "";
+    nextdirlayout = ParseFatPath(&devicebuffer, &curfat, pathvector.at(1));
+    curfat.curdirlayout = nextdirlayout;
+    std::cout << "child path: " << pathvector.at(1) << "'s layout: " << nextdirlayout << std::endl;
 
-
-    // PARSE ROOT DIRECTORY, WHICH IS ZERO I GUESS
-    // curinode = ParseFatDirectory(curimg, curstartsector, ptreecnt, 0, "", "");
-    /*
-    // MAY WANT THIS IN HERE TO LOOP AND PARSE THE RESPECTIVE DIRECTORIES TO GET TO THE FILE...
     std::cout << "path vector size: " << pathvector.size() << std::endl;
-    // PARSE ROOT DIRECTORY AND GET INODE FOR THE NEXT DIRECTORY IN PATH VECTOR
-
-    std::cout << "Inode for " << pathvector.at(1) << ": " << returninode << std::endl;
-    std::cout << "Loop Over the Remaining Paths\n";
-
     for(int i=1; i < pathvector.size() - 2; i++)
     {
-        returninode = ParseExtPath(&devicebuffer, &cursb, returninode, pathvector.at(i));
-        std::cout << "Inode for " << pathvector.at(i) << ": " << returninode << std::endl;
-        //std::cout << "i: " << i << " Next Directory to Parse: " << pathvector.at(i+1) << std::endl;
+	nextdirlayout = ParseFatPath(&devicebuffer, &curfat, pathvector.at(i+1));
+	curfat.curdirlayout = nextdirlayout;
+	std::cout << "child path: " << pathvector.at(i+1) << "'s layout: " << nextdirlayout << std::endl;
     }
-    
+
+    std::cout << "now to parse fat file: " << pathvector.at(pathvector.size() - 1) << std::endl;
+
+    /*
     ParseExtFile(&devicebuffer, &cursb, returninode, pathvector.at(pathvector.size() - 1));
     */
 }
 
-uint32_t ParseFatPath(std::ifstream* rawcontent, fatinfo* curfat, std::string childpath)
+std::string ParseFatPath(std::ifstream* rawcontent, fatinfo* curfat, std::string childpath)
 {
+    uint8_t isrootdir = 0;
     // NEED TO DETERMINE IF IT'S ROOT DIRECTORY OR NOT AND HANDLE ACCORDINGLY
+    if(curfat->curdirlayout.compare(curfat->rootdirlayout) == 0)
+    {
+	isrootdir = 1;
+	std::cout << "root dir layout matches curdirlayout" << std::endl;
+    }
+    else
+    {
+	isrootdir = 0;
+	std::cout << "curdirlayout is not rootdirlayout" << std::endl;
+    }
+
     std::cout << "child path to find: " << childpath << std::endl;
     // GET THE DIRECTORY CONTENT OFFSETS/LENGTHS AND THEN LOOP OVER THEM
-    std::vector<std::string> rootdirlayoutlist;
-    rootdirlayoutlist.clear();
-    std::istringstream rdll(curfat->rootdirlayout);
+    std::vector<std::string> dirlayoutlist;
+    dirlayoutlist.clear();
+    std::istringstream rdll(curfat->curdirlayout);
     std::string rdls;
     while(getline(rdll, rdls, ';'))
-	rootdirlayoutlist.push_back(rdls);
-    for(int i=0; i < rootdirlayoutlist.size(); i++)
+	dirlayoutlist.push_back(rdls);
+    for(int i=0; i < dirlayoutlist.size(); i++)
     {
-	std::size_t layoutsplit = rootdirlayoutlist.at(i).find(",");
-	uint64_t rootdiroffset = std::stoull(rootdirlayoutlist.at(i).substr(0, layoutsplit));
-	uint64_t rootdirlength = std::stoull(rootdirlayoutlist.at(i).substr(layoutsplit+1));
-	//std::cout << "root dir offset: " << rootdiroffset << " root dir length: " << rootdirlength << std::endl;
-	unsigned int rootdirentrycount = rootdirlength / 32;
-	//std::cout << "root dir entry count: " << rootdirentrycount << std::endl;
+	uint64_t diroffset = 0;
+	uint64_t dirlength = 0;
+	std::size_t layoutsplit = dirlayoutlist.at(i).find(",");
+	if(i == 0)
+	{
+	    if(isrootdir == 1) // root directory
+	    {
+		diroffset = std::stoull(dirlayoutlist.at(i).substr(0, layoutsplit));
+		dirlength = std::stoull(dirlayoutlist.at(i).substr(layoutsplit+1));
+	    }
+	    else // sub directory
+	    {
+		diroffset = std::stoull(dirlayoutlist.at(i).substr(0, layoutsplit)) + 64; // skip . and .. directories
+		dirlength = std::stoull(dirlayoutlist.at(i).substr(layoutsplit+1)) - 64; // adjust read size for the 64 byte skip
+	    }
+	}
+	std::cout << "dir offset: " << diroffset << " dir length: " << dirlength << std::endl;
+	unsigned int direntrycount = dirlength / 32;
+	std::cout << "dir entry count: " << direntrycount << std::endl;
 	// PARSE DIRECTORY ENTRIES
 	std::string longnamestring = "";
-	for(unsigned int j=0; j < rootdirentrycount; j++)
+	for(unsigned int j=0; j < direntrycount; j++)
 	{
 	    uint8_t* fc = new uint8_t[1];
 	    uint8_t firstchar = 0;
-	    ReadContent(rawcontent, fc, rootdiroffset + j*32, 1);
+	    ReadContent(rawcontent, fc, diroffset + j*32, 1);
 	    firstchar = (uint8_t)fc[0];
 	    delete[] fc;
             if(firstchar == 0xe5) // deleted entry, skip
@@ -411,7 +461,7 @@ uint32_t ParseFatPath(std::ifstream* rawcontent, fatinfo* curfat, std::string ch
             {
                 uint8_t* fa = new uint8_t[1];
                 uint8_t fileattr = 0;
-                ReadContent(rawcontent, fa, rootdiroffset + j*32 + 11, 1);
+                ReadContent(rawcontent, fa, diroffset + j*32 + 11, 1);
                 fileattr = (uint8_t)fa[0];
                 delete[] fa;
                 if(fileattr == 0x0f || fileattr == 0x3f) // Long Directory Name
@@ -426,7 +476,7 @@ uint32_t ParseFatPath(std::ifstream* rawcontent, fatinfo* curfat, std::string ch
                         {
                             uint16_t longletter = 0;
                             uint8_t* ll = new uint8_t[3];
-                            ReadContent(rawcontent, ll, rootdiroffset + j*32 + arr[k], 2);
+                            ReadContent(rawcontent, ll, diroffset + j*32 + arr[k], 2);
                             ReturnUint16(&longletter, ll);
                             delete[] ll;
                             if(longletter < 0xFFFF)
@@ -441,17 +491,17 @@ uint32_t ParseFatPath(std::ifstream* rawcontent, fatinfo* curfat, std::string ch
 		{
 		    if(fileattr == 0x10)
 		    {
-			//std::cout << "long name: " << longnamestring << "|" << std::endl;
+			std::cout << "long name: " << longnamestring << "|" << std::endl;
 			if(longnamestring.find(childpath) != std::string::npos)
 			{
 			    uint8_t* hcn = new uint8_t[2];
 			    uint16_t hiclusternum = 0;
-			    ReadContent(rawcontent, hcn, rootdiroffset + j*32 + 20, 2); // always zero for fat12/16
+			    ReadContent(rawcontent, hcn, diroffset + j*32 + 20, 2); // always zero for fat12/16
 			    ReturnUint16(&hiclusternum, hcn);
 			    delete[] hcn;
 			    uint8_t* lcn = new uint8_t[2];
 			    uint16_t loclusternum = 0;
-			    ReadContent(rawcontent, lcn, rootdiroffset + j*32 + 26, 2);
+			    ReadContent(rawcontent, lcn, diroffset + j*32 + 26, 2);
 			    ReturnUint16(&loclusternum, lcn);
 			    delete[] lcn;
 			    uint32_t clusternum = ((uint32_t)hiclusternum >> 16) + loclusternum;
@@ -464,25 +514,10 @@ uint32_t ParseFatPath(std::ifstream* rawcontent, fatinfo* curfat, std::string ch
 			    }
 			    std::string layout = "";
 			    if(clusterlist.size() > 0)
-				layout = ConvertClustersToExtents(&clusterlist, curfat->sectorspercluster * curfat->bytespersector, rootdiroffset);
-//std::string ConvertClustersToExtents(std::vector<uint32_t>* clusterlist, uint32_t blocksize, uint64_t rootdiroffset);
+				layout = ConvertClustersToExtents(&clusterlist, curfat->sectorspercluster * curfat->bytespersector, diroffset);
 			    clusterlist.clear();
-			    /*
-			    uint16_t hiclusternum = qFromLittleEndian<uint16_t>(curimg->ReadContent(rootdiroffset + j*32 + 20, 2)); // always zero for fat12/16
-			    uint16_t loclusternum = qFromLittleEndian<uint16_t>(curimg->ReadContent(rootdiroffset + j*32 + 26, 2));
-			    uint32_t clusternum = ((uint32_t)hiclusternum >> 16) + loclusternum;
-			    QList<uint> clusterlist;
-			    clusterlist.clear();
-			    if(clusternum >= 2)
-			    {
-				clusterlist.append(clusternum);
-				GetNextCluster(curimg, clusternum, fstype, fatoffset, &clusterlist);
-			    }
-			    QString layout = "";
-			    if(clusterlist.count() > 0)
-				layout = ConvertBlocksToExtents(clusterlist, sectorspercluster * bytespersector, clusterareastart * bytespersector);
-			    out << "Layout|" << layout << "|File offset,size; layout in bytes." << Qt::endl;
-			    */
+			    std::cout << "layout: " << layout << std::endl;
+			    return layout;
 			}
 		    }
 		    longnamestring = "";
@@ -528,7 +563,9 @@ uint32_t ParseFatPath(std::ifstream* rawcontent, fatinfo* curfat, std::string ch
 	}
     }
 
-    return 2;
+    return "";
+
+    //return 2;
 }
 
 /*

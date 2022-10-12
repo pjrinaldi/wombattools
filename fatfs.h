@@ -14,7 +14,8 @@ struct fatinfo
     uint32_t fatsize = 0;
     uint64_t clusterareastart = 0;
     std::string rootdirlayout = "";
+    std::string curdirlayout = "";
 };
 
 void ParseFatInfo(std::ifstream* rawcontent, fatinfo* curfat);
-uint32_t ParseFatPath(std::ifstream* rawcontent, fatinfo* curfat, std::string childpath);
+std::string ParseFatPath(std::ifstream* rawcontent, fatinfo* curfat, std::string childpath);
