@@ -1,6 +1,5 @@
 #include "common.h"
 
-
 struct fatinfo
 {
     uint16_t bytespersector = 0;

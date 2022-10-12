@@ -396,15 +396,12 @@ std::string ParseFatPath(std::ifstream* rawcontent, fatinfo* curfat, std::string
 	std::size_t layoutsplit = dirlayoutlist.at(i).find(",");
 	if(i == 0)
 	{
-	    if(isrootdir == 1) // root directory
+	    diroffset = std::stoull(dirlayoutlist.at(i).substr(0, layoutsplit));
+	    dirlength = std::stoull(dirlayoutlist.at(i).substr(layoutsplit+1));
+	    if(isrootdir == 0) // sub directory
 	    {
-		diroffset = std::stoull(dirlayoutlist.at(i).substr(0, layoutsplit));
-		dirlength = std::stoull(dirlayoutlist.at(i).substr(layoutsplit+1));
-	    }
-	    else // sub directory
-	    {
-		diroffset = std::stoull(dirlayoutlist.at(i).substr(0, layoutsplit)) + 64; // skip . and .. directories
-		dirlength = std::stoull(dirlayoutlist.at(i).substr(layoutsplit+1)) - 64; // adjust read size for the 64 byte skip
+		diroffset = diroffset + 64; // skip . and .. directories
+		dirlength = dirlength - 64; // adjust read size for the 64 byte skip
 	    }
 	}
 	//std::cout << "dir offset: " << diroffset << " dir length: " << dirlength << std::endl;
@@ -663,7 +660,7 @@ std::string ParseFatFile(std::ifstream* rawcontent, fatinfo* curfat, std::string
 			    layout = ConvertClustersToExtents(&clusterlist, curfat);
 			}
 			clusterlist.clear();
-			fileforensics += "Physical Layout (offset,size;)|" + layout + "\n";
+			fileforensics += "Physical Layout|" + layout + " (offset,size;) [bytes]\n";
 			//std::cout << "layout: " << layout << std::endl;
 			// GET DATE/TIME's
 			uint8_t* cd = new uint8_t[2];
