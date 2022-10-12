@@ -1,5 +1,93 @@
 #include "fatfs.h"
 
+void GetNextCluster(std::ifstream* rawcontent, uint32_t clusternum, uint8_t ftype, uint32_t fatoffset, std::vector<uint32_t>* clusterlist)
+{
+    uint32_t curcluster = 0;
+    int fatbyte1 = 0;
+    if(ftype == 1) // FAT 12
+    {
+	fatbyte1 = clusternum + (clusternum / 2);
+	uint8_t* cc = new uint8_t[2];
+	uint16_t ccluster = 0;
+	ReadContent(rawcontent, cc, fatoffset + fatbyte1, 2);
+	ReturnUint16(&ccluster, cc);
+	delete[] cc;
+	if(clusternum & 0x0001) // ODD
+	{
+	    curcluster = ccluster >> 4;
+	}
+	else // EVEN
+	{
+	    curcluster = ccluster & 0x0FFF;
+	}
+	if(curcluster < 0x0FF7 && curcluster >= 2)
+	{
+	    clusterlist->push_back(curcluster);
+	    GetNextCluster(rawcontent, curcluster, ftype, fatoffset, clusterlist);
+	}
+    }
+    else if(ftype == 2) // FAT16
+    {
+    }
+    else if(ftype == 3) // FAT32
+    {
+    }
+    else if(ftype == 4) // EXFAT
+    {
+    }
+}
+
+std::string ConvertClustersToExtents(std::vector<uint32_t>* clusterlist, uint32_t clustersize, uint64_t rootdiroffset)
+{
+    std::string extentstring = "";
+
+    return extentstring;
+}
+
+/*
+QString ConvertBlocksToExtents(QList<uint> blocklist, uint blocksize, qulonglong rootdiroffset)
+{
+    // FirstSectorOfCluster = ((N-2) * sectorspercluster) + firstdatasector [rootdirstart];
+    //QString rootdirlayout = QString::number(rootdiroffset + ((rootdircluster - 2) * sectorspercluster * bytespersector)) + "," + QString::number(sectorspercluster * bytespersector) + ";";
+    QString extentstring = "";
+    int blkcnt = 1;
+    uint startvalue = blocklist.at(0);
+    for(int i=1; i < blocklist.count(); i++)
+    {
+        uint oldvalue = blocklist.at(i-1);
+        uint newvalue = blocklist.at(i);
+        if(newvalue - oldvalue == 1)
+            blkcnt++;
+        else
+        {
+            if(rootdiroffset > 0)
+                extentstring += QString::number(rootdiroffset + ((startvalue - 2) * blocksize)) + "," + QString::number(blkcnt * blocksize) + ";";
+            else
+                extentstring += QString::number(startvalue * blocksize) + "," + QString::number(blkcnt * blocksize) + ";";
+            startvalue = blocklist.at(i);
+            blkcnt = 1;
+        }
+        if(i == blocklist.count() - 1)
+        {
+            if(rootdiroffset > 0)
+                extentstring += QString::number(rootdiroffset + ((startvalue - 2) * blocksize)) + "," + QString::number(blkcnt * blocksize) + ";";
+            else
+                extentstring += QString::number(startvalue * blocksize) + "," + QString::number(blkcnt * blocksize) + ";";
+            startvalue = blocklist.at(i);
+            blkcnt = 1;
+        }
+    }
+    if(blocklist.count() == 1)
+    {
+        if(rootdiroffset > 0)
+            extentstring += QString::number(rootdiroffset + ((startvalue - 2) * blocksize)) + "," + QString::number(blkcnt * blocksize) + ";";
+        else
+            extentstring += QString::number(startvalue * blocksize) + "," + QString::number(blkcnt * blocksize) + ";";
+    }
+
+    return extentstring;
+}
+*/
 /*
 void GetNextCluster(ForImg* curimg, uint32_t clusternum, uint8_t fstype, qulonglong fatoffset, QList<uint>* clusterlist)
 {
@@ -175,9 +263,9 @@ else if(exfatstr == "EXFAT")
 
  */
 
-void ParseFatInfo(std::ifstream* rawcontent, fatinfo* curfat, uint8_t ftype)
+void ParseFatInfo(std::ifstream* rawcontent, fatinfo* curfat)
 {
-    if(ftype == 1 || ftype == 2)
+    if(curfat->fattype == 1 || curfat->fattype == 2)
     {
         uint8_t* bps = new uint8_t[2];
         uint16_t bytespersector = 0;
@@ -185,44 +273,44 @@ void ParseFatInfo(std::ifstream* rawcontent, fatinfo* curfat, uint8_t ftype)
         ReturnUint16(&bytespersector, bps);
         delete[] bps;
         curfat->bytespersector = bytespersector;
-        std::cout << "Bytes Per Sector: " << bytespersector << std::endl;
+        //std::cout << "Bytes Per Sector: " << bytespersector << std::endl;
         uint8_t* fc = new uint8_t[1];
         uint8_t fatcount = 0;
         ReadContent(rawcontent, fc, 16, 1);
         fatcount = (uint8_t)fc[0];
         delete[] fc;
-        std::cout << "Fat Count: " << (unsigned int)fatcount << std::endl;
+        //std::cout << "Fat Count: " << (unsigned int)fatcount << std::endl;
         uint8_t* spc = new uint8_t[1];
         uint8_t sectorspercluster = 0;
         ReadContent(rawcontent, spc, 13, 1);
         sectorspercluster = (uint8_t)spc[0];
         delete[] spc;
         curfat->sectorspercluster = sectorspercluster;
-        std::cout << "Sectors per cluster: " << (unsigned int)sectorspercluster << std::endl;
+        //std::cout << "Sectors per cluster: " << (unsigned int)sectorspercluster << std::endl;
         uint8_t* ras = new uint8_t[2];
         uint16_t reservedareasize = 0;
         ReadContent(rawcontent, ras, 14, 2);
         ReturnUint16(&reservedareasize, ras);
         delete[] ras;
-        std::cout << "Reserved Area Size: " << reservedareasize << std::endl;
+        //std::cout << "Reserved Area Size: " << reservedareasize << std::endl;
         curfat->fatoffset = reservedareasize * bytespersector;
-        std::cout << "Fat Offset: " << curfat->fatoffset << std::endl;
+        //std::cout << "Fat Offset: " << curfat->fatoffset << std::endl;
         uint8_t* fs = new uint8_t[2];
         uint16_t fatsize = 0;
         ReadContent(rawcontent, fs, 22, 2);
         ReturnUint16(&fatsize, fs);
         delete[] fs;
         curfat->fatsize = fatsize;
-        std::cout << "Fat Size: " << fatsize << std::endl;
+        //std::cout << "Fat Size: " << fatsize << std::endl;
         uint8_t* rdmf = new uint8_t[2];
         uint16_t rootdirmaxfiles = 0;
         ReadContent(rawcontent, rdmf, 17, 2);
         ReturnUint16(&rootdirmaxfiles, rdmf);
         delete[] rdmf;
-        std::cout << "Root Dir Max Files: " << rootdirmaxfiles << std::endl;
-        std::cout << "Cluster Area Start: " << reservedareasize + fatcount * fatsize + ((rootdirmaxfiles * 32) + (bytespersector - 1)) / bytespersector << std::endl;
+        //std::cout << "Root Dir Max Files: " << rootdirmaxfiles << std::endl;
+        //std::cout << "Cluster Area Start: " << reservedareasize + fatcount * fatsize + ((rootdirmaxfiles * 32) + (bytespersector - 1)) / bytespersector << std::endl;
         curfat->rootdirlayout = std::to_string((reservedareasize + fatcount * fatsize) * bytespersector) + "," + std::to_string(rootdirmaxfiles * 32 + bytespersector - 1) + ";";
-        std::cout << "Root Directory Layout: " << curfat->rootdirlayout << std::endl;
+        //std::cout << "Root Directory Layout: " << curfat->rootdirlayout << std::endl;
     }
 
     /*
@@ -239,8 +327,9 @@ void ParseFatForensics(std::string filename, std::string mntptstr, std::string d
     // FTYPE = 1 (FAT12) = 2 (FAT16) = 3 (FAT32) = 4 (EXFAT)
     
     fatinfo curfat;
+    curfat.fattype = ftype;
     // GET FAT FILESYSTEM INFO
-    ParseFatInfo(&devicebuffer, &curfat, ftype);
+    ParseFatInfo(&devicebuffer, &curfat);
     std::string pathstring = "";
     if(mntptstr.compare("/") == 0)
         pathstring = filename;
@@ -249,7 +338,7 @@ void ParseFatForensics(std::string filename, std::string mntptstr, std::string d
         std::size_t initpos = filename.find(mntptstr);
         pathstring = filename.substr(initpos + mntptstr.size());
     }
-    std::cout << "pathstring: " << pathstring << std::endl;
+    //std::cout << "pathstring: " << pathstring << std::endl;
     // SPLIT CURRENT FILE PATH INTO DIRECTORY STEPS
     std::vector<std::string> pathvector;
     std::istringstream iss(pathstring);
@@ -257,7 +346,7 @@ void ParseFatForensics(std::string filename, std::string mntptstr, std::string d
     while(getline(iss, pp, '/'))
         pathvector.push_back(pp);
 
-    std::cout << "path vector size: " << pathvector.size() << std::endl;
+    //std::cout << "path vector size: " << pathvector.size() << std::endl;
     // PARSE ROOT DIRECTORY OF THE MOUNTED FILE SYSTEM
     uint32_t returninode = 0;
     returninode = ParseFatPath(&devicebuffer, &curfat, pathvector.at(1));
@@ -301,9 +390,9 @@ uint32_t ParseFatPath(std::ifstream* rawcontent, fatinfo* curfat, std::string ch
 	std::size_t layoutsplit = rootdirlayoutlist.at(i).find(",");
 	uint64_t rootdiroffset = std::stoull(rootdirlayoutlist.at(i).substr(0, layoutsplit));
 	uint64_t rootdirlength = std::stoull(rootdirlayoutlist.at(i).substr(layoutsplit+1));
-	std::cout << "root dir offset: " << rootdiroffset << " root dir length: " << rootdirlength << std::endl;
+	//std::cout << "root dir offset: " << rootdiroffset << " root dir length: " << rootdirlength << std::endl;
 	unsigned int rootdirentrycount = rootdirlength / 32;
-	std::cout << "root dir entry count: " << rootdirentrycount << std::endl;
+	//std::cout << "root dir entry count: " << rootdirentrycount << std::endl;
 	// PARSE DIRECTORY ENTRIES
 	std::string longnamestring = "";
 	for(unsigned int j=0; j < rootdirentrycount; j++)
@@ -327,12 +416,9 @@ uint32_t ParseFatPath(std::ifstream* rawcontent, fatinfo* curfat, std::string ch
                 delete[] fa;
                 if(fileattr == 0x0f || fileattr == 0x3f) // Long Directory Name
                 {
-		    //std::cout << "first char: " << (char)firstchar << " int: " << (int)firstchar << " mask: " << ((int)firstchar & 0x4f)  << " OR'ed mask: " << ((int)firstchar & 0x0f) << std::endl;
-                    // long name is 260 / 13, so no more than 20 names
                     unsigned int lsn = ((int)firstchar & 0x0f);
                     if(lsn <= 20)
                     {
-                        //std::cout << "lfn sequence number: " << ((int)firstchar & 0x4f) << std::endl;
                         // process long file name part here... then add to the long file name...
                         std::string longname = "";
                         int arr[13] = {1, 3, 5, 7, 9, 14, 16, 18, 20, 22, 24, 28, 30};
@@ -346,56 +432,63 @@ uint32_t ParseFatPath(std::ifstream* rawcontent, fatinfo* curfat, std::string ch
                             if(longletter < 0xFFFF)
                             {
                                 longname += (char)longletter;
-                                //std::cout << "long letter "<< arr[k] << " has value: " << (char)longletter << std::endl;
                             }
                         }
-		        //std::cout << "long name: " << l1 << "|" << std::endl;
                         longnamestring.insert(0, longname);
-		        //longnamestring.insert(0, l1);
-                        if(lsn == 1)
-                        {
-			    //longnamestring.insert(0, longname);
-                            // add long file name part here, then store in string and then
-                            // reset to empty so i can get the next one.
-                            //longnamestring = longname;
-                            longname = "";
-                            std::cout << "long name: " << longnamestring << "|" << std::endl;
-                        }
                     }
                 }
-                if(fileattr == 0x10) // directory type, so do get name now
-                {
-                    std::cout << "long name: " << longnamestring << "|" << std::endl;
-                    longnamestring = "";
-                }
+		else
+		{
+		    if(fileattr == 0x10)
+		    {
+			//std::cout << "long name: " << longnamestring << "|" << std::endl;
+			if(longnamestring.find(childpath) != std::string::npos)
+			{
+			    uint8_t* hcn = new uint8_t[2];
+			    uint16_t hiclusternum = 0;
+			    ReadContent(rawcontent, hcn, rootdiroffset + j*32 + 20, 2); // always zero for fat12/16
+			    ReturnUint16(&hiclusternum, hcn);
+			    delete[] hcn;
+			    uint8_t* lcn = new uint8_t[2];
+			    uint16_t loclusternum = 0;
+			    ReadContent(rawcontent, lcn, rootdiroffset + j*32 + 26, 2);
+			    ReturnUint16(&loclusternum, lcn);
+			    delete[] lcn;
+			    uint32_t clusternum = ((uint32_t)hiclusternum >> 16) + loclusternum;
+			    std::vector<uint32_t> clusterlist;
+			    clusterlist.clear();
+			    if(clusternum >= 2)
+			    {
+				clusterlist.push_back(clusternum);
+				GetNextCluster(rawcontent, clusternum, curfat->fattype, curfat->fatoffset, &clusterlist);
+			    }
+			    std::string layout = "";
+			    if(clusterlist.size() > 0)
+				layout = ConvertClustersToExtents(&clusterlist, curfat->sectorspercluster * curfat->bytespersector, rootdiroffset);
+//std::string ConvertClustersToExtents(std::vector<uint32_t>* clusterlist, uint32_t blocksize, uint64_t rootdiroffset);
+			    clusterlist.clear();
+			    /*
+			    uint16_t hiclusternum = qFromLittleEndian<uint16_t>(curimg->ReadContent(rootdiroffset + j*32 + 20, 2)); // always zero for fat12/16
+			    uint16_t loclusternum = qFromLittleEndian<uint16_t>(curimg->ReadContent(rootdiroffset + j*32 + 26, 2));
+			    uint32_t clusternum = ((uint32_t)hiclusternum >> 16) + loclusternum;
+			    QList<uint> clusterlist;
+			    clusterlist.clear();
+			    if(clusternum >= 2)
+			    {
+				clusterlist.append(clusternum);
+				GetNextCluster(curimg, clusternum, fstype, fatoffset, &clusterlist);
+			    }
+			    QString layout = "";
+			    if(clusterlist.count() > 0)
+				layout = ConvertBlocksToExtents(clusterlist, sectorspercluster * bytespersector, clusterareastart * bytespersector);
+			    out << "Layout|" << layout << "|File offset,size; layout in bytes." << Qt::endl;
+			    */
+			}
+		    }
+		    longnamestring = "";
+		}
             }
             /*
-            if(fileattr == 0x0f || fileattr == 0x3f) // long directory entry for succeeding short entry...
-	    {
-		//std::cout << "get long directory name here, which should come after short entry..." << std::endl;
-		std::string l3 = "";
-		std::string l2 = "";
-		std::string l1 = "";
-		//for(int k=0; k < int array.size(); k++) int array [28, 30, 14, 16, 18, 20, 22, 24, 1, 3, 5, 7, 9]
-		//int arr[13] =  {28, 30, 14, 16, 18, 20, 22, 24, 1, 3, 5, 7, 9};
-		int arr2[13] = {1, 3, 5, 7, 9, 14, 16, 18, 20, 22, 24, 28, 30};
-		for(int k=0; k < 13; k++)
-		{
-		    uint16_t longletter = 0;
-		    uint8_t* ll = new uint8_t[3];
-		    ReadContent(rawcontent, ll, rootdiroffset + j*32 + arr2[k], 2);
-		    ReturnUint16(&longletter, ll);
-		    delete[] ll;
-		    if(longletter < 0xFFFF)
-		    {
-			l1 += (char)longletter;
-			//std::cout << "long letter "<< arr[k] << " has value: " << (char)longletter << std::endl;
-		    }
-		}
-		//std::cout << "long name: " << l1 << "|" << std::endl;
-		longnamestring.insert(0, l1);
-
-	    }
             if(fileattr & 0x10)
 	    {
 		if(!longnamestring.empty())
@@ -403,14 +496,7 @@ uint32_t ParseFatPath(std::ifstream* rawcontent, fatinfo* curfat, std::string ch
 		    std::cout << "long name: " << longnamestring << "|" << std::endl;
 		    longnamestring = "";
 		}
-                //if(!longnamestring.isEmpty())
-		std::cout << "first char: " << std::hex << (int)firstchar << std::endl;
 		std::cout << "File Attribute: " << std::hex << (int)fileattr << std::endl;
-                std::cout << " Current Directory Entry is a Sub Directory, get name and see if it matches childpath\n";
-		if(firstchar == 0xe5 || firstchar == 0x05) // was allocated but now free
-		{
-		    std::cout << "deleted, so skip..\n";
-		}
 		uint8_t* rname = new uint8_t[8];
 		ReadContent(rawcontent, rname, rootdiroffset + j*32 + 1, 7);
 		rname[7] = '\0';
