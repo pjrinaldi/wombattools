@@ -325,13 +325,14 @@ uint32_t ParseFatPath(std::ifstream* rawcontent, fatinfo* curfat, std::string ch
                 ReadContent(rawcontent, fa, rootdiroffset + j*32 + 11, 1);
                 fileattr = (uint8_t)fa[0];
                 delete[] fa;
-                if(fileattr == 0x0f || fileattr == 0x3f)
+                if(fileattr == 0x0f || fileattr == 0x3f) // Long Directory Name
                 {
+		    //std::cout << "first char: " << (char)firstchar << " int: " << (int)firstchar << " mask: " << ((int)firstchar & 0x4f)  << " OR'ed mask: " << ((int)firstchar & 0x0f) << std::endl;
                     // long name is 260 / 13, so no more than 20 names
-                    unsigned int lsn = ((int)firstchar & 0x4f);
+                    unsigned int lsn = ((int)firstchar & 0x0f);
                     if(lsn <= 20)
                     {
-                        std::cout << "lfn sequence number: " << ((int)firstchar & 0x4f) << std::endl;
+                        //std::cout << "lfn sequence number: " << ((int)firstchar & 0x4f) << std::endl;
                         // process long file name part here... then add to the long file name...
                         std::string longname = "";
                         int arr[13] = {1, 3, 5, 7, 9, 14, 16, 18, 20, 22, 24, 28, 30};
@@ -353,6 +354,7 @@ uint32_t ParseFatPath(std::ifstream* rawcontent, fatinfo* curfat, std::string ch
 		        //longnamestring.insert(0, l1);
                         if(lsn == 1)
                         {
+			    //longnamestring.insert(0, longname);
                             // add long file name part here, then store in string and then
                             // reset to empty so i can get the next one.
                             //longnamestring = longname;
