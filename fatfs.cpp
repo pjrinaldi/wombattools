@@ -79,48 +79,6 @@ std::string ConvertClustersToExtents(std::vector<uint32_t>* clusterlist, uint32_
 }
 
 /*
-QString ConvertBlocksToExtents(QList<uint> blocklist, uint blocksize, qulonglong rootdiroffset)
-{
-    QString extentstring = "";
-    int blkcnt = 1;
-    uint startvalue = blocklist.at(0);
-    for(int i=1; i < blocklist.count(); i++)
-    {
-        uint oldvalue = blocklist.at(i-1);
-        uint newvalue = blocklist.at(i);
-        if(newvalue - oldvalue == 1)
-            blkcnt++;
-        else
-        {
-            if(rootdiroffset > 0)
-                extentstring += QString::number(rootdiroffset + ((startvalue - 2) * blocksize)) + "," + QString::number(blkcnt * blocksize) + ";";
-            else
-                extentstring += QString::number(startvalue * blocksize) + "," + QString::number(blkcnt * blocksize) + ";";
-            startvalue = blocklist.at(i);
-            blkcnt = 1;
-        }
-        if(i == blocklist.count() - 1)
-        {
-            if(rootdiroffset > 0)
-                extentstring += QString::number(rootdiroffset + ((startvalue - 2) * blocksize)) + "," + QString::number(blkcnt * blocksize) + ";";
-            else
-                extentstring += QString::number(startvalue * blocksize) + "," + QString::number(blkcnt * blocksize) + ";";
-            startvalue = blocklist.at(i);
-            blkcnt = 1;
-        }
-    }
-    if(blocklist.count() == 1)
-    {
-        if(rootdiroffset > 0)
-            extentstring += QString::number(rootdiroffset + ((startvalue - 2) * blocksize)) + "," + QString::number(blkcnt * blocksize) + ";";
-        else
-            extentstring += QString::number(startvalue * blocksize) + "," + QString::number(blkcnt * blocksize) + ";";
-    }
-
-    return extentstring;
-}
-*/
-/*
 void GetNextCluster(ForImg* curimg, uint32_t clusternum, uint8_t fstype, qulonglong fatoffset, QList<uint>* clusterlist)
 {
     uint32_t curcluster = 0;
@@ -507,6 +465,7 @@ std::string ParseFatPath(std::ifstream* rawcontent, fatinfo* curfat, std::string
 			    uint32_t clusternum = ((uint32_t)hiclusternum >> 16) + loclusternum;
 			    std::vector<uint32_t> clusterlist;
 			    clusterlist.clear();
+			    std::cout << "first cluster: " << clusternum << std::endl;
 			    if(clusternum >= 2)
 			    {
 				clusterlist.push_back(clusternum);
@@ -526,11 +485,6 @@ std::string ParseFatPath(std::ifstream* rawcontent, fatinfo* curfat, std::string
             /*
             if(fileattr & 0x10)
 	    {
-		if(!longnamestring.empty())
-		{
-		    std::cout << "long name: " << longnamestring << "|" << std::endl;
-		    longnamestring = "";
-		}
 		std::cout << "File Attribute: " << std::hex << (int)fileattr << std::endl;
 		uint8_t* rname = new uint8_t[8];
 		ReadContent(rawcontent, rname, rootdiroffset + j*32 + 1, 7);
