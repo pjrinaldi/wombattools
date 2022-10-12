@@ -1,8 +1,5 @@
 #include "common.h"
 
-void GetNextCluster(std::ifstream* rawcontent, uint32_t clusternum, uint8_t ftype, uint32_t fatoffset, std::vector<uint32_t>* clusterlist);
-std::string ConvertClustersToExtents(std::vector<uint32_t>* clusterlist, uint32_t clustersize, uint64_t rootdiroffset);
-
 void ParseFatForensics(std::string filename, std::string mntptstr, std::string devicestr, uint8_t ftype);
 
 struct fatinfo
@@ -17,5 +14,12 @@ struct fatinfo
     std::string curdirlayout = "";
 };
 
+void GetNextCluster(std::ifstream* rawcontent, uint32_t clusternum, fatinfo* curfat, std::vector<uint32_t>* clusterlist);
+
+std::string ConvertClustersToExtents(std::vector<uint32_t>* clusterlist, fatinfo* curfat);
+
 void ParseFatInfo(std::ifstream* rawcontent, fatinfo* curfat);
+
 std::string ParseFatPath(std::ifstream* rawcontent, fatinfo* curfat, std::string childpath);
+
+std::string ParseFatFile(std::ifstream* rawcontent, fatinfo* curfat, std::string childfile);
