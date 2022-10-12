@@ -1,5 +1,29 @@
 #include "fatfs.h"
 
+std::string ConvertDosTimeToHuman(uint16_t* dosdate, uint16_t* dostime)
+{
+    std::string humanstring = "";
+    humanstring += std::to_string(((*dosdate & 0x1e0) >> 5)); // MONTH
+    humanstring += "/"; // DIVIDER
+    humanstring += std::to_string(((*dosdate & 0x1f) >> 0)); // MONTH
+    humanstring += "/"; // DIVIDER
+    humanstring += std::to_string(((*dosdate & 0xfe00) >> 9) + 1980); // YEAR
+    humanstring += " ";
+    if(dostime == NULL)
+	humanstring += "00:00:00";
+    else
+    {
+	humanstring += std::to_string(((*dostime & 0xf800) >> 11)); // HOUR
+	humanstring += ":";
+	humanstring += std::to_string(((*dostime & 0x7e0) >> 5)); // MINUTE
+	humanstring += ":";
+	humanstring += std::to_string(((*dostime & 0x1f) >> 0) * 2); // SECOND
+    }
+    humanstring += " (UTC)";
+    
+    return humanstring;
+}
+
 void GetNextCluster(std::ifstream* rawcontent, uint32_t clusternum, fatinfo* curfat, std::vector<uint32_t>* clusterlist)
 {
     uint32_t curcluster = 0;
@@ -36,51 +60,6 @@ void GetNextCluster(std::ifstream* rawcontent, uint32_t clusternum, fatinfo* cur
     {
     }
 }
-
-std::string ConvertClustersToExtents(std::vector<uint32_t>* clusterlist, fatinfo* curfat)
-{
-    uint32_t clustersize = curfat->sectorspercluster * curfat->bytespersector;
-    uint64_t rootdiroffset = curfat->clusterareastart * curfat->bytespersector;
-
-    std::string extentstring = "";
-    int blkcnt = 1;
-    uint32_t startvalue = clusterlist->at(0);
-    for(int i=1; i < clusterlist->size(); i++)
-    {
-	uint32_t oldvalue = clusterlist->at(i-1);
-	uint32_t newvalue = clusterlist->at(i);
-	if(newvalue - oldvalue == 1)
-	    blkcnt++;
-	else
-	{
-	    if(rootdiroffset > 0)
-		extentstring += std::to_string(rootdiroffset + ((startvalue - 2) * clustersize)) + "," + std::to_string(blkcnt * clustersize) + ";";
-	    else
-		extentstring += std::to_string(startvalue * clustersize) + "," + std::to_string(blkcnt * clustersize) + ";";
-	    startvalue = clusterlist->at(i);
-	    blkcnt = 1;
-	}
-	if(i == clusterlist->size() - 1)
-	{
-	    if(rootdiroffset > 0)
-		extentstring += std::to_string(rootdiroffset + ((startvalue - 2) * clustersize)) + "," + std::to_string(blkcnt * clustersize) + ";";
-	    else
-		extentstring += std::to_string(startvalue * clustersize) + "," + std::to_string(blkcnt * clustersize) + ";";
-	    startvalue = clusterlist->at(i);
-	    blkcnt = 1;
-	}
-    }
-    if(clusterlist->size() == 1)
-    {
-	if(rootdiroffset > 0)
-	    extentstring += std::to_string(rootdiroffset + ((startvalue - 2) * clustersize)) + "," + std::to_string(blkcnt * clustersize) + ";";
-	else
-	    extentstring += std::to_string(startvalue * clustersize) + "," + std::to_string(blkcnt * clustersize) + ";";
-    }
-
-    return extentstring;
-}
-
 /*
 void GetNextCluster(ForImg* curimg, uint32_t clusternum, uint8_t fstype, qulonglong fatoffset, QList<uint>* clusterlist)
 {
@@ -88,19 +67,6 @@ void GetNextCluster(ForImg* curimg, uint32_t clusternum, uint8_t fstype, qulongl
     int fatbyte1 = 0;
     if(fstype == 1) // FAT12
     {
-        fatbyte1 = clusternum + (clusternum / 2);
-        if(clusternum & 0x0001) // ODD
-            curcluster = (qFromLittleEndian<uint16_t>(curimg->ReadContent(fatoffset + fatbyte1, 2)) >> 4);
-        else // EVEN
-            curcluster = (qFromLittleEndian<uint16_t>(curimg->ReadContent(fatoffset + fatbyte1, 2)) & 0x0FFF);
-        //if(curcluster != 0x0FF7)
-        //    clusterlist->append(curcluster);
-        //if(curcluster < 0x0FF8 && curcluster >= 2)
-        if(curcluster < 0x0FF7 && curcluster >= 2)
-        {
-            clusterlist->append(curcluster);
-            GetNextCluster(curimg, curcluster, fstype, fatoffset, clusterlist);
-        }
     }
     else if(fstype == 2) // FAT16
     {
@@ -150,6 +116,50 @@ void GetNextCluster(ForImg* curimg, uint32_t clusternum, uint8_t fstype, qulongl
     }
 }
 */
+
+std::string ConvertClustersToExtents(std::vector<uint32_t>* clusterlist, fatinfo* curfat)
+{
+    uint32_t clustersize = curfat->sectorspercluster * curfat->bytespersector;
+    uint64_t rootdiroffset = curfat->clusterareastart * curfat->bytespersector;
+
+    std::string extentstring = "";
+    int blkcnt = 1;
+    uint32_t startvalue = clusterlist->at(0);
+    for(int i=1; i < clusterlist->size(); i++)
+    {
+	uint32_t oldvalue = clusterlist->at(i-1);
+	uint32_t newvalue = clusterlist->at(i);
+	if(newvalue - oldvalue == 1)
+	    blkcnt++;
+	else
+	{
+	    if(rootdiroffset > 0)
+		extentstring += std::to_string(rootdiroffset + ((startvalue - 2) * clustersize)) + "," + std::to_string(blkcnt * clustersize) + ";";
+	    else
+		extentstring += std::to_string(startvalue * clustersize) + "," + std::to_string(blkcnt * clustersize) + ";";
+	    startvalue = clusterlist->at(i);
+	    blkcnt = 1;
+	}
+	if(i == clusterlist->size() - 1)
+	{
+	    if(rootdiroffset > 0)
+		extentstring += std::to_string(rootdiroffset + ((startvalue - 2) * clustersize)) + "," + std::to_string(blkcnt * clustersize) + ";";
+	    else
+		extentstring += std::to_string(startvalue * clustersize) + "," + std::to_string(blkcnt * clustersize) + ";";
+	    startvalue = clusterlist->at(i);
+	    blkcnt = 1;
+	}
+    }
+    if(clusterlist->size() == 1)
+    {
+	if(rootdiroffset > 0)
+	    extentstring += std::to_string(rootdiroffset + ((startvalue - 2) * clustersize)) + "," + std::to_string(blkcnt * clustersize) + ";";
+	else
+	    extentstring += std::to_string(startvalue * clustersize) + "," + std::to_string(blkcnt * clustersize) + ";";
+    }
+
+    return extentstring;
+}
 
 /*
  uint16_t bytespersector = qFromLittleEndian<uint16_t>(curimg->ReadContent(curstartsector*512 + 11, 2));
@@ -307,12 +317,6 @@ void ParseFatInfo(std::ifstream* rawcontent, fatinfo* curfat)
 	curfat->curdirlayout = curfat->rootdirlayout;
         //std::cout << "Root Directory Layout: " << curfat->rootdirlayout << std::endl;
     }
-
-    /*
-            uint16_t rootdirmaxfiles = qFromLittleEndian<uint16_t>(curimg->ReadContent(curstartsector*512 + 17, 2));
-            out << "Cluster Area Start|" << curstartsector + reservedareasize + fatcount * fatsize + ((rootdirmaxfiles * 32) + (bytespersector - 1)) / bytespersector << "|Byte offset to the start of the cluster area." << Qt::endl;
-            out << "Root Directory Layout|" << QString(QString::number((qulonglong)(curstartsector*512 + (reservedareasize + fatcount * fatsize) * bytespersector)) + "," + QString::number((rootdirmaxfiles * 32) + (bytespersector - 1)) + ";") << "|Layout for the root directory." << Qt::endl;
-    */
 }
 
 void ParseFatForensics(std::string filename, std::string mntptstr, std::string devicestr, uint8_t ftype)
@@ -341,21 +345,24 @@ void ParseFatForensics(std::string filename, std::string mntptstr, std::string d
     while(getline(iss, pp, '/'))
         pathvector.push_back(pp);
 
-    std::string nextdirlayout = "";
-    nextdirlayout = ParseFatPath(&devicebuffer, &curfat, pathvector.at(1));
-    curfat.curdirlayout = nextdirlayout;
-    //std::cout << "child path: " << pathvector.at(1) << "'s layout: " << nextdirlayout << std::endl;
-
-    //std::cout << "path vector size: " << pathvector.size() << std::endl;
-    for(int i=1; i < pathvector.size() - 2; i++)
+    if(pathvector.size() > 2)
     {
-	nextdirlayout = ParseFatPath(&devicebuffer, &curfat, pathvector.at(i+1));
-	curfat.curdirlayout = nextdirlayout;
-	//std::cout << "child path: " << pathvector.at(i+1) << "'s layout: " << nextdirlayout << std::endl;
-    }
+        std::string nextdirlayout = "";
+	nextdirlayout = ParseFatPath(&devicebuffer, &curfat, pathvector.at(1));
+        curfat.curdirlayout = nextdirlayout;
+	//std::cout << "child path: " << pathvector.at(1) << "'s layout: " << nextdirlayout << std::endl;
 
+        //std::cout << "path vector size: " << pathvector.size() << std::endl;
+	for(int i=1; i < pathvector.size() - 2; i++)
+        {
+	    nextdirlayout = ParseFatPath(&devicebuffer, &curfat, pathvector.at(i+1));
+	    curfat.curdirlayout = nextdirlayout;
+	    //std::cout << "child path: " << pathvector.at(i+1) << "'s layout: " << nextdirlayout << std::endl;
+	}
+    }
     //std::cout << "now to parse fat file: " << pathvector.at(pathvector.size() - 1) << std::endl;
     std::string forensicsinfo = ParseFatFile(&devicebuffer, &curfat, pathvector.at(pathvector.size() - 1));
+    std::cout << forensicsinfo << std::endl;
 
 }
 
@@ -486,62 +493,31 @@ std::string ParseFatPath(std::ifstream* rawcontent, fatinfo* curfat, std::string
 		    longnamestring = "";
 		}
             }
-            /*
-            if(fileattr & 0x10)
-	    {
-		std::cout << "File Attribute: " << std::hex << (int)fileattr << std::endl;
-		uint8_t* rname = new uint8_t[8];
-		ReadContent(rawcontent, rname, rootdiroffset + j*32 + 1, 7);
-		rname[7] = '\0';
-		std::string restname((char*)rname);
-		delete[] rname;
-		std::cout << "file name: " << (char)firstchar << restname << std::endl;
-		uint8_t* ename = new uint8_t[4];
-		ReadContent(rawcontent, ename, rootdiroffset + j*32 + 8, 3);
-		ename[3] = '\0';
-		std::string extname((char*)ename);
-		delete[] ename;
-		std::size_t findempty = 0;
-		while(extname.size() > 0)
-		{
-		    findempty = extname.find(" ", 0);
-		    if(findempty != std::string::npos)
-			extname.erase(findempty, 1);
-		    else
-			break;
-		}
-		std::cout << "extname after find/erase loop: " << extname << "|" << std::endl;
-
-		if(extname.size() > 0)
-		    std::cout << "alias name: " << (char)firstchar << restname + "." + extname << std::endl;
-		else
-		    std::cout << "alias name: " << (char)firstchar << restname << std::endl;
-	    }
-            */
 	}
     }
 
     return "";
-
-    //return 2;
 }
 
 std::string ParseFatFile(std::ifstream* rawcontent, fatinfo* curfat, std::string childfile)
 {
+    // NEED TO SPIT OUT ORIGINAL INFORMATION FOR FILE WHICH IS IN || || PORTIONS
     std::string fileforensics = "";
+    //std::cout << "child file to find: " << childfile << std::endl;
+    //std::cout << "parent directory layout: " << curfat->curdirlayout << std::endl;
 
-    std::cout << "child file to find: " << childfile << std::endl;
+    uint8_t isrootdir = 0;
+    if(curfat->curdirlayout.compare(curfat->rootdirlayout) == 0)
+	isrootdir = 1;
+    else
+	isrootdir = 0;
 
-    return fileforensics;
-    /*
-    std::cout << "child path to find: " << childpath << std::endl;
-    // GET THE DIRECTORY CONTENT OFFSETS/LENGTHS AND THEN LOOP OVER THEM
     std::vector<std::string> dirlayoutlist;
     dirlayoutlist.clear();
-    std::istringstream rdll(curfat->curdirlayout);
-    std::string rdls;
-    while(getline(rdll, rdls, ';'))
-	dirlayoutlist.push_back(rdls);
+    std::istringstream dll(curfat->curdirlayout);
+    std::string dls;
+    while(getline(dll, dls, ';'))
+	dirlayoutlist.push_back(dls);
     for(int i=0; i < dirlayoutlist.size(); i++)
     {
 	uint64_t diroffset = 0;
@@ -549,20 +525,17 @@ std::string ParseFatFile(std::ifstream* rawcontent, fatinfo* curfat, std::string
 	std::size_t layoutsplit = dirlayoutlist.at(i).find(",");
 	if(i == 0)
 	{
-	    if(isrootdir == 1) // root directory
+	    diroffset = std::stoull(dirlayoutlist.at(i).substr(0, layoutsplit));
+	    dirlength = std::stoull(dirlayoutlist.at(i).substr(layoutsplit+1));
+	    if(isrootdir == 0) // sub directory
 	    {
-		diroffset = std::stoull(dirlayoutlist.at(i).substr(0, layoutsplit));
-		dirlength = std::stoull(dirlayoutlist.at(i).substr(layoutsplit+1));
-	    }
-	    else // sub directory
-	    {
-		diroffset = std::stoull(dirlayoutlist.at(i).substr(0, layoutsplit)) + 64; // skip . and .. directories
-		dirlength = std::stoull(dirlayoutlist.at(i).substr(layoutsplit+1)) - 64; // adjust read size for the 64 byte skip
+		diroffset = diroffset + 64; // skip . and .. directories
+		dirlength = dirlength - 64; // adjust read size for the 64 byte skip
 	    }
 	}
-	std::cout << "dir offset: " << diroffset << " dir length: " << dirlength << std::endl;
+	//std::cout << "dir offset: " << diroffset << " dir length: " << dirlength << std::endl;
 	unsigned int direntrycount = dirlength / 32;
-	std::cout << "dir entry count: " << direntrycount << std::endl;
+	//std::cout << "dir entry count: " << direntrycount << std::endl;
 	// PARSE DIRECTORY ENTRIES
 	std::string longnamestring = "";
 	for(unsigned int j=0; j < direntrycount; j++)
@@ -572,13 +545,13 @@ std::string ParseFatFile(std::ifstream* rawcontent, fatinfo* curfat, std::string
 	    ReadContent(rawcontent, fc, diroffset + j*32, 1);
 	    firstchar = (uint8_t)fc[0];
 	    delete[] fc;
-            if(firstchar == 0xe5) // deleted entry, skip
-            {
-            }
-            else if(firstchar == 0x00) // entry is free and all remaining are free
-                break;
-            else
-            {
+	    if(firstchar == 0xe5) // deleted entry, skip
+	    {
+	    }
+	    else if(firstchar == 0x00) // entry is free and all remaining are free
+		break;
+	    else
+	    {
                 uint8_t* fa = new uint8_t[1];
                 uint8_t fileattr = 0;
                 ReadContent(rawcontent, fa, diroffset + j*32 + 11, 1);
@@ -607,314 +580,125 @@ std::string ParseFatFile(std::ifstream* rawcontent, fatinfo* curfat, std::string
                         longnamestring.insert(0, longname);
                     }
                 }
-		else
+		else // parse file contents here...
 		{
-		    if(fileattr == 0x10)
+		    //std::cout << "long name: " << longnamestring << "|" << std::endl;
+		    if(longnamestring.find(childfile) != std::string::npos)
 		    {
-			std::cout << "long name: " << longnamestring << "|" << std::endl;
-			if(longnamestring.find(childpath) != std::string::npos)
+			// PRINT OUT LONG NAME
+			fileforensics += "Long Name|" + longnamestring + "\n";
+			//std::cout << "child file found, parse here..." << std::endl;
+			// GET ALIAS NAME AND PRINT OUT
+			uint8_t* rname = new uint8_t[8];
+			ReadContent(rawcontent, rname, diroffset + j*32 + 1, 7);
+			rname[7] = '\0';
+			std::string restname((char*)rname);
+			delete[] rname;
+			//std::cout << "file name: " << (char)firstchar << restname << std::endl;
+			uint8_t* ename = new uint8_t[4];
+			ReadContent(rawcontent, ename, diroffset + j*32 + 8, 3);
+			ename[3] = '\0';
+			std::string extname((char*)ename);
+			delete[] ename;
+			std::size_t findempty = 0;
+			while(extname.size() > 0)
 			{
-			    uint8_t* hcn = new uint8_t[2];
-			    uint16_t hiclusternum = 0;
-			    ReadContent(rawcontent, hcn, diroffset + j*32 + 20, 2); // always zero for fat12/16
-			    ReturnUint16(&hiclusternum, hcn);
-			    delete[] hcn;
-			    uint8_t* lcn = new uint8_t[2];
-			    uint16_t loclusternum = 0;
-			    ReadContent(rawcontent, lcn, diroffset + j*32 + 26, 2);
-			    ReturnUint16(&loclusternum, lcn);
-			    delete[] lcn;
-			    uint32_t clusternum = ((uint32_t)hiclusternum >> 16) + loclusternum;
-			    std::vector<uint32_t> clusterlist;
-			    clusterlist.clear();
-			    std::cout << "first cluster: " << clusternum << std::endl;
-			    if(clusternum >= 2)
-			    {
-				clusterlist.push_back(clusternum);
-				GetNextCluster(rawcontent, clusternum, curfat, &clusterlist);
-				//GetNextCluster(rawcontent, clusternum, curfat->fattype, curfat->fatoffset, &clusterlist);
-			    }
-			    std::string layout = "";
-			    if(clusterlist.size() > 0)
-			    {
-				layout = ConvertClustersToExtents(&clusterlist, curfat);
-				//layout = ConvertClustersToExtents(&clusterlist, curfat->sectorspercluster * curfat->bytespersector, curfat->clusterareastart * curfat->bytespersector);
-			    }
-			    clusterlist.clear();
-			    std::cout << "layout: " << layout << std::endl;
-			    return layout;
+			    findempty = extname.find(" ", 0);
+			    if(findempty != std::string::npos)
+				extname.erase(findempty, 1);
+			    else
+				break;
 			}
+			//std::cout << "extname after find/erase loop: " << extname << "|" << std::endl;
+			fileforensics += "Alias Name|" + std::string(1, (char)firstchar) + restname;
+			if(extname.size() > 0)
+			    fileforensics += "." + extname + "\n";
+			else
+			    fileforensics += "\n";
+			// GET FILE PROPERTIES
+			fileforensics += "Attributes|";
+			if(fileattr & 0x01)
+			    fileforensics += "Read Only,";
+			if(fileattr & 0x02)
+			    fileforensics += "Hidden File,";
+			if(fileattr & 0x04)
+			    fileforensics += "System File,";
+			if(fileattr & 0x08)
+			    fileforensics += "Volume ID,";
+			if(fileattr & 0x10)
+			    fileforensics += "Sub Directory,";
+			if(fileattr & 0x20)
+			    fileforensics += "Archive File,";
+			fileforensics += "\n";
+			// GET LOGICAL FILE SIZE
+			uint8_t* ls = new uint8_t[4];
+			uint32_t logicalsize = 0;
+			ReadContent(rawcontent, ls, diroffset + j*32 + 28, 4);
+			ReturnUint32(&logicalsize, ls);
+			delete[] ls;
+			fileforensics += "Logical Size|" + std::to_string(logicalsize) + " bytes\n";
+			// GET PHYSICAL FILE SIZE (SHOULD BE LAYOUT)
+			uint8_t* hcn = new uint8_t[2];
+			uint16_t hiclusternum = 0;
+			ReadContent(rawcontent, hcn, diroffset + j*32 + 20, 2); // always zero for fat12/16
+			ReturnUint16(&hiclusternum, hcn);
+			delete[] hcn;
+			uint8_t* lcn = new uint8_t[2];
+			uint16_t loclusternum = 0;
+			ReadContent(rawcontent, lcn, diroffset + j*32 + 26, 2);
+			ReturnUint16(&loclusternum, lcn);
+			delete[] lcn;
+			uint32_t clusternum = ((uint32_t)hiclusternum >> 16) + loclusternum;
+			std::vector<uint32_t> clusterlist;
+			clusterlist.clear();
+			//std::cout << "first cluster: " << clusternum << std::endl;
+			if(clusternum >= 2)
+			{
+			    clusterlist.push_back(clusternum);
+			    GetNextCluster(rawcontent, clusternum, curfat, &clusterlist);
+			}
+			std::string layout = "";
+			if(clusterlist.size() > 0)
+			{
+			    layout = ConvertClustersToExtents(&clusterlist, curfat);
+			}
+			clusterlist.clear();
+			fileforensics += "Physical Layout (offset,size;)|" + layout + "\n";
+			//std::cout << "layout: " << layout << std::endl;
+			// GET DATE/TIME's
+			uint8_t* cd = new uint8_t[2];
+			uint16_t createdate = 0;
+			ReadContent(rawcontent, cd, diroffset + j*32 + 16, 2);
+			ReturnUint16(&createdate, cd);
+			delete[] cd;
+			uint8_t* ct = new uint8_t[2];
+			uint16_t createtime = 0;
+			ReadContent(rawcontent, ct, diroffset + j*32 + 14, 2);
+			ReturnUint16(&createtime, ct);
+			fileforensics += "Create Date|" + ConvertDosTimeToHuman(&createdate, &createtime) + "\n";
+			uint8_t* ad = new uint8_t[2];
+			uint16_t accessdate = 0;
+			ReadContent(rawcontent, ad, diroffset + j*32 + 18, 2);
+			ReturnUint16(&accessdate, ad);
+			delete[] ad;
+			fileforensics += "Access Date|" + ConvertDosTimeToHuman(&accessdate, NULL) + "\n";
+			uint8_t* md = new uint8_t[2];
+			uint16_t modifydate = 0;
+			ReadContent(rawcontent, md, diroffset + j*32 + 24, 2);
+			ReturnUint16(&modifydate, md);
+			delete[] md;
+			uint8_t* mt = new uint8_t[2];
+			uint16_t modifytime = 0;
+			ReadContent(rawcontent, mt, diroffset + j*32 + 22, 2);
+			ReturnUint16(&modifytime, mt);
+			delete[] mt;
+			fileforensics += "Modify Date|" + ConvertDosTimeToHuman(&modifydate, &modifytime) + "\n";
 		    }
 		    longnamestring = "";
 		}
-            }
-            if(fileattr & 0x10)
-	    {
-		std::cout << "File Attribute: " << std::hex << (int)fileattr << std::endl;
-		uint8_t* rname = new uint8_t[8];
-		ReadContent(rawcontent, rname, rootdiroffset + j*32 + 1, 7);
-		rname[7] = '\0';
-		std::string restname((char*)rname);
-		delete[] rname;
-		std::cout << "file name: " << (char)firstchar << restname << std::endl;
-		uint8_t* ename = new uint8_t[4];
-		ReadContent(rawcontent, ename, rootdiroffset + j*32 + 8, 3);
-		ename[3] = '\0';
-		std::string extname((char*)ename);
-		delete[] ename;
-		std::size_t findempty = 0;
-		while(extname.size() > 0)
-		{
-		    findempty = extname.find(" ", 0);
-		    if(findempty != std::string::npos)
-			extname.erase(findempty, 1);
-		    else
-			break;
-		}
-		std::cout << "extname after find/erase loop: " << extname << "|" << std::endl;
-
-		if(extname.size() > 0)
-		    std::cout << "alias name: " << (char)firstchar << restname + "." + extname << std::endl;
-		else
-		    std::cout << "alias name: " << (char)firstchar << restname << std::endl;
 	    }
 	}
     }
-     */ 
-}
 
-/*
-qulonglong ParseFatDirectory(ForImg* curimg, uint32_t curstartsector, uint8_t ptreecnt, qulonglong parinode, QString parfilename, QString dirlayout)
-{
-    if(!dirlayout.isEmpty())
-	rootdirlayout = dirlayout;
-    for(int i=0; i < rootdirlayout.split(";", Qt::SkipEmptyParts).count(); i++)
-    {
-	if(i == 0)
-	    if(dirlayout.isEmpty()) // root directory
-	        rootdiroffset = rootdirlayout.split(";", Qt::SkipEmptyParts).at(i).split(",").at(0).toULongLong();
-		rootdirsize = rootdirlayout.split(";", Qt::SkipEmptyParts).at(i).split(",").at(1).toULongLong();
-	    else // sub directory
-		rootdiroffset = rootdirlayout.split(";", Qt::SkipEmptyParts).at(i).split(",").at(0).toULongLong() + 64; // skip . and .. directories
-		rootdirsize = rootdirlayout.split(";", Qt::SkipEmptyParts).at(i).split(",").at(1).toULongLong() - 64; // adjust read size for the 64 byte skip
-        uint rootdirentrycount = rootdirsize / 32;
-	if(parinode == 0)
-	    inodecnt = 0;
-	else
-	    inodecnt = parinode + 1;
-        for(uint j=0; j < rootdirentrycount; j++)
-        {
-	    QString longname = "";
-            //qDebug() << "firstchar:" << QString::number(firstchar, 16) << "fileattr:" << QString::number(fileattr, 16);
-            if(fileattr != 0x0f && fileattr != 0x00 && fileattr != 0x3f) // need to process differently // 0x3f is ATTR_LONG_NAME_MASK which is a long name entry sub component
-            {
-                if(!longnamestring.isEmpty())
-                {
-                    out << "Long Name|" << longnamestring << "|Long name for the file." << Qt::endl;
-		    longname = longnamestring;
-                    longnamestring = "";
-                }
-                else
-                    out << "Long Name| |Long name for the file." << Qt::endl;
-
-		//uint8_t createtenth = rootdirbuf.at(i*32 + 13); // NOT GOING TO USE RIGHT NOW...
-                qint64 createdate = ConvertDosTimeToUnixTime(qFromLittleEndian<uint8_t>(curimg->ReadContent(rootdiroffset + j*32 + 15, 1)), qFromLittleEndian<uint8_t>(curimg->ReadContent(rootdiroffset + j*32 + 14, 1)), qFromLittleEndian<uint8_t>(curimg->ReadContent(rootdiroffset + j*32 + 17, 1)), qFromLittleEndian<uint8_t>(curimg->ReadContent(rootdiroffset + j*32 + 16, 1)));
-                qint64 accessdate = ConvertDosTimeToUnixTime(0x00, 0x00, qFromLittleEndian<uint8_t>(curimg->ReadContent(rootdiroffset + j*32 + 19, 1)), qFromLittleEndian<uint8_t>(curimg->ReadContent(rootdiroffset + j*32 + 18, 1)));
-                qint64 modifydate = ConvertDosTimeToUnixTime(qFromLittleEndian<uint8_t>(curimg->ReadContent(rootdiroffset + j*32 + 23, 1)), qFromLittleEndian<uint8_t>(curimg->ReadContent(rootdiroffset + j*32 + 22, 1)), qFromLittleEndian<uint8_t>(curimg->ReadContent(rootdiroffset + j*32 + 25, 1)), qFromLittleEndian<uint8_t>(curimg->ReadContent(rootdiroffset + j*32 + 24, 1)));
-                uint16_t hiclusternum = qFromLittleEndian<uint16_t>(curimg->ReadContent(rootdiroffset + j*32 + 20, 2)); // always zero for fat12/16
-                uint16_t loclusternum = qFromLittleEndian<uint16_t>(curimg->ReadContent(rootdiroffset + j*32 + 26, 2));
-                uint32_t clusternum = ((uint32_t)hiclusternum >> 16) + loclusternum;
-                QList<uint> clusterlist;
-                clusterlist.clear();
-                if(clusternum >= 2)
-                {
-                    clusterlist.append(clusternum);
-                    GetNextCluster(curimg, clusternum, fstype, fatoffset, &clusterlist);
-                }
-                QString layout = "";
-                if(clusterlist.count() > 0)
-		    layout = ConvertBlocksToExtents(clusterlist, sectorspercluster * bytespersector, clusterareastart * bytespersector);
-		out << "Layout|" << layout << "|File offset,size; layout in bytes." << Qt::endl;
-                qulonglong physicalsize = clusterlist.count() * sectorspercluster * bytespersector;
-		out << "Physical Size|" << QString::number(physicalsize) << "|Sector Size in Bytes for the file." << Qt::endl;
-                clusterlist.clear();
-		uint32_t logicalsize = 0;
-		uint8_t itemtype = 0;
-		if(fileattr & 0x10) // sub directory attribute
-		{
-		    if(firstchar == 0xe5 || firstchar == 0x05) // deleted directory
-			itemtype = 2;
-		    else // directory
-			itemtype = 3;
-                    qulonglong curdirsize = 0;
-                    int lastdirentry = 0;
-                    int curdircnt = 0;
-                    for(int k = 0; k < layout.split(";", Qt::SkipEmptyParts).count(); k++)
-                    {
-                        curdirsize += layout.split(";").at(k).split(",").at(1).toULongLong();
-                    }
-                    for(int k=0; k < layout.split(";", Qt::SkipEmptyParts).count(); k++)
-                    {
-                        for(uint m=0; m < curdirsize / 32; m++)
-                        {
-                            uint8_t curfirstchar = qFromLittleEndian<uint8_t>(curimg->ReadContent(layout.split(";").at(k).split(",").at(0).toULongLong() + m*32, 1));
-                            if(curfirstchar == 0x00) // entry is free and all remaining are free
-                            {
-                                lastdirentry = curdircnt;
-                                break;
-                            }
-                            curdircnt++;
-                        }
-                    }
-                    logicalsize = lastdirentry * 32;
-		}
-		else
-		{
-		    if(firstchar == 0xe5 || firstchar == 0x05) // deleted file
-			itemtype = 4;
-		    else
-			itemtype = 5;
-		    logicalsize = qFromLittleEndian<uint32_t>(curimg->ReadContent(rootdiroffset + j*32 + 28, 4));
-		}
-		out << "Logical Size|" << QString::number(logicalsize) << "|Size in Bytes for the file." << Qt::endl;
-		//qDebug() << "logicalsize:" << logicalsize;
-		// ADD FILE INFO TO THE NODE TREE...
-		QString filepath = "";
-		QString filename = "";
-		if(longname.isEmpty())
-		    filename = aliasname;
-		else
-		    filename = longname;
-		QHash<QString, QVariant> nodedata;
-		nodedata.clear();
-		nodedata.insert("name", QByteArray(filename.toStdString().c_str()).toBase64());
-		if(parfilename.isEmpty())
-		    filepath = "/";
-		else
-		    filepath = parfilename;
-		nodedata.insert("path", QByteArray(filepath.toUtf8()).toBase64());
-                nodedata.insert("size", logicalsize);
-                nodedata.insert("create", createdate);
-                nodedata.insert("access", accessdate);
-                nodedata.insert("modify", modifydate);
-                //nodedata.insert("status", "0");
-                //nodedata.insert("hash", "0");
-		if(logicalsize > 0) // Get Category/Signature
-		{
-		    if(itemtype == 3 && isdeleted == 0)
-                    {
-			nodedata.insert("cat", "Directory");
-                        nodedata.insert("sig", "Directory"); // category << signature
-                    }
-		    else
-		    {
-			//QString catsig = GenerateCategorySignature(curimg, filename, layout); might not need this method, could just read more and see if it has word/ in hex.
-			QString catsig = GenerateCategorySignature(curimg, filename, layout.split(";").at(0).split(",").at(0).toULongLong());
-			//qDebug() << filename.left(20) << catsig;
-                        nodedata.insert("cat", catsig.split("/").first());
-                        nodedata.insert("sig", catsig.split("/").last());
-		    }
-		}
-                else
-                {
-                    nodedata.insert("cat", "Empty");
-                    nodedata.insert("sig", "Zero File");
-                }
-                //nodedata.insert("tag", "0");
-                nodedata.insert("id", QString("e" + curimg->MountPath().split("/").last().split("-e").last() + "-p" + QString::number(ptreecnt) + "-f" + QString::number(inodecnt)));
-		//nodedata.insert("match", 0);
-                QString parentstr = "";
-                if(parinode == 0)
-                    parentstr = QString("e" + curimg->MountPath().split("/").last().split("-e").last() + "-p" + QString::number(ptreecnt));
-                else
-                    parentstr = QString("e" + curimg->MountPath().split("/").last().split("-e").last() + "-p" + QString::number(ptreecnt) + "-f" + QString::number(parinode));
-                mutex.lock();
-                treenodemodel->AddNode(nodedata, parentstr, itemtype, isdeleted);
-                mutex.unlock();
-                if(nodedata.value("id").toString().split("-").count() == 3)
-                {
-                    listeditems.append(nodedata.value("id").toString());
-                    filesfound++;
-                    isignals->ProgUpd();
-                }
-                inodecnt++;
-                out.flush();
-                fileprop.close();
-                nodedata.clear();
-		//qDebug() << "inodecnt:" << inodecnt << filename << layout;
-                if(fileattr & 0x10 && logicalsize > 0) // sub directory
-                {
-                    if(firstchar != 0xe5 && firstchar != 0x05) // not deleted
-			inodecnt = ParseFatDirectory(curimg, curstartsector, ptreecnt, inodecnt-1, QString(filepath + filename + "/"), layout);
-                }
-            }
-            else if(fileattr == 0x0f || 0x3f) // long directory entry for succeeding short entry...
-            {
-                if(firstchar & 0x40)
-                {
-                    if(!longnamestring.isEmpty()) // orphan long entry
-                    {
-			QHash<QString, QVariant> nodedata;
-			nodedata.clear();
-			nodedata.insert("name", QByteArray(longnamestring.toUtf8()).toBase64());
-                        nodedata.insert("path", QByteArray("/orphans/").toBase64());
-                        nodedata.insert("size", 0);
-                        nodedata.insert("create", "0");
-                        nodedata.insert("access", "0");
-                        nodedata.insert("modify", "0");
-                        nodedata.insert("status", "0");
-                        nodedata.insert("hash", "0");
-                        nodedata.insert("cat", "Empty");
-                        nodedata.insert("sig", "Empty File");
-                        nodedata.insert("tag", "0");
-                        nodedata.insert("id", QString("e" + curimg->MountPath().split("/").last().split("-e").last() + "-p" + QString::number(ptreecnt) + "-f" + QString::number(inodecnt)));
-			nodedata.insert("match", 0);
-			mutex.lock();
-			treenodemodel->AddNode(nodedata, QString("e" + curimg->MountPath().split("/").last().split("-e").last() + "-p" + QString::number(ptreecnt) + "-o"), 4, 1);
-			mutex.unlock();
-			nodedata.clear();
-			inodecnt++;
-                        //qDebug() << "orphan:" << longnamestring;
-                        //orphaninfo.clear();
-                        //orphaninfo.insert("filename", QVariant(longnamestring));
-                        //orphanlist->append(orphaninfo);
-                        //orphanlist->append(longnamestring);
-                        longnamestring = "";
-                    }
-                }
-                QString l3 = "";
-                QString l2 = "";
-                QString l1 = "";
-                if(qFromLittleEndian<uint16_t>(curimg->ReadContent(rootdiroffset + j*32 + 28, 2)) < 0xFFFF)
-                    l3 += QString(QChar(qFromLittleEndian<uint16_t>(curimg->ReadContent(rootdiroffset + j*32 + 28, 2))));
-                if(qFromLittleEndian<uint16_t>(curimg->ReadContent(rootdiroffset + j*32 + 30, 2)) < 0xFFFF)
-                    l3 += QString(QChar(qFromLittleEndian<uint16_t>(curimg->ReadContent(rootdiroffset + j*32 + 30, 2))));
-                if(qFromLittleEndian<uint16_t>(curimg->ReadContent(rootdiroffset + j*32 + 14, 2)) < 0xFFFF)
-                    l2 += QString(QChar(qFromLittleEndian<uint16_t>(curimg->ReadContent(rootdiroffset + j*32 + 14, 2))));
-                if(qFromLittleEndian<uint16_t>(curimg->ReadContent(rootdiroffset + j*32 + 16, 2)) < 0xFFFF)
-                    l2 += QString(QChar(qFromLittleEndian<uint16_t>(curimg->ReadContent(rootdiroffset + j*32 + 16, 2))));
-                if(qFromLittleEndian<uint16_t>(curimg->ReadContent(rootdiroffset + j*32 + 18, 2)) < 0xFFFF)
-                    l2 += QString(QChar(qFromLittleEndian<uint16_t>(curimg->ReadContent(rootdiroffset + j*32 + 18, 2))));
-                if(qFromLittleEndian<uint16_t>(curimg->ReadContent(rootdiroffset + j*32 + 20, 2)) < 0xFFFF)
-                    l2 += QString(QChar(qFromLittleEndian<uint16_t>(curimg->ReadContent(rootdiroffset + j*32 + 20, 2))));
-                if(qFromLittleEndian<uint16_t>(curimg->ReadContent(rootdiroffset + j*32 + 22, 2)) < 0xFFFF)
-                    l2 += QString(QChar(qFromLittleEndian<uint16_t>(curimg->ReadContent(rootdiroffset + j*32 + 22, 2))));
-                if(qFromLittleEndian<uint16_t>(curimg->ReadContent(rootdiroffset + j*32 + 24, 2)) < 0xFFFF)
-                    l2 += QString(QChar(qFromLittleEndian<uint16_t>(curimg->ReadContent(rootdiroffset + j*32 + 24, 2))));
-                if(qFromLittleEndian<uint16_t>(curimg->ReadContent(rootdiroffset + j*32 + 1, 2)) < 0xFFFF)
-                    l1 += QString(QChar(qFromLittleEndian<uint16_t>(curimg->ReadContent(rootdiroffset + j*32 + 1, 2))));
-                if(qFromLittleEndian<uint16_t>(curimg->ReadContent(rootdiroffset + j*32 + 3, 2)) < 0xFFFF)
-                    l1 += QString(QChar(qFromLittleEndian<uint16_t>(curimg->ReadContent(rootdiroffset + j*32 + 3, 2))));
-                if(qFromLittleEndian<uint16_t>(curimg->ReadContent(rootdiroffset + j*32 + 5, 2)) < 0xFFFF)
-                    l1 += QString(QChar(qFromLittleEndian<uint16_t>(curimg->ReadContent(rootdiroffset + j*32 + 5, 2))));
-                if(qFromLittleEndian<uint16_t>(curimg->ReadContent(rootdiroffset + j*32 + 7, 2)) < 0xFFFF)
-                    l1 += QString(QChar(qFromLittleEndian<uint16_t>(curimg->ReadContent(rootdiroffset + j*32 + 7, 2))));
-                if(qFromLittleEndian<uint16_t>(curimg->ReadContent(rootdiroffset + j*32 + 9, 2)) < 0xFFFF)
-                    l1 += QString(QChar(qFromLittleEndian<uint16_t>(curimg->ReadContent(rootdiroffset + j*32 + 9, 2))));
-                longnamestring.prepend(QString(l1 + l2 + l3).toUtf8());
-            }
-        }
-    }
-    return inodecnt;
+    return fileforensics;
 }
-*/

@@ -1,6 +1,5 @@
 #include "common.h"
 
-void ParseFatForensics(std::string filename, std::string mntptstr, std::string devicestr, uint8_t ftype);
 
 struct fatinfo
 {
@@ -14,12 +13,11 @@ struct fatinfo
     std::string curdirlayout = "";
 };
 
-void GetNextCluster(std::ifstream* rawcontent, uint32_t clusternum, fatinfo* curfat, std::vector<uint32_t>* clusterlist);
-
+std::string ConvertDosTimeToHuman(uint16_t* dosdate, uint16_t* dostime);
 std::string ConvertClustersToExtents(std::vector<uint32_t>* clusterlist, fatinfo* curfat);
-
-void ParseFatInfo(std::ifstream* rawcontent, fatinfo* curfat);
-
 std::string ParseFatPath(std::ifstream* rawcontent, fatinfo* curfat, std::string childpath);
-
 std::string ParseFatFile(std::ifstream* rawcontent, fatinfo* curfat, std::string childfile);
+
+void GetNextCluster(std::ifstream* rawcontent, uint32_t clusternum, fatinfo* curfat, std::vector<uint32_t>* clusterlist);
+void ParseFatInfo(std::ifstream* rawcontent, fatinfo* curfat);
+void ParseFatForensics(std::string filename, std::string mntptstr, std::string devicestr, uint8_t ftype);
