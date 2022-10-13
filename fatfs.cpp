@@ -241,66 +241,64 @@ void ParseFatInfo(std::ifstream* rawcontent, fatinfo* curfat)
     }
     else if(curfat->fattype == 4) // EXFAT
     {
-        /*
-         *      uint32_t fatsize = qFromLittleEndian<uint32_t>(curimg->ReadContent(curstartsector*512 + 84, 4));
-                out << "FAT Size|" << QString::number(fatsize) << "|Size of the FAT." << Qt::endl;
-
-                bytespersector = pow(2, qFromLittleEndian<uint8_t>(curimg->ReadContent(curstartsector*512 + 108, 1))); // power of 2 so 2^(bytespersector)
-                out << "Bytes Per Sector|" << QString::number(bytespersector) << "|Number of bytes per sector, usually 512." << Qt::endl;
-
-                sectorspercluster = pow(2, qFromLittleEndian<uint8_t>(curimg->ReadContent(curstartsector*512 + 109, 1))); // power of 2 so 2^(sectorspercluster)
-                out << "Sectors Per Cluster|" << QString::number(sectorspercluster) << "|Number of sectors per cluster." << Qt::endl;
-
-                fatcount = qFromLittleEndian<uint8_t>(curimg->ReadContent(curstartsector*512 + 110, 1)); // 1 or 2, 2 if TexFAT is in use
-                out << "FAT Count|" << QString::number(fatcount) << "| Number of FAT's in the file system." << Qt::endl;
-		
-                qulonglong fatoffset = (qFromLittleEndian<uint32_t>(curimg->ReadContent(curstartsector*512 + 80, 4)) * bytespersector) + (curstartsector * 512);
-                out << "FAT Offset|" << QString::number(fatoffset) << "|Byte offset to the start of the first FAT." << Qt::endl;
-
-                uint32_t clusterstart = qFromLittleEndian<uint32_t>(curimg->ReadContent(curstartsector*512 + 88, 4));
-                out << "Cluster Area Start|" << QString::number(clusterstart) << "|Sector offset to the start of the cluster area." << Qt::endl;
-
-                uint32_t rootdircluster = qFromLittleEndian<uint32_t>(curimg->ReadContent(curstartsector*512 + 96, 4));
-                qulonglong rootdiroffset = (qulonglong)((curstartsector * 512) + (((rootdircluster - 2) * sectorspercluster) + clusterstart) * bytespersector);
-                out << "Root Directory Offset|" << QString::number(rootdiroffset) << "|Byte offset to the start of the root directory." << Qt::endl;
-                out << "Root Directory Size|" << QString::number(((rootdirmaxfiles * 32) + (bytespersector - 1))) << "|Size in bytes of the root directory." << Qt::endl;
-                //fsinfo.insert("rootdirsectors", QVariant(((fsinfo.value("rootdirmaxfiles").toUInt() * 32) + (fsinfo.value("bytespersector").toUInt() - 1)) / fsinfo.value("bytespersector").toUInt()));
-                //fsinfo.insert("rootdirsize", QVariant(fsinfo.value("rootdirsectors").toUInt() * fsinfo.value("bytespersector").toUInt()));
-                QList<uint> clusterlist;
-                clusterlist.clear();
-                if(rootdircluster >= 2)
-                {
-                    clusterlist.append(rootdircluster);
-                    GetNextCluster(curimg, rootdircluster, 4, fatoffset, &clusterlist);
-                }
-                QString rootdirlayout = ConvertBlocksToExtents(clusterlist, sectorspercluster * bytespersector, clusterstart * bytespersector);
-                out << "Root Directory Layout|" << rootdirlayout << "|Layout for the root directory";
-                //qDebug() << "Extent String:" << rootdirlayout;
-                clusterlist.clear();
-                for(int i=0; i < rootdirlayout.split(";", Qt::SkipEmptyParts).count(); i++)
-                {
-                    uint curoffset = 0;
-                    qDebug() << "i:" << i << "rootdiroffset:" << rootdirlayout.split(";").at(i).split(",").at(0) << "rootdirlength:" << rootdirlayout.split(";").at(i).split(",").at(1);
-                    while(curoffset < rootdirlayout.split(";").at(i).split(",").at(1).toUInt())
-                    {
-                        if(qFromLittleEndian<uint8_t>(curimg->ReadContent(rootdirlayout.split(";").at(i).split(",").at(0).toULongLong() + curoffset, 1)) == 0x83)
-                            break;
-                        curoffset += 32;
-                    }
-                    qDebug() << "curoffset:" << curoffset;
-                    if(curoffset < rootdirlayout.split(";").at(i).split(",").at(1))
-                    {
-                        if(qFromLittleEndian<uint8_t>(curimg->ReadContent(rootdirlayout.split(";").at(i).split(",").at(0).toULongLong() + curoffset + 1, 1)) > 0)
-                        {
-                            for(int j=0; j < qFromLittleEndian<uint8_t>(curimg->ReadContent(rootdirlayout.split(";").at(i).split(",").at(0).toULongLong() + curoffset + 1, 1)); j++)
-                                partitionname += QString(QChar(qFromLittleEndian<uint16_t>(curimg->ReadContent(rootdirlayout.split(";").at(i).split(",").at(0).toULongLong() + curoffset + 2 + j*2, 2))));
-                            qDebug() << "partitionname:" << partitionname;
-                            out << "Volume Label|" << partitionname << "|Label for the file system volume." << Qt::endl;
-                            partitionname += " [EXFAT]";
-                        }
-                    }
-                }
-         */ 
+	// FAT SIZE
+	uint8_t* fs = new uint8_t[4];
+	uint32_t fatsize = 0;
+	ReadContent(rawcontent, fs, 84, 4);
+	ReturnUint32(&fatsize, fs);
+	delete[] fs;
+	curfat->fatsize = fatsize;
+	//std::cout << "FAT Size: " << fatsize << std::endl;
+	// BYTES PER SECTOR
+	uint8_t* bps = new uint8_t[1];
+	ReadContent(rawcontent, bps, 108, 1);
+	uint8_t bpspow = (uint8_t)bps[0];
+	delete[] bps;
+	uint16_t bytespersector = pow(2, bpspow);
+	//std::cout << "Bytes Per Sector: " << bytespersector << std::endl;
+	curfat->bytespersector = bytespersector;
+	// SECTORS PER CLUSTER
+	uint8_t* spc = new uint8_t[1];
+	ReadContent(rawcontent, spc, 109, 1);
+	uint8_t spcpow = (uint8_t)spc[0];
+	delete[] spc;
+	uint16_t sectorspercluster = pow(2, spcpow);
+	//std::cout << "Sectors Per Cluster: " << sectorspercluster << std::endl;
+	curfat->sectorspercluster = sectorspercluster;
+	// FAT OFFSET
+	uint8_t* fo = new uint8_t[4];
+	uint32_t foff = 0;
+	ReadContent(rawcontent, fo, 80, 4);
+	ReturnUint32(&foff, fo);
+	delete[] fo;
+	curfat->fatoffset = foff * curfat->bytespersector;
+	//std::cout << "FAT Offset: " << curfat->fatoffset << std::endl;
+	// CLUSTER AREA START
+	uint8_t* cas = new uint8_t[4];
+	uint32_t clusterareastart = 0;
+	ReadContent(rawcontent, cas, 88, 4);
+	ReturnUint32(&clusterareastart, cas);
+	delete[] cas;
+	curfat->clusterareastart = clusterareastart;
+	//std::cout << "Cluster Area Start: " << clusterareastart << std::endl;
+	// ROOT DIRECTORY LAYOUT
+	uint8_t* rdc = new uint8_t[4];
+	uint32_t rootdircluster = 0;
+	ReadContent(rawcontent, rdc, 96, 4);
+	ReturnUint32(&rootdircluster, rdc);
+	delete[] rdc;
+	std::vector<uint32_t> clusterlist;
+	clusterlist.clear();
+	if(rootdircluster >= 2)
+	{
+	    clusterlist.push_back(rootdircluster);
+	    GetNextCluster(rawcontent, rootdircluster, curfat, &clusterlist);
+	}
+	if(clusterlist.size() > 0)
+	    curfat->rootdirlayout = ConvertClustersToExtents(&clusterlist, curfat);
+	clusterlist.clear();
+	curfat->curdirlayout = curfat->rootdirlayout;
+	//std::cout << "Root Directory Layout: " << curfat->rootdirlayout << std::endl;
     }
 }
 
