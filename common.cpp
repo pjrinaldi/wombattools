@@ -15,3 +15,8 @@ void ReturnUint16(uint16_t* tmp16, uint8_t* tmp8)
 {
     *tmp16 = (uint16_t)tmp8[0] | (uint16_t)tmp8[1] << 8;
 }
+
+void ReturnUint64(uint64_t* tmp64, uint8_t* tmp8)
+{
+    *tmp64 = (uint64_t)tmp8[0] | (uint64_t)tmp8[1] << 8 | (uint64_t)tmp8[2] << 16 | (uint64_t)tmp8[3] << 24 | (uint64_t)tmp8[4] << 32 | (uint64_t)tmp8[5] << 40 | (uint64_t)tmp8[6] << 48 << (uint64_t)tmp8[7] << 56;
+}

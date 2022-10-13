@@ -395,6 +395,22 @@ std::string ParseFatPath(std::ifstream* rawcontent, fatinfo* curfat, std::string
 	std::string longnamestring = "";
 	for(unsigned int j=0; j < direntrycount; j++)
 	{
+	    /* EXFAT STARTING VARIABLES PLACEMENT FOR ACCESS OUTSIDE IF's
+	     *
+		QString filename = "";
+		QString filepath = "";
+		QString layout = "";
+		int fatchain = 0;
+		uint32_t clusternum = qFromLittleEndian<uint32_t>(curimg->ReadContent(rootdiroffset + j*32 + 20, 4));
+		uint64_t logicalsize = 0;
+		uint64_t physicalsize = 0;
+		uint8_t isdeleted = 0;
+		uint8_t itemtype = 0;
+		uint8_t fileattr = 0;
+		qint64 createdate = 0;
+		qint64 accessdate = 0;
+		qint64 modifydate = 0;
+	     */ 
 	    // FIRST CHARACTER
 	    uint8_t* fc = new uint8_t[1];
 	    uint8_t firstchar = 0;
@@ -434,7 +450,56 @@ std::string ParseFatPath(std::ifstream* rawcontent, fatinfo* curfat, std::string
 			ReadContent(rawcontent, set, diroffset + j*32 + k*32, 1);
 			subentrytype = (uint8_t)set[0];
 			delete[] set;
-			std::cout << "Sub entry type: 0x" << std::hex << (int)subentrytype << std::endl;
+			//std::cout << "Sub entry type: 0x" << std::hex << (int)subentrytype << std::endl;
+			if(subentrytype == 0xc0) // Stream Extension Directory Entry
+			{
+			    // NAME LENGTH
+			    uint8_t* nl = new uint8_t[1];
+			    ReadContent(rawcontent, nl, diroffset + (j+k)*32 + 3, 1);
+			    namelength = (uint8_t)nl[0];
+			    delete[] nl;
+			    // FLAGS
+			    uint8_t* ff = new uint8_t[1];
+			    ReadContent(rawcontent, ff, diroffset + (j+k)*32 + 1, 1);
+			    std::bitset<8> flagbits{(uint8_t)ff[0]};
+			    delete[] ff;
+			    //std::cout << "flagbits: " << flagbits << std::endl;
+			    // FAT CHAIN
+			    int fatchain = flagbits[1];
+			    //std::cout << "fatchain: " << fatchain << std::endl;
+			    // LOGICAL SIZE
+			    uint8_t* ls = new uint8_t[8];
+			    uint64_t logicalsize = 0;
+			    ReadContent(rawcontent, ls, diroffset + (j+k)*32 + 8, 8);
+			    ReturnUint64(&logicalsize, ls);
+			    delete[] ls;
+			    //std::cout << "Logical Size: " << logicalsize << std::endl;
+			    // CLUSTER NUM
+			    uint8_t* cn = new uint8_t[4];
+			    uint32_t clusternum = 0;
+			    ReadContent(rawcontent, cn, diroffset + (j+k)*32 + 20, 4);
+			    ReturnUint32(&clusternum, cn);
+			    delete[] cn;
+			    //std::cout << "Cluster Number: " << clusternum << std::endl;
+			    // PHYSICAL SIZE
+			    uint8_t* ps = new uint8_t[8];
+			    uint64_t physicalsize = 0;
+			    ReadContent(rawcontent, ps, diroffset + (j+k)*32 + 24, 8);
+			    ReturnUint64(&physicalsize, ps);
+			    delete[] ps;
+			    //std::cout << "Physical Size: " << physicalsize << std::endl;
+
+			}
+			else if(subentrytype == 0xc1) // File Name Directory Entry
+			{
+			    curlength += 15;
+			    if(curlength <= namelength)
+			    {
+			    }
+			    else
+			    {
+			    }
+			}
 		    }
 
 		}
@@ -445,15 +510,6 @@ std::string ParseFatPath(std::ifstream* rawcontent, fatinfo* curfat, std::string
 		{
 		    uint8_t subentrytype = qFromLittleEndian<uint8_t>(curimg->ReadContent(rootdiroffset + j*32 + k*32, 1));
 		    //qDebug() << "subentrytype:" << QString::number(subentrytype, 16);
-		    if(subentrytype == 0xc0 || subentrytype == 0x40) // Stream Extension Directory Entry
-		    {
-			namelength = qFromLittleEndian<uint8_t>(curimg->ReadContent(rootdiroffset + (j + k)*32 + 3, 1));
-			QString flagstr = QString("%1").arg(qFromLittleEndian<uint8_t>(curimg->ReadContent(rootdiroffset + (j+k)*32 + 1, 1)), 8, 2, QChar('0'));
-			fatchain = flagstr.mid(7, 1).toInt(nullptr, 2);
-			logicalsize = qFromLittleEndian<uint64_t>(curimg->ReadContent(rootdiroffset + (j+k)*32 + 8, 8));
-			clusternum = qFromLittleEndian<uint32_t>(curimg->ReadContent(rootdiroffset + (j+k)*32 + 20, 4));
-			physicalsize = qFromLittleEndian<uint64_t>(curimg->ReadContent(rootdiroffset + (j+k)*32 + 24, 8));
-		    }
 		    else if(subentrytype == 0xc1 || subentrytype == 0x41) // File Name Directory Entry
 		    {
 			curlength += 15;
