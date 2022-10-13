@@ -1386,17 +1386,20 @@ int main(int argc, char* argv[])
                 ParseExtForensics(filename, mntptstr, devicestr);
                 break;
             case 1:
-                std::cout << "FAT12\n";
+                //std::cout << "FAT12\n";
                 ParseFatForensics(filename, mntptstr, devicestr, 1);
                 break;
             case 2:
-                std::cout << "FAT16\n";
+                //std::cout << "FAT16\n";
+		ParseFatForensics(filename, mntptstr, devicestr, 2);
                 break;
             case 3:
-                std::cout << "FAT32\n";
+                //std::cout << "FAT32\n";
+		ParseFatForensics(filename, mntptstr, devicestr, 3);
                 break;
             case 4:
-                std::cout << "EXFAT\n";
+                //std::cout << "EXFAT\n";
+		ParseFatForensics(filename, mntptstr, devicestr, 4);
                 break;
             case 5:
                 std::cout << "NTFS\n";
