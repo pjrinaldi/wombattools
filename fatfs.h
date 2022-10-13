@@ -8,6 +8,7 @@ struct fatinfo
     uint32_t fatoffset = 0;
     uint32_t fatsize = 0;
     uint64_t clusterareastart = 0;
+    uint32_t rootdircluster = 0;
     std::string rootdirlayout = "";
     std::string curdirlayout = "";
 };

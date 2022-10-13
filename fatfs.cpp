@@ -88,6 +88,7 @@ void GetNextCluster(std::ifstream* rawcontent, uint32_t clusternum, fatinfo* cur
     {
         if(clusternum >= 2)
         {
+	    curcluster = 0;
             fatbyte1 = clusternum * 4;
             uint8_t* cc = new uint8_t[4];
             ReadContent(rawcontent, cc, curfat->fatoffset + fatbyte1, 4);
@@ -106,6 +107,12 @@ std::string ConvertClustersToExtents(std::vector<uint32_t>* clusterlist, fatinfo
 {
     uint32_t clustersize = curfat->sectorspercluster * curfat->bytespersector;
     uint64_t rootdiroffset = curfat->clusterareastart * curfat->bytespersector;
+    /*
+    if(curfat->fattype == 4) // EXFAT
+    {
+	rootdiroffset = (((curfat->rootdircluster - 2) * curfat->sectorspercluster) + curfat->clusterareastart) * curfat->bytespersector;
+    }
+    */
 
     std::string extentstring = "";
     int blkcnt = 1;
@@ -287,6 +294,7 @@ void ParseFatInfo(std::ifstream* rawcontent, fatinfo* curfat)
 	ReadContent(rawcontent, rdc, 96, 4);
 	ReturnUint32(&rootdircluster, rdc);
 	delete[] rdc;
+	curfat->rootdircluster = rootdircluster;
 	std::vector<uint32_t> clusterlist;
 	clusterlist.clear();
 	if(rootdircluster >= 2)
@@ -320,7 +328,7 @@ void ParseFatForensics(std::string filename, std::string mntptstr, std::string d
         std::size_t initpos = filename.find(mntptstr);
         pathstring = filename.substr(initpos + mntptstr.size());
     }
-    //std::cout << "pathstring: " << pathstring << std::endl;
+    std::cout << "pathstring: " << pathstring << std::endl;
     // SPLIT CURRENT FILE PATH INTO DIRECTORY STEPS
     std::vector<std::string> pathvector;
     std::istringstream iss(pathstring);
@@ -333,17 +341,17 @@ void ParseFatForensics(std::string filename, std::string mntptstr, std::string d
         std::string nextdirlayout = "";
 	nextdirlayout = ParseFatPath(&devicebuffer, &curfat, pathvector.at(1));
         curfat.curdirlayout = nextdirlayout;
-	//std::cout << "child path: " << pathvector.at(1) << "'s layout: " << nextdirlayout << std::endl;
+	std::cout << "child path: " << pathvector.at(1) << "'s layout: " << nextdirlayout << std::endl;
 
-        //std::cout << "path vector size: " << pathvector.size() << std::endl;
+        std::cout << "path vector size: " << pathvector.size() << std::endl;
 	for(int i=1; i < pathvector.size() - 2; i++)
         {
 	    nextdirlayout = ParseFatPath(&devicebuffer, &curfat, pathvector.at(i+1));
 	    curfat.curdirlayout = nextdirlayout;
-	    //std::cout << "child path: " << pathvector.at(i+1) << "'s layout: " << nextdirlayout << std::endl;
+	    std::cout << "child path: " << pathvector.at(i+1) << "'s layout: " << nextdirlayout << std::endl;
 	}
     }
-    //std::cout << "now to parse fat file: " << pathvector.at(pathvector.size() - 1) << std::endl;
+    std::cout << "now to parse fat file: " << pathvector.at(pathvector.size() - 1) << std::endl;
     std::string forensicsinfo = ParseFatFile(&devicebuffer, &curfat, pathvector.at(pathvector.size() - 1));
     std::cout << forensicsinfo << std::endl;
 
@@ -356,15 +364,15 @@ std::string ParseFatPath(std::ifstream* rawcontent, fatinfo* curfat, std::string
     if(curfat->curdirlayout.compare(curfat->rootdirlayout) == 0)
     {
 	isrootdir = 1;
-	//std::cout << "root dir layout matches curdirlayout" << std::endl;
+	std::cout << "root dir layout matches curdirlayout" << std::endl;
     }
     else
     {
 	isrootdir = 0;
-	//std::cout << "curdirlayout is not rootdirlayout" << std::endl;
+	std::cout << "curdirlayout is not rootdirlayout" << std::endl;
     }
 
-    //std::cout << "child path to find: " << childpath << std::endl;
+    std::cout << "child path to find: " << childpath << std::endl;
     // GET THE DIRECTORY CONTENT OFFSETS/LENGTHS AND THEN LOOP OVER THEM
     std::vector<std::string> dirlayoutlist;
     dirlayoutlist.clear();
@@ -387,9 +395,9 @@ std::string ParseFatPath(std::ifstream* rawcontent, fatinfo* curfat, std::string
 		dirlength = dirlength - 64; // adjust read size for the 64 byte skip
 	    }
 	}
-	//std::cout << "dir offset: " << diroffset << " dir length: " << dirlength << std::endl;
+	std::cout << "dir offset: " << diroffset << " dir length: " << dirlength << std::endl;
 	unsigned int direntrycount = dirlength / 32;
-	//std::cout << "dir entry count: " << direntrycount << std::endl;
+	std::cout << "dir entry count: " << direntrycount << std::endl;
 	// PARSE DIRECTORY ENTRIES
 	std::string longnamestring = "";
 	for(unsigned int j=0; j < direntrycount; j++)
@@ -399,6 +407,7 @@ std::string ParseFatPath(std::ifstream* rawcontent, fatinfo* curfat, std::string
 	    ReadContent(rawcontent, fc, diroffset + j*32, 1);
 	    firstchar = (uint8_t)fc[0];
 	    delete[] fc;
+	    std::cout << "first char: " << (int)firstchar << std::endl;
             if(firstchar == 0xe5) // deleted entry, skip
             {
             }
