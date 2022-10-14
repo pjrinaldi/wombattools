@@ -24,6 +24,40 @@ std::string ConvertDosTimeToHuman(uint16_t* dosdate, uint16_t* dostime)
     return humanstring;
 }
 
+/*
+qint64 ConvertExfatTimeToUnixTime(uint8_t t1, uint8_t t2, uint8_t d1, uint8_t d2, uint8_t utc)
+{
+    int year = 0;
+    int month = 0;
+    int day = 0;
+    int hour = 0;
+    int min = 0;
+    int sec = 0;
+    int offsetsecs = 0;
+    QString tmpdate = QString("%1%2").arg(d1, 8, 2, QChar('0')).arg(d2, 8, 2, QChar('0'));
+    QString tmptime = QString("%1%2").arg(t1, 8, 2, QChar('0')).arg(t2, 8, 2, QChar('0'));
+    QString utcstr = QString("%1").arg(utc, 8, 2, QChar('0'));
+    year = tmpdate.left(7).toInt(nullptr, 2) + 1980;
+    month = tmpdate.mid(7, 4).toInt(nullptr, 2);
+    day = tmpdate.right(5).toInt(nullptr, 2);
+    hour = tmptime.left(5).toInt(nullptr, 2);
+    min = tmptime.mid(5, 6).toInt(nullptr, 2);
+    sec = tmptime.right(5).toInt(nullptr, 2) * 2;
+    //qDebug() << "utcstr:" << utcstr << utcstr.toInt(nullptr, 2) << "utcstr right:" << utcstr.right(1) << utcstr.right(1).toInt(nullptr, 2) << "utcstr left:" << utcstr.left(7) << utcstr.left(7).toInt(nullptr, 2);
+    if(utcstr.right(1).toInt(nullptr, 2) == 1) // apply utc offset
+    {
+        offsetsecs = utcstr.left(7).toInt(nullptr, 2) * 15 * 60; // signed decimal value * 15 to get the number of 15 minute increments * 60 to put it in seconds.
+        //qDebug() << "offset seconds:" << offsetsecs;
+    }
+    QString datetimestring = QString("%1-%2-%3 %4:%5:%6").arg(year, 4, 10, QChar('0')).arg(month, 2, 10, QChar('0')).arg(day, 2, 10, QChar('0')).arg(hour, 2, 10, QChar('0')).arg(min, 2, 10, QChar('0')).arg(sec, 2, 10, QChar('0'));
+    QDateTime tmpdatetime = QDateTime::fromString(datetimestring, "yyyy-MM-dd hh:mm:ss");
+    tmpdatetime.setOffsetFromUtc(-offsetsecs);
+
+    return tmpdatetime.toSecsSinceEpoch();
+}
+
+ */ 
+
 void GetNextCluster(std::ifstream* rawcontent, uint32_t clusternum, fatinfo* curfat, std::vector<uint32_t>* clusterlist)
 {
     uint32_t curcluster = 0;
@@ -711,7 +745,7 @@ std::string ParseFatFile(std::ifstream* rawcontent, fatinfo* curfat, std::string
 			ReadContent(rawcontent, ls, diroffset + (j+k)*32 + 8, 8);
 			ReturnUint64(&logicalsize, ls);
 			delete[] ls;
-			std::cout << "Logical Size: " << logicalsize << std::endl;
+			//std::cout << "Logical Size: " << logicalsize << std::endl;
 			// CLUSTER NUM
 			uint8_t* cn = new uint8_t[4];
 			ReadContent(rawcontent, cn, diroffset + (j+k)*32 + 20, 4);
@@ -723,7 +757,7 @@ std::string ParseFatFile(std::ifstream* rawcontent, fatinfo* curfat, std::string
 			ReadContent(rawcontent, ps, diroffset + (j+k)*32 + 24, 8);
 			ReturnUint64(&physicalsize, ps);
 			delete[] ps;
-			std::cout << "Physical Size: " << physicalsize << std::endl;
+			//std::cout << "Physical Size: " << physicalsize << std::endl;
 		    }
 		    else if(subentrytype == 0xc1) // File Name Directory Entry
 		    {
@@ -756,11 +790,23 @@ std::string ParseFatFile(std::ifstream* rawcontent, fatinfo* curfat, std::string
 			}
 		    }
 		}
-		std::cout << "file name: " << filename << std::endl;
 		if(filename.find(childfile) != std::string::npos)
 		{
-		    std::string layout = "";
 		    //std::cout << "cur file name: " << filename << std::endl;
+		    fileforensics += "File Name|" + filename + "\n";
+		    std::string layout = "";
+		    // GET FILE PROPERTIES
+		    fileforensics += "Attributes|";
+		    if(fileattr & 0x01)
+			fileforensics += "Read Only,";
+		    if(fileattr & 0x02)
+			fileforensics += "Hidden File,";
+		    if(fileattr & 0x04)
+			fileforensics += "System File,";
+		    if(fileattr & 0x10)
+			fileforensics += "Sub Directory,";
+		    if(fileattr & 0x20)
+			fileforensics += "Archive File,\n";
 		    // GET DIRECTORY LAYOUT
 		    if(fatchain == 0 && clusternum > 1)
 		    {
@@ -786,80 +832,9 @@ std::string ParseFatFile(std::ifstream* rawcontent, fatinfo* curfat, std::string
 		qint64 modifydate = 0;
 		 */ 
 	    /*
-			else if(entrytype == 0x85 || entrytype == 0x05) // File/Dir Directory Entry
-			{
-			    uint8_t secondarycount = qFromLittleEndian<uint8_t>(curimg->ReadContent(rootdiroffset + j*32 + 1, 1));
-			    fileattr = qFromLittleEndian<uint8_t>(curimg->ReadContent(rootdiroffset + j*32 + 4, 1));
-			    out << "File Attributes|";
-			    if(fileattr & 0x01)
-				out << "Read Only,";
-			    if(fileattr & 0x02)
-				out << "Hidden File,";
-			    if(fileattr & 0x04)
-				out << "System File,";
-			    if(fileattr & 0x10)
-				out << "Sub Directory,";
-			    if(fileattr & 0x20)
-				out << "Archive File,";
-			    out << "|File attributes." << Qt::endl;
-			    createdate = ConvertExfatTimeToUnixTime(qFromLittleEndian<uint8_t>(curimg->ReadContent(rootdiroffset + j*32 + 9, 1)), qFromLittleEndian<uint8_t>(curimg->ReadContent(rootdiroffset + j*32 + 8, 1)), qFromLittleEndian<uint8_t>(curimg->ReadContent(rootdiroffset + j*32 + 11, 1)), qFromLittleEndian<uint8_t>(curimg->ReadContent(rootdiroffset + j*32 + 10, 1)), qFromLittleEndian<uint8_t>(curimg->ReadContent(rootdiroffset + j*32 + 22, 1)));
-			    modifydate = ConvertExfatTimeToUnixTime(qFromLittleEndian<uint8_t>(curimg->ReadContent(rootdiroffset + j*32 + 13, 1)), qFromLittleEndian<uint8_t>(curimg->ReadContent(rootdiroffset + j*32 + 12, 1)), qFromLittleEndian<uint8_t>(curimg->ReadContent(rootdiroffset + j*32 + 15, 1)), qFromLittleEndian<uint8_t>(curimg->ReadContent(rootdiroffset + j*32 + 14, 1)), qFromLittleEndian<uint8_t>(curimg->ReadContent(rootdiroffset + j*32 + 23, 1)));
-			    accessdate = ConvertExfatTimeToUnixTime(qFromLittleEndian<uint8_t>(curimg->ReadContent(rootdiroffset + j*32 + 17, 1)), qFromLittleEndian<uint8_t>(curimg->ReadContent(rootdiroffset + j*32 + 16, 1)), qFromLittleEndian<uint8_t>(curimg->ReadContent(rootdiroffset + j*32 + 19, 1)), qFromLittleEndian<uint8_t>(curimg->ReadContent(rootdiroffset + j*32 + 18, 1)), qFromLittleEndian<uint8_t>(curimg->ReadContent(rootdiroffset + j*32 + 24, 1)));
-			    uint8_t namelength = 0;
-			    uint8_t curlength = 0;
-			    for(uint8_t k=1; k <= secondarycount; k++)
-			    {
-				uint8_t subentrytype = qFromLittleEndian<uint8_t>(curimg->ReadContent(rootdiroffset + j*32 + k*32, 1));
-				//qDebug() << "subentrytype:" << QString::number(subentrytype, 16);
-				if(subentrytype == 0xc0 || subentrytype == 0x40) // Stream Extension Directory Entry
-				{
-				    namelength = qFromLittleEndian<uint8_t>(curimg->ReadContent(rootdiroffset + (j + k)*32 + 3, 1));
-				    QString flagstr = QString("%1").arg(qFromLittleEndian<uint8_t>(curimg->ReadContent(rootdiroffset + (j+k)*32 + 1, 1)), 8, 2, QChar('0'));
-				    fatchain = flagstr.mid(7, 1).toInt(nullptr, 2);
-				    logicalsize = qFromLittleEndian<uint64_t>(curimg->ReadContent(rootdiroffset + (j+k)*32 + 8, 8));
-				    clusternum = qFromLittleEndian<uint32_t>(curimg->ReadContent(rootdiroffset + (j+k)*32 + 20, 4));
-				    physicalsize = qFromLittleEndian<uint64_t>(curimg->ReadContent(rootdiroffset + (j+k)*32 + 24, 8));
-				}
-				else if(subentrytype == 0xc1 || subentrytype == 0x41) // File Name Directory Entry
-				{
-				    curlength += 15;
-				    if(curlength <= namelength)
-				    {
-					for(int m=1; m < 16; m++)
-					    filename += QString(QChar(qFromLittleEndian<uint16_t>(curimg->ReadContent(rootdiroffset + (j+k)*32 + m*2, 2))));
-				    }
-				    else
-				    {
-					int remaining = namelength + 16 - curlength;
-					for(int m=1; m < remaining; m++)
-					    filename += QString(QChar(qFromLittleEndian<uint16_t>(curimg->ReadContent(rootdiroffset + (j+k)*32 + m*2, 2))));
-				    }
-				}
-			    }
-			    filepath = "/";
-			}
-			else if(entrytype == 0xa0) // Volume GUID Dir Entry
-			{
-			    // skip for now
-			}
-			//qDebug() << "filename:" << filename << "clusternum:" << clusternum;
-			if(fatchain == 0 && clusternum > 1)
-			{
-			    QList<uint32_t> clusterlist;
-			    clusterlist.clear();
-			    clusterlist.append(clusternum);
-			    GetNextCluster(curimg, clusternum, 4, fatoffset, &clusterlist);
-			    layout = ConvertBlocksToExtents(clusterlist, sectorspercluster * bytespersector, clusterareastart * bytespersector);
-			    clusterlist.clear();
-			}
-			else if(fatchain == 1)
-			{
-			    uint clustercount = (uint)ceil((float)physicalsize / (bytespersector * sectorspercluster));
-			    layout = QString::number(clusterareastart * bytespersector + ((clusternum - 2) * bytespersector * sectorspercluster)) + "," + QString::number(clustercount * bytespersector * sectorspercluster) + ";";
-			    //qDebug() << "clustercount:" << clustercount;
-			}
-			//qDebug() << "filename:" << filename << "layout:" << layout;
-
+	    createdate = ConvertExfatTimeToUnixTime(qFromLittleEndian<uint8_t>(curimg->ReadContent(rootdiroffset + j*32 + 9, 1)), qFromLittleEndian<uint8_t>(curimg->ReadContent(rootdiroffset + j*32 + 8, 1)), qFromLittleEndian<uint8_t>(curimg->ReadContent(rootdiroffset + j*32 + 11, 1)), qFromLittleEndian<uint8_t>(curimg->ReadContent(rootdiroffset + j*32 + 10, 1)), qFromLittleEndian<uint8_t>(curimg->ReadContent(rootdiroffset + j*32 + 22, 1)));
+	    modifydate = ConvertExfatTimeToUnixTime(qFromLittleEndian<uint8_t>(curimg->ReadContent(rootdiroffset + j*32 + 13, 1)), qFromLittleEndian<uint8_t>(curimg->ReadContent(rootdiroffset + j*32 + 12, 1)), qFromLittleEndian<uint8_t>(curimg->ReadContent(rootdiroffset + j*32 + 15, 1)), qFromLittleEndian<uint8_t>(curimg->ReadContent(rootdiroffset + j*32 + 14, 1)), qFromLittleEndian<uint8_t>(curimg->ReadContent(rootdiroffset + j*32 + 23, 1)));
+	    accessdate = ConvertExfatTimeToUnixTime(qFromLittleEndian<uint8_t>(curimg->ReadContent(rootdiroffset + j*32 + 17, 1)), qFromLittleEndian<uint8_t>(curimg->ReadContent(rootdiroffset + j*32 + 16, 1)), qFromLittleEndian<uint8_t>(curimg->ReadContent(rootdiroffset + j*32 + 19, 1)), qFromLittleEndian<uint8_t>(curimg->ReadContent(rootdiroffset + j*32 + 18, 1)), qFromLittleEndian<uint8_t>(curimg->ReadContent(rootdiroffset + j*32 + 24, 1)));
 			if(entrytype == 0x85 || entrytype == 0x05 || entrytype == 0x81 || entrytype == 0x82)
 			{
 			    for(int c=0; c < layout.split(";", Qt::SkipEmptyParts).count(); c++)
@@ -882,58 +857,6 @@ std::string ParseFatFile(std::ifstream* rawcontent, fatinfo* curfat, std::string
 			    nodedata.insert("modify", modifydate);
 			    nodedata.insert("status", "0");
 			    nodedata.insert("hash", "0");
-			    if(logicalsize > 0) // Get Category/Signature
-			    {
-				if(itemtype == 3 && isdeleted == 0)
-				{
-				    nodedata.insert("cat", "Directory");
-				    nodedata.insert("sig", "Directory");
-				}
-				else
-				{
-				    QString catsig = GenerateCategorySignature(curimg, filename, layout.split(";").at(0).split(",").at(0).toULongLong());
-				    nodedata.insert("cat", catsig.split("/").first());
-				    nodedata.insert("sig", catsig.split("/").last());
-				}
-			    }
-			    else
-			    {
-				nodedata.insert("cat", "Empty");
-				nodedata.insert("sig", "Zero File");
-			    }
-			    nodedata.insert("tag", "0");
-			    nodedata.insert("id", QString("e" + curimg->MountPath().split("/").last().split("-e").last() + "-p" + QString::number(ptreecnt) + "-f" + QString::number(inodecnt)));
-			    nodedata.insert("match", 0);
-			    QString parentstr = "";
-			    if(parinode == 0)
-				parentstr = QString("e" + curimg->MountPath().split("/").last().split("-e").last() + "-p" + QString::number(ptreecnt));
-			    else
-				parentstr = QString("e" + curimg->MountPath().split("/").last().split("-e").last() + "-p" + QString::number(ptreecnt) + "-f" + QString::number(parinode));
-			    mutex.lock();
-			    treenodemodel->AddNode(nodedata, parentstr, itemtype, isdeleted);
-			    mutex.unlock();
-			    if(nodedata.value("id").toString().split("-").count() == 3)
-			    {
-				listeditems.append(nodedata.value("id").toString());
-				filesfound++;
-				isignals->ProgUpd();
-			    }
-			    inodecnt++;
-			    nodedata.clear();
-			    if(fileattr & 0x10 && logicalsize > 0) // Sub Directory
-			    {
-				inodecnt = ParseExfatDirectory(curimg, curstartsector, ptreecnt, inodecnt - 1, QString(filepath + filename + "/"), layout, orphanoffsets);
-			    }
-			    nodedata.clear();
-			}
-			out.flush();
-			fileprop.close();
-		    }
-		}
-		//qDebug() << "orphanoffsets:" << orphanoffsets;
-		return inodecnt;
-	    }
-
 	     */ 
 
 	    }
