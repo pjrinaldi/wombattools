@@ -25,6 +25,9 @@ void ShowUsage(int outtype)
         printf("FILES\t: a device to image such as /dev/sdX\n");
         printf("Arguments :\n");
 	printf("-r\t: Recurse subdirectories.\n");
+	printf("-c\t: Calculate the hash for the file(s).\n");
+	//printf("-w\t: Include file slack in output.\n");
+	//printf("-o FILE\t: Output file's contents to FILE.\n");
         printf("-V\t: Prints Version information\n");
         printf("-h\t: Prints help information\n\n");
         printf("Example Usage :\n");
