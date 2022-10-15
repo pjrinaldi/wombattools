@@ -3,8 +3,12 @@
 std::string ConvertDosTimeToHuman(uint16_t* dosdate, uint16_t* dostime)
 {
     std::string humanstring = "";
+    if(((*dosdate & 0x1e0) >> 5) < 10)
+        humanstring += "0";
     humanstring += std::to_string(((*dosdate & 0x1e0) >> 5)); // MONTH
     humanstring += "/"; // DIVIDER
+    if(((*dosdate & 0x1f) >> 0) < 10)
+        humanstring += "0";
     humanstring += std::to_string(((*dosdate & 0x1f) >> 0)); // MONTH
     humanstring += "/"; // DIVIDER
     humanstring += std::to_string(((*dosdate & 0xfe00) >> 9) + 1980); // YEAR
@@ -13,10 +17,16 @@ std::string ConvertDosTimeToHuman(uint16_t* dosdate, uint16_t* dostime)
 	humanstring += "00:00:00";
     else
     {
+        if(((*dostime & 0xf800) >> 11) < 10)
+            humanstring += "0";
 	humanstring += std::to_string(((*dostime & 0xf800) >> 11)); // HOUR
 	humanstring += ":";
+        if(((*dostime & 0x7e0) >> 5) < 10)
+            humanstring += "0";
 	humanstring += std::to_string(((*dostime & 0x7e0) >> 5)); // MINUTE
 	humanstring += ":";
+        if((((*dostime & 0x1f) >> 0) * 2) < 10)
+            humanstring += "0";
 	humanstring += std::to_string(((*dostime & 0x1f) >> 0) * 2); // SECOND
     }
     humanstring += " (UTC)";
@@ -24,39 +34,36 @@ std::string ConvertDosTimeToHuman(uint16_t* dosdate, uint16_t* dostime)
     return humanstring;
 }
 
-/*
-qint64 ConvertExfatTimeToUnixTime(uint8_t t1, uint8_t t2, uint8_t d1, uint8_t d2, uint8_t utc)
+std::string ConvertExFatTimeToHuman(uint16_t* dosdate, uint16_t* dostime, uint8_t* timezone)
 {
-    int year = 0;
-    int month = 0;
-    int day = 0;
-    int hour = 0;
-    int min = 0;
-    int sec = 0;
-    int offsetsecs = 0;
-    QString tmpdate = QString("%1%2").arg(d1, 8, 2, QChar('0')).arg(d2, 8, 2, QChar('0'));
-    QString tmptime = QString("%1%2").arg(t1, 8, 2, QChar('0')).arg(t2, 8, 2, QChar('0'));
-    QString utcstr = QString("%1").arg(utc, 8, 2, QChar('0'));
-    year = tmpdate.left(7).toInt(nullptr, 2) + 1980;
-    month = tmpdate.mid(7, 4).toInt(nullptr, 2);
-    day = tmpdate.right(5).toInt(nullptr, 2);
-    hour = tmptime.left(5).toInt(nullptr, 2);
-    min = tmptime.mid(5, 6).toInt(nullptr, 2);
-    sec = tmptime.right(5).toInt(nullptr, 2) * 2;
-    //qDebug() << "utcstr:" << utcstr << utcstr.toInt(nullptr, 2) << "utcstr right:" << utcstr.right(1) << utcstr.right(1).toInt(nullptr, 2) << "utcstr left:" << utcstr.left(7) << utcstr.left(7).toInt(nullptr, 2);
-    if(utcstr.right(1).toInt(nullptr, 2) == 1) // apply utc offset
+    std::string humanstring = ConvertDosTimeToHuman(dosdate, dostime);
+    std::bitset<8> zonebits{*timezone};
+    if(zonebits[0] == 1) // apply utc offset
     {
-        offsetsecs = utcstr.left(7).toInt(nullptr, 2) * 15 * 60; // signed decimal value * 15 to get the number of 15 minute increments * 60 to put it in seconds.
-        //qDebug() << "offset seconds:" << offsetsecs;
+        // CALCULATE OFFSET AND REPLACE (UTC) IN STRING WITH HOW TO WRITE TIME ZONE OFFSET PIECE
+        // OR INSERT HUMANSTRING.END()-1, IF(<0) - ELSE +, OFFSETSECS/3600 float = (OFFSETSECS%3600)/3600) (HOUR::MIN)
+        // IF FLOAT = 0, THEN 00 = 0.25, THEN 15, = 0.50, THEN 30, =0.75 THEN 45
+        zonebits.set(0, 0); // set switch bit to zero so i can get the offset without that value
+        int offsetsecs = (int)zonebits.to_ulong() * 15 * 60;
+        std::cout << "offset secs:" << std::hex << offsetsecs << std::endl;
+        int offhour = offsetsecs / 3600;
+        float offmin = (abs(offsetsecs) % 3600 ) / 3600;
+        std::string offstring = std::to_string(offhour) + ":";
+        if(offmin == 0.00)
+            offstring += "00";
+        else if(offmin == 0.25)
+            offstring += "15";
+        else if(offmin == 0.50)
+            offstring += "30";
+        else if(offmin == 0.75)
+            offstring += "45";
+        else
+            offstring += "00";
+        std::cout << "offset secs: " << offstring << std::endl;
     }
-    QString datetimestring = QString("%1-%2-%3 %4:%5:%6").arg(year, 4, 10, QChar('0')).arg(month, 2, 10, QChar('0')).arg(day, 2, 10, QChar('0')).arg(hour, 2, 10, QChar('0')).arg(min, 2, 10, QChar('0')).arg(sec, 2, 10, QChar('0'));
-    QDateTime tmpdatetime = QDateTime::fromString(datetimestring, "yyyy-MM-dd hh:mm:ss");
-    tmpdatetime.setOffsetFromUtc(-offsetsecs);
 
-    return tmpdatetime.toSecsSinceEpoch();
+    return humanstring;
 }
-
- */ 
 
 void GetNextCluster(std::ifstream* rawcontent, uint32_t clusternum, fatinfo* curfat, std::vector<uint32_t>* clusterlist)
 {
@@ -807,7 +814,9 @@ std::string ParseFatFile(std::ifstream* rawcontent, fatinfo* curfat, std::string
 			fileforensics += "Sub Directory,";
 		    if(fileattr & 0x20)
 			fileforensics += "Archive File,\n";
-		    // GET DIRECTORY LAYOUT
+                    // GET LOGICAL SIZE
+                    fileforensics += "Logical Size|" + std::to_string(logicalsize) + " bytes\n";
+		    // GET DIRECTORY LAYOUT (PHYSICAL SIZE)
 		    if(fatchain == 0 && clusternum > 1)
 		    {
 			std::vector<uint32_t> clusterlist;
@@ -822,43 +831,32 @@ std::string ParseFatFile(std::ifstream* rawcontent, fatinfo* curfat, std::string
 			uint clustercount = (uint)ceil((float)physicalsize / ((float)(curfat->bytespersector * curfat->sectorspercluster)));
 			layout = std::to_string(curfat->clusterareastart * curfat->bytespersector + ((clusternum - 2) * curfat->bytespersector * curfat->sectorspercluster)) + "," + std::to_string(clustercount * curfat->bytespersector * curfat->sectorspercluster) + ";";
 		    }
+		    fileforensics += "Physical Layout|" + layout + " (offset,size;) [bytes]\n";
 		    //std::cout << "Layout: " << layout << std::endl;
+                    // GET DATE/TIME's
+                    uint8_t* cd = new uint8_t[2];
+                    uint16_t createdate = 0;
+                    ReadContent(rawcontent, cd, diroffset + j*32 + 10, 2);
+                    ReturnUint16(&createdate, cd);
+                    delete[] cd;
+                    uint8_t* ct = new uint8_t[2];
+                    uint16_t createtime = 0;
+                    ReadContent(rawcontent, ct, diroffset + j*32 + 8, 2);
+                    ReturnUint16(&createtime, ct);
+                    delete[] ct;
+                    uint8_t* cz = new uint8_t[1];
+                    uint8_t createzone = 0;
+                    ReadContent(rawcontent, cz, diroffset + j*32 + 22, 1);
+                    createzone = (uint8_t)cz[0];
+                    delete[] cz;
+                    fileforensics += "Create Date|" + ConvertExFatTimeToHuman(&createdate, &createtime, &createzone) + "\n";
 		}
-
-
-		/*
-		qint64 createdate = 0;
-		qint64 accessdate = 0;
-		qint64 modifydate = 0;
-		 */ 
-	    /*
+                /*
+                 *	// GET DATE/TIME's
 	    createdate = ConvertExfatTimeToUnixTime(qFromLittleEndian<uint8_t>(curimg->ReadContent(rootdiroffset + j*32 + 9, 1)), qFromLittleEndian<uint8_t>(curimg->ReadContent(rootdiroffset + j*32 + 8, 1)), qFromLittleEndian<uint8_t>(curimg->ReadContent(rootdiroffset + j*32 + 11, 1)), qFromLittleEndian<uint8_t>(curimg->ReadContent(rootdiroffset + j*32 + 10, 1)), qFromLittleEndian<uint8_t>(curimg->ReadContent(rootdiroffset + j*32 + 22, 1)));
 	    modifydate = ConvertExfatTimeToUnixTime(qFromLittleEndian<uint8_t>(curimg->ReadContent(rootdiroffset + j*32 + 13, 1)), qFromLittleEndian<uint8_t>(curimg->ReadContent(rootdiroffset + j*32 + 12, 1)), qFromLittleEndian<uint8_t>(curimg->ReadContent(rootdiroffset + j*32 + 15, 1)), qFromLittleEndian<uint8_t>(curimg->ReadContent(rootdiroffset + j*32 + 14, 1)), qFromLittleEndian<uint8_t>(curimg->ReadContent(rootdiroffset + j*32 + 23, 1)));
 	    accessdate = ConvertExfatTimeToUnixTime(qFromLittleEndian<uint8_t>(curimg->ReadContent(rootdiroffset + j*32 + 17, 1)), qFromLittleEndian<uint8_t>(curimg->ReadContent(rootdiroffset + j*32 + 16, 1)), qFromLittleEndian<uint8_t>(curimg->ReadContent(rootdiroffset + j*32 + 19, 1)), qFromLittleEndian<uint8_t>(curimg->ReadContent(rootdiroffset + j*32 + 18, 1)), qFromLittleEndian<uint8_t>(curimg->ReadContent(rootdiroffset + j*32 + 24, 1)));
-			if(entrytype == 0x85 || entrytype == 0x05 || entrytype == 0x81 || entrytype == 0x82)
-			{
-			    for(int c=0; c < layout.split(";", Qt::SkipEmptyParts).count(); c++)
-			    {
-				orphanoffsets->append(layout.split(";", Qt::SkipEmptyParts).at(c).split(",").at(0).toULongLong());
-				orphanoffsets->append(layout.split(";", Qt::SkipEmptyParts).at(c).split(",").at(1).toULongLong());
-			    }
-			    out << "Layout|" << layout << "|File offset,size; layout in bytes." << Qt::endl;
-			    out << "Physical Size|" << QString::number(physicalsize) << "|Sector Size in Bytes for the file." << Qt::endl;
-			    out << "Logical Size|" << QString::number(logicalsize) << "|Size in Bytes for the file." << Qt::endl;
-			    if(!parfilename.isEmpty())
-				filepath = parfilename;
-			    QHash<QString, QVariant> nodedata;
-			    nodedata.clear();
-			    nodedata.insert("name", QByteArray(filename.toUtf8()).toBase64());
-			    nodedata.insert("path", QByteArray(filepath.toUtf8()).toBase64());
-			    nodedata.insert("size", (qulonglong)logicalsize);
-			    nodedata.insert("create", createdate);
-			    nodedata.insert("access", accessdate);
-			    nodedata.insert("modify", modifydate);
-			    nodedata.insert("status", "0");
-			    nodedata.insert("hash", "0");
 	     */ 
-
 	    }
 	    else
 	    {

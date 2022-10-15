@@ -13,6 +13,7 @@ struct fatinfo
 };
 
 std::string ConvertDosTimeToHuman(uint16_t* dosdate, uint16_t* dostime);
+std::string ConvertExFatTimeToHuman(uint16_t* dosdate, uint16_t* dostime, uint8_t* timezone);
 std::string ConvertClustersToExtents(std::vector<uint32_t>* clusterlist, fatinfo* curfat);
 std::string ParseFatPath(std::ifstream* rawcontent, fatinfo* curfat, std::string childpath);
 std::string ParseFatFile(std::ifstream* rawcontent, fatinfo* curfat, std::string childfile);
