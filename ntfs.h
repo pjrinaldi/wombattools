@@ -19,5 +19,8 @@ std::string ParseFatFile(std::ifstream* rawcontent, fatinfo* curfat, std::string
 
 */
 
+void GetRunListLayout(std::ifstream* rawcontent, ntfsinfo* curnt, uint64_t curoffset, uint32_t attributelength, std::string* runliststr);
+//void GetRunListLayout(std::ifstream* rawcontent, ntfsinfo* curnt, uint64_t curoffset, std::string* runliststr);
+
 void ParseNtfsInfo(std::ifstream* rawcontent, ntfsinfo* curnt);
 void ParseNtfsForensics(std::string filename, std::string mntptstr, std::string devicestr, uint8_t ftype);

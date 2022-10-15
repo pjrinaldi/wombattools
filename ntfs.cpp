@@ -1,5 +1,93 @@
 #include "ntfs.h"
 
+void GetRunListLayout(std::ifstream* rawcontent, ntfsinfo* curnt, uint64_t curoffset, uint32_t attributelength, std::string* runliststr)
+{
+    // runlist offset is # from 0 in the data attribute wiht attribute length...
+    // RUN LIST OFFSET
+    uint8_t* rlo = new uint8_t[2];
+    uint16_t runlistoffset = 0;
+    ReadContent(rawcontent, rlo, curoffset + 32, 2);
+    ReturnUint16(&runlistoffset, rlo);
+    delete[] rlo;
+    std::cout << "Run List Offset: " << runlistoffset << std::endl;
+    unsigned int currunoffset = curoffset + runlistoffset;
+    int i = 0;
+    while(currunoffset < curoffset + curnt->mftentrysize * curnt->sectorspercluster * curnt->bytespersector)
+    //unsigned int currunoffset = runlistoffset;
+    //while(runlistoffset < attributelength)
+    {
+        // RUN INFO
+        uint8_t* ri = new uint8_t[1];
+        uint8_t runinfo = 0;
+        ReadContent(rawcontent, ri, currunoffset, 1);
+        runinfo = (uint8_t)ri[0];
+        delete[] ri;
+        if(runinfo > 0)
+        {
+            std::bitset<8> runbits{runinfo};
+            std::cout << "run bits: " << runbits << std::endl;
+            std::bitset<4> runlengthbits;
+            std::bitset<4> runoffsetbits;
+            for(int j=0; j < 4; j++)
+            {
+                runlengthbits.set(j, runbits[j]);
+                runoffsetbits.set(j, runbits[j+4]);
+            }
+            std::cout << "run length bits: " << runlengthbits << std::endl;
+            std::cout << "run offset bits: " << runoffsetbits << std::endl;
+            std::cout << "run length: " << runlengthbits.to_ulong() << std::endl;
+            std::cout << "run offset: " << runoffsetbits.to_ulong() << std::endl;
+            if(runlengthbits.to_ulong() == 0 && runoffsetbits.to_ulong() == 0)
+                break;
+            currunoffset++;
+            i++;
+            currunoffset += runlengthbits.to_ulong() + runoffsetbits.to_ulong();
+        }
+        else
+            break;
+    }
+    /*
+    uint currunoff = curoffset + runlistoff;
+    int i = 0;
+    QStringList runlist;
+    runlist.clear();
+    while(currunoff < curoffset + mftentrybytes)
+    {
+	if(qFromLittleEndian<uint8_t>(curimg->ReadContent(currunoff, 1)) > 0)
+	{
+	    QString runstr = QString("%1").arg(qFromLittleEndian<uint8_t>(curimg->ReadContent(currunoff, 1)), 8, 2, QChar('0'));
+	    uint runlengthbytes = runstr.right(4).toInt(nullptr, 2);
+	    uint runlengthoffset = runstr.left(4).toInt(nullptr, 2);
+	    if(runlengthbytes == 0 && runlengthoffset == 0)
+		break;
+	    currunoff++;
+	    uint runlength = 0;
+	    int runoffset = 0;
+	    if(runlengthbytes == 1)
+		runlength = qFromLittleEndian<uint8_t>(curimg->ReadContent(currunoff, runlengthbytes));
+	    else
+		runlength = qFromLittleEndian<uint>(curimg->ReadContent(currunoff, runlengthbytes));
+	    if(runlengthoffset == 1)
+		runoffset = qFromLittleEndian<int8_t>(curimg->ReadContent(currunoff + runlengthbytes, runlengthoffset));
+	    else
+		runoffset = qFromLittleEndian<int>(curimg->ReadContent(currunoff + runlengthbytes, runlengthoffset));
+	    if(i > 0)
+	    {
+		if(i > 1 && QString::number(runoffset, 16).right(1).toInt() == 1)
+		    runoffset = runoffset - 0xffff - 1;
+		runoffset = runoffset + runlist.at(i-1).split(",").at(0).toUInt();
+	    }
+	    runlist.append(QString(QString::number(runoffset) + "," + QString::number(runlength)));
+	    i++;
+	    currunoff += runlengthbytes + runlengthoffset;
+	}
+    }
+    for(int k=0; k < runlist.count(); k++)
+	layout->append(QString(QString::number(curstartsector * 512 + (runlist.at(k).split(",").at(0).toUInt() * bytespercluster)) + "," + QString::number(runlist.at(k).split(",").at(1).toUInt() * bytespercluster) + ";"));
+    runlist.clear();
+    */
+}
+
 /*
 std::string ConvertDosTimeToHuman(uint16_t* dosdate, uint16_t* dostime)
 {
@@ -225,6 +313,7 @@ void ParseNtfsInfo(std::ifstream* rawcontent, ntfsinfo* curnt)
     std::cout << "MFT Entry Size (cluster, bytes): " << (int)mftentrysize << ", " << mftentrysize * sectorspercluster * bytespersector << std::endl;
     // MFT LAYOUT
     uint64_t mftoffset = mftstartingcluster * sectorspercluster * bytespersector;
+    // MOVE THE BELOW TO A FUNCTION TO GET DATA RUN
     uint8_t* me0s = new uint8_t[5];
     ReadContent(rawcontent, me0s, mftoffset, 4);
     me0s[4] = '\0';
@@ -233,29 +322,71 @@ void ParseNtfsInfo(std::ifstream* rawcontent, ntfsinfo* curnt)
     //std::cout << "MFT Entry 0 Signature: " << me0str << std::endl;
     if(me0str.compare("FILE") == 0) // A PROPER MFT ENTRY
     {
-        //std::cout << "A proper mft entry, continue...\n";
+        // OFFSET TO THE FIRST ATTRIBUTE
+        uint8_t* fao = new uint8_t[2];
+        uint16_t firstattributeoffset = 0;
+        ReadContent(rawcontent, fao, mftoffset + 20, 2);
+        ReturnUint16(&firstattributeoffset, fao);
+        delete[] fao;
+        std::cout << "First Attribute Offset: " << firstattributeoffset << std::endl;
+        // NEXT ATTRIBUTE ID
+        uint8_t* nai = new uint8_t[2];
+        uint16_t nextattributeid = 0;
+        ReadContent(rawcontent, nai, mftoffset + 40, 2);
+        ReturnUint16(&nextattributeid, nai);
+        delete[] nai;
+        std::cout << "Next Attribute ID: " << nextattributeid << std::endl;
+        // LOOP OVER ATTRIBUTES TO FIND DATA ATTRIBUTE
+        uint16_t curoffset = firstattributeoffset;
+        //for(int i=0; i < nextattributeid; i++)
+        while(curoffset < mftentrysize * sectorspercluster * bytespersector)
+        {
+            // ATTRIBUTE LENGTH
+            uint8_t* al = new uint8_t[4];
+            uint32_t attributelength = 0;
+            ReadContent(rawcontent, al, mftoffset + curoffset + 4, 4);
+            ReturnUint32(&attributelength, al);
+            delete[] al;
+            std::cout << "Attribute Length: " << attributelength << std::endl;
+            // ATTRIBUTE TYPE
+            uint8_t* at = new uint8_t[4];
+            uint32_t attributetype = 0;
+            ReadContent(rawcontent, at, mftoffset + curoffset, 4);
+            ReturnUint32(&attributetype, at);
+            delete[] at;
+            std::cout << "Attribute Type: 0x" << std::hex << attributetype << std::dec << std::endl;
+            if(attributetype == 0x80) // DATA ATTRIBUTE
+            {
+                uint8_t* anl = new uint8_t[1];
+                uint8_t attributenamelength = 0;
+                ReadContent(rawcontent, anl, mftoffset + curoffset + 9, 1);
+                attributenamelength = (uint8_t)anl[0];
+                delete[] anl;
+                std::cout << "Attribute Name Length: " << (int)attributenamelength << std::endl;
+                if(attributenamelength == 0) // DEFAULT DATA ENTRY
+                {
+                    // GET RUN LIST AND RETURN LAYOUT
+                    std::string runliststr = "";
+                    uint64_t totalmftsize = 0;
+                    GetRunListLayout(rawcontent, curnt, mftoffset + curoffset, attributelength, &runliststr);
+                    break;
+                }
+            }
+            curoffset += attributelength;
+            if(attributelength == 0)
+                break;
+        }
     }
+    // MOVE THE ABOVE INTO A FUNCTION TO RETURN THE RUN LIST
 
     /*
 	    if(line.startsWith("MFT Layout|"))
 		mftlayout = line.split("|").at(1);
-		mftentrybytes = line.split("|").at(1).toUInt();
-		bytespercluster = line.split("|").at(1).toUInt();
             else if(line.startsWith("Max MFT Entries|"))
                 maxmftentries = line.split("|").at(1).toULongLong();
-     */ 
-    /*
-
             // GET THE MFT LAYOUT TO WRITE TO PROP FILE
             if(QString::fromStdString(curimg->ReadContent(mftoffset, 4).toStdString()) == "FILE") // a proper MFT entry
             {
-                int curoffset = qFromLittleEndian<uint16_t>(curimg->ReadContent(mftoffset + 20, 2)); // mft offset + offset to first attribute
-                for(int i=0; i < qFromLittleEndian<uint16_t>(curimg->ReadContent(mftoffset + 40, 2)); i++) // loop over attributes until hit attribute before the next attribute id
-                {
-                    if(qFromLittleEndian<uint32_t>(curimg->ReadContent(mftoffset + curoffset, 4)) == 0x80 && qFromLittleEndian<uint8_t>(curimg->ReadContent(mftoffset + curoffset + 9, 1)) == 0) // attrtype | namelength > default$DATA attribute to parse
-                        break;
-                    curoffset += qFromLittleEndian<uint32_t>(curimg->ReadContent(mftoffset + curoffset + 4, 4)); // attribute length
-                }
                 QString runliststr = "";
                 quint64 mftsize = 0;
                 GetRunListLayout(curimg, curstartsector, bytespercluster, 1024, mftoffset + curoffset, &runliststr);
