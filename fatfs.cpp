@@ -495,15 +495,6 @@ std::string ParseFatPath(std::ifstream* rawcontent, fatinfo* curfat, std::string
 			    // FAT CHAIN
 			    int fatchain = flagbits[1];
 			    //std::cout << "fatchain: " << fatchain << std::endl;
-			    /*
-			    // LOGICAL SIZE
-			    uint8_t* ls = new uint8_t[8];
-			    uint64_t logicalsize = 0;
-			    ReadContent(rawcontent, ls, diroffset + (j+k)*32 + 8, 8);
-			    ReturnUint64(&logicalsize, ls);
-			    delete[] ls;
-			    //std::cout << "Logical Size: " << logicalsize << std::endl;
-			    */
 			    // CLUSTER NUM
 			    uint8_t* cn = new uint8_t[4];
 			    //uint32_t clusternum = 0;
@@ -850,13 +841,39 @@ std::string ParseFatFile(std::ifstream* rawcontent, fatinfo* curfat, std::string
                     createzone = (uint8_t)cz[0];
                     delete[] cz;
                     fileforensics += "Create Date|" + ConvertExFatTimeToHuman(&createdate, &createtime, &createzone) + "\n";
+                    uint8_t* md = new uint8_t[2];
+                    uint16_t modifydate = 0;
+                    ReadContent(rawcontent, md, diroffset + j*32 + 14, 2);
+                    ReturnUint16(&modifydate, md);
+                    delete[] md;
+                    uint8_t* mt = new uint8_t[2];
+                    uint16_t modifytime = 0;
+                    ReadContent(rawcontent, mt, diroffset + j*32 + 12, 2);
+                    ReturnUint16(&modifytime, mt);
+                    delete[] mt;
+                    uint8_t* mz = new uint8_t[1];
+                    uint8_t modifyzone = 0;
+                    ReadContent(rawcontent, mz, diroffset + j*32 + 23, 1);
+                    modifyzone = (uint8_t)mz[0];
+                    delete[] mz;
+                    fileforensics += "Modify Date|" + ConvertExFatTimeToHuman(&modifydate, &modifytime, &modifyzone) + "\n";
+                    uint8_t* ad = new uint8_t[2];
+                    uint16_t accessdate = 0;
+                    ReadContent(rawcontent, ad, diroffset + j*32 + 18, 2);
+                    ReturnUint16(&accessdate, ad);
+                    delete[] ad;
+                    uint8_t* at = new uint8_t[2];
+                    uint16_t accesstime = 0;
+                    ReadContent(rawcontent, at, diroffset + j*32 + 16, 2);
+                    ReturnUint16(&accesstime, at);
+                    delete[] at;
+                    uint8_t* az = new uint8_t[1];
+                    uint8_t accesszone = 0;
+                    ReadContent(rawcontent, az, diroffset + j*32 + 24, 1);
+                    accesszone = (uint8_t)az[0];
+                    delete[] az;
+                    fileforensics += "Access Date|" + ConvertExFatTimeToHuman(&accessdate, &accesstime, &accesszone) + "\n";
 		}
-                /*
-                 *	// GET DATE/TIME's
-	    createdate = ConvertExfatTimeToUnixTime(qFromLittleEndian<uint8_t>(curimg->ReadContent(rootdiroffset + j*32 + 9, 1)), qFromLittleEndian<uint8_t>(curimg->ReadContent(rootdiroffset + j*32 + 8, 1)), qFromLittleEndian<uint8_t>(curimg->ReadContent(rootdiroffset + j*32 + 11, 1)), qFromLittleEndian<uint8_t>(curimg->ReadContent(rootdiroffset + j*32 + 10, 1)), qFromLittleEndian<uint8_t>(curimg->ReadContent(rootdiroffset + j*32 + 22, 1)));
-	    modifydate = ConvertExfatTimeToUnixTime(qFromLittleEndian<uint8_t>(curimg->ReadContent(rootdiroffset + j*32 + 13, 1)), qFromLittleEndian<uint8_t>(curimg->ReadContent(rootdiroffset + j*32 + 12, 1)), qFromLittleEndian<uint8_t>(curimg->ReadContent(rootdiroffset + j*32 + 15, 1)), qFromLittleEndian<uint8_t>(curimg->ReadContent(rootdiroffset + j*32 + 14, 1)), qFromLittleEndian<uint8_t>(curimg->ReadContent(rootdiroffset + j*32 + 23, 1)));
-	    accessdate = ConvertExfatTimeToUnixTime(qFromLittleEndian<uint8_t>(curimg->ReadContent(rootdiroffset + j*32 + 17, 1)), qFromLittleEndian<uint8_t>(curimg->ReadContent(rootdiroffset + j*32 + 16, 1)), qFromLittleEndian<uint8_t>(curimg->ReadContent(rootdiroffset + j*32 + 19, 1)), qFromLittleEndian<uint8_t>(curimg->ReadContent(rootdiroffset + j*32 + 18, 1)), qFromLittleEndian<uint8_t>(curimg->ReadContent(rootdiroffset + j*32 + 24, 1)));
-	     */ 
 	    }
 	    else
 	    {
