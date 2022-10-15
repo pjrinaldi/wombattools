@@ -29,8 +29,15 @@ void ReturnUint64(uint64_t* tmp64, uint8_t* tmp8)
 
 void ReturnUint(unsigned int* tmp, uint8_t* tmp8, unsigned int length)
 {
+    std::cout << "integer length: " << length << std::endl;
+    unsigned int* tmpint = NULL;
     for(unsigned int i=0; i < length; i++)
-        tmp[i] = (unsigned int)tmp8[i] << i * 8;
+    {
+        std::cout << i << " " << length - 1 - i << " " << std::hex << (unsigned int)tmp8[length - 1 - i] << std::dec << std::endl;
+        //tmpint[i] = (unsigned int)tmp8[length - 1 - i];
+    }
+    std::cout << "tmpint: " << tmpint << std::endl;
+    *tmp = *tmpint;
 }
 
 void ReturnInt(int* tmp, int8_t* tmp8, unsigned int length)

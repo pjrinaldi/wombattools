@@ -29,8 +29,8 @@ void GetRunListLayout(std::ifstream* rawcontent, ntfsinfo* curnt, uint64_t curof
             std::bitset<4> runoffsetbits;
             for(int j=0; j < 4; j++)
             {
-                runlengthbits.set(j, runbits[j+4]);
-                runoffsetbits.set(j, runbits[j]);
+                runlengthbits.set(j, runbits[j]);
+                runoffsetbits.set(j, runbits[j+4]);
             }
             std::cout << "run length bits: " << runlengthbits << std::endl;
             std::cout << "run offset bits: " << runoffsetbits << std::endl;
@@ -41,9 +41,12 @@ void GetRunListLayout(std::ifstream* rawcontent, ntfsinfo* curnt, uint64_t curof
             if(runlengthbytes == 0 && runoffsetbytes == 0)
                 break;
             currunoffset++;
+            std::cout << "current run offset: " << currunoffset << std::endl;
+            std::cout << "local attribute current run offset: " << currunoffset - curoffset << std::endl;
             unsigned int runlength = 0;
-            int runoffset = 0;
-            if(runlengthbits.to_ulong() == 1)
+            unsigned int runoffset = 0;
+            //int runoffset = 0;
+            if(runlengthbytes == 1)
             {
                 uint8_t* rl = new uint8_t[1];
                 ReadContent(rawcontent, rl, currunoffset, 1);
@@ -59,16 +62,16 @@ void GetRunListLayout(std::ifstream* rawcontent, ntfsinfo* curnt, uint64_t curof
             std::cout << "data run length: " << runlength << std::endl;
             if(runoffsetbits.to_ulong() == 1)
             {
-                int8_t* ro = new int8_t[1];
+                uint8_t* ro = new uint8_t[1];
                 ReadContent(rawcontent, ro, currunoffset + runlengthbytes, 1);
-                runoffset = (int8_t)ro[0];
+                runoffset = (uint8_t)ro[0];
                 delete[] ro;
             }
             else
             {
-                int8_t* ro = new int8_t[runoffsetbytes];
+                uint8_t* ro = new uint8_t[runoffsetbytes];
                 ReadContent(rawcontent, ro, currunoffset + runlengthbytes, runoffsetbytes);
-                ReturnInt(&runoffset, ro, runoffsetbytes);
+                ReturnUint(&runoffset, ro, runoffsetbytes);
             }
             std::cout << "data run offset: " << runoffset << std::endl;
 
@@ -409,6 +412,13 @@ void ParseNtfsInfo(std::ifstream* rawcontent, ntfsinfo* curnt)
             if(attributelength == 0)
                 break;
         }
+        // LOGICAL FILE SIZE
+        uint8_t* ls = new uint8_t[8];
+        uint64_t logicalsize = 0;
+        ReadContent(rawcontent, ls, mftoffset + curoffset + 48, 8);
+        ReturnUint64(&logicalsize, ls);
+        delete[] ls;
+        std::cout << "Logical Size: " << logicalsize << std::endl;
     }
     // MOVE THE ABOVE INTO A FUNCTION TO RETURN THE RUN LIST
 
