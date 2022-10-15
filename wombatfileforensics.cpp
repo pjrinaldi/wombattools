@@ -26,8 +26,8 @@ void ShowUsage(int outtype)
         printf("Arguments :\n");
 	printf("-r\t: Recurse subdirectories.\n");
 	printf("-c\t: Calculate the hash for the file(s).\n");
-	//printf("-w\t: Include file slack in output.\n");
-	//printf("-o FILE\t: Output file's contents to FILE.\n");
+	printf("-w\t: Include file slack in output.\n");
+	printf("-o FILE\t: Output file's contents to FILE.\n");
         printf("-V\t: Prints Version information\n");
         printf("-h\t: Prints help information\n\n");
         printf("Example Usage :\n");
@@ -1293,6 +1293,11 @@ else
 int main(int argc, char* argv[])
 {
     uint8_t isrecursive = 0;
+    uint8_t ishash = 0;
+    uint8_t isoutput = 0;
+    uint8_t iswithslack = 0;
+
+    std::string outfile = "";
 
     std::string imagepath;
     std::string logpath;
@@ -1310,7 +1315,7 @@ int main(int argc, char* argv[])
     }
 
     int i;
-    while((i=getopt(argc, argv, "chrV")) != -1)
+    while((i=getopt(argc, argv, "cho:rwV")) != -1)
     {
         switch(i)
         {
@@ -1321,11 +1326,19 @@ int main(int argc, char* argv[])
                 ShowUsage(1);
                 return 1;
 	    case 'c':
+                ishash = 0;
 		printf("Calculate hash and store in logical image.\n");
 		break;
 	    case 'r':
 		isrecursive = 1;
 		break;
+            case 'o':
+                isoutput = 1;
+                outfile = optarg;
+                break;
+            case 'w':
+                iswithslack = 1;
+                break;
         }
     }
     // get all the input strings... then run parse directory to get the list of files...
