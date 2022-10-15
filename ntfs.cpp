@@ -71,6 +71,7 @@ void GetRunListLayout(std::ifstream* rawcontent, ntfsinfo* curnt, uint64_t curof
             {
                 uint8_t* ro = new uint8_t[runoffsetbytes];
                 ReadContent(rawcontent, ro, currunoffset + runlengthbytes, runoffsetbytes);
+                //ReturnInt(&runoffset, ro, runoffsetbytes);
                 ReturnUint(&runoffset, ro, runoffsetbytes);
             }
             std::cout << "data run offset: " << runoffset << std::endl;
