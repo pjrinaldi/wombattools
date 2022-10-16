@@ -98,6 +98,78 @@ void GetRunListLayout(std::ifstream* rawcontent, ntfsinfo* curnt, uint64_t curof
     runlenlist.clear();
 }
 
+std::string GetDataAttributeLayout(std::ifstream* rawcontent, ntfsinfo* curnt, uint64_t mftoffset)
+{
+    uint8_t* me0s = new uint8_t[5];
+    ReadContent(rawcontent, me0s, mftoffset, 4);
+    me0s[4] = '\0';
+    std::string me0str((char*)me0s);
+    delete[] me0s;
+    //std::cout << "MFT Entry 0 Signature: " << me0str << std::endl;
+    if(me0str.compare("FILE") == 0) // A PROPER MFT ENTRY
+    {
+        std::string runliststr = "";
+        // OFFSET TO THE FIRST ATTRIBUTE
+        uint8_t* fao = new uint8_t[2];
+        uint16_t firstattributeoffset = 0;
+        ReadContent(rawcontent, fao, mftoffset + 20, 2);
+        ReturnUint16(&firstattributeoffset, fao);
+        delete[] fao;
+        std::cout << "First Attribute Offset: " << firstattributeoffset << std::endl;
+        // NEXT ATTRIBUTE ID
+        uint8_t* nai = new uint8_t[2];
+        uint16_t nextattributeid = 0;
+        ReadContent(rawcontent, nai, mftoffset + 40, 2);
+        ReturnUint16(&nextattributeid, nai);
+        delete[] nai;
+        std::cout << "Next Attribute ID: " << nextattributeid << std::endl;
+        // LOOP OVER ATTRIBUTES TO FIND DATA ATTRIBUTE
+        uint16_t curoffset = firstattributeoffset;
+        //for(int i=0; i < nextattributeid; i++)
+        while(curoffset < curnt->mftentrysize * curnt->sectorspercluster * curnt->bytespersector)
+        {
+            std::cout << "Current Offset: " << curoffset << std::endl;
+            // ATTRIBUTE LENGTH
+            uint8_t* al = new uint8_t[4];
+            uint32_t attributelength = 0;
+            ReadContent(rawcontent, al, mftoffset + curoffset + 4, 4);
+            ReturnUint32(&attributelength, al);
+            delete[] al;
+            std::cout << "Attribute Length: " << attributelength << std::endl;
+            // ATTRIBUTE TYPE
+            uint8_t* at = new uint8_t[4];
+            uint32_t attributetype = 0;
+            ReadContent(rawcontent, at, mftoffset + curoffset, 4);
+            ReturnUint32(&attributetype, at);
+            delete[] at;
+            std::cout << "Attribute Type: 0x" << std::hex << attributetype << std::dec << std::endl;
+            if(attributetype == 0x80) // DATA ATTRIBUTE
+            {
+                uint8_t* anl = new uint8_t[1];
+                uint8_t attributenamelength = 0;
+                ReadContent(rawcontent, anl, mftoffset + curoffset + 9, 1);
+                attributenamelength = (uint8_t)anl[0];
+                delete[] anl;
+                std::cout << "Attribute Name Length: " << (int)attributenamelength << std::endl;
+                if(attributenamelength == 0) // DEFAULT DATA ENTRY
+                {
+                    // GET RUN LIST AND RETURN LAYOUT
+                    uint64_t totalmftsize = 0;
+                    GetRunListLayout(rawcontent, curnt, mftoffset + curoffset, attributelength, &runliststr);
+                    std::cout << "Run List Layout: " << runliststr << std::endl;
+                    break;
+                }
+            }
+            curoffset += attributelength;
+            if(attributelength == 0)
+                break;
+        }
+        return runliststr;
+    }
+    else
+        return "";
+}
+
 /*
 std::string ConvertDosTimeToHuman(uint16_t* dosdate, uint16_t* dostime)
 {
@@ -323,280 +395,41 @@ void ParseNtfsInfo(std::ifstream* rawcontent, ntfsinfo* curnt)
     std::cout << "MFT Entry Size (cluster, bytes): " << (int)mftentrysize << ", " << mftentrysize * sectorspercluster * bytespersector << std::endl;
     // MFT LAYOUT
     uint64_t mftoffset = mftstartingcluster * sectorspercluster * bytespersector;
-    // MOVE THE BELOW TO A FUNCTION TO GET DATA RUN
-    uint8_t* me0s = new uint8_t[5];
-    ReadContent(rawcontent, me0s, mftoffset, 4);
-    me0s[4] = '\0';
-    std::string me0str((char*)me0s);
-    delete[] me0s;
-    //std::cout << "MFT Entry 0 Signature: " << me0str << std::endl;
-    if(me0str.compare("FILE") == 0) // A PROPER MFT ENTRY
+    std::string mftlayout = GetDataAttributeLayout(rawcontent, curnt, mftoffset);
+    curnt->mftlayout = mftlayout;
+    std::vector<std::string> mftlayoutlist;
+    mftlayoutlist.clear();
+    std::istringstream mll(mftlayout);
+    std::string mls;
+    uint64_t mftsize = 0;
+    while(getline(mll, mls, ';'))
+        mftlayoutlist.push_back(mls);
+    for(int i=0; i < mftlayoutlist.size(); i++)
     {
-        // OFFSET TO THE FIRST ATTRIBUTE
-        uint8_t* fao = new uint8_t[2];
-        uint16_t firstattributeoffset = 0;
-        ReadContent(rawcontent, fao, mftoffset + 20, 2);
-        ReturnUint16(&firstattributeoffset, fao);
-        delete[] fao;
-        std::cout << "First Attribute Offset: " << firstattributeoffset << std::endl;
-        // NEXT ATTRIBUTE ID
-        uint8_t* nai = new uint8_t[2];
-        uint16_t nextattributeid = 0;
-        ReadContent(rawcontent, nai, mftoffset + 40, 2);
-        ReturnUint16(&nextattributeid, nai);
-        delete[] nai;
-        std::cout << "Next Attribute ID: " << nextattributeid << std::endl;
-        // LOOP OVER ATTRIBUTES TO FIND DATA ATTRIBUTE
-        uint16_t curoffset = firstattributeoffset;
-        //for(int i=0; i < nextattributeid; i++)
-        while(curoffset < mftentrysize * sectorspercluster * bytespersector)
-        {
-            std::cout << "Current Offset: " << curoffset << std::endl;
-            // ATTRIBUTE LENGTH
-            uint8_t* al = new uint8_t[4];
-            uint32_t attributelength = 0;
-            ReadContent(rawcontent, al, mftoffset + curoffset + 4, 4);
-            ReturnUint32(&attributelength, al);
-            delete[] al;
-            std::cout << "Attribute Length: " << attributelength << std::endl;
-            // ATTRIBUTE TYPE
-            uint8_t* at = new uint8_t[4];
-            uint32_t attributetype = 0;
-            ReadContent(rawcontent, at, mftoffset + curoffset, 4);
-            ReturnUint32(&attributetype, at);
-            delete[] at;
-            std::cout << "Attribute Type: 0x" << std::hex << attributetype << std::dec << std::endl;
-            if(attributetype == 0x80) // DATA ATTRIBUTE
-            {
-                uint8_t* anl = new uint8_t[1];
-                uint8_t attributenamelength = 0;
-                ReadContent(rawcontent, anl, mftoffset + curoffset + 9, 1);
-                attributenamelength = (uint8_t)anl[0];
-                delete[] anl;
-                std::cout << "Attribute Name Length: " << (int)attributenamelength << std::endl;
-                if(attributenamelength == 0) // DEFAULT DATA ENTRY
-                {
-                    // GET RUN LIST AND RETURN LAYOUT
-                    std::string runliststr = "";
-                    uint64_t totalmftsize = 0;
-                    GetRunListLayout(rawcontent, curnt, mftoffset + curoffset, attributelength, &runliststr);
-                    std::cout << "Run List Layout: " << runliststr << std::endl;
-                    break;
-                }
-            }
-            curoffset += attributelength;
-            if(attributelength == 0)
-                break;
-        }
-        // LOGICAL FILE SIZE
-        uint8_t* ls = new uint8_t[8];
-        uint64_t logicalsize = 0;
-        ReadContent(rawcontent, ls, mftoffset + curoffset + 48, 8);
-        ReturnUint64(&logicalsize, ls);
-        delete[] ls;
-        std::cout << "Logical Size: " << logicalsize << std::endl;
+        std::size_t layoutsplit = mftlayoutlist.at(i).find(",");
+        mftsize += std::stoull(mftlayoutlist.at(i).substr(layoutsplit+1));
     }
-    // MOVE THE ABOVE INTO A FUNCTION TO RETURN THE RUN LIST
-
+    std::cout << "MFT Size: " << mftsize << std::endl;
+    uint64_t maxmftentrycount = mftsize / (curnt->mftentrysize * curnt->sectorspercluster * curnt->bytespersector);
+    curnt->maxmftentrycount = maxmftentrycount;
+    std::cout << "Max MFT Entry Count: " << maxmftentrycount << std::endl;
     /*
-	    if(line.startsWith("MFT Layout|"))
-		mftlayout = line.split("|").at(1);
-            else if(line.startsWith("Max MFT Entries|"))
-                maxmftentries = line.split("|").at(1).toULongLong();
-            // GET THE MFT LAYOUT TO WRITE TO PROP FILE
-            if(QString::fromStdString(curimg->ReadContent(mftoffset, 4).toStdString()) == "FILE") // a proper MFT entry
-            {
-                QString runliststr = "";
-                quint64 mftsize = 0;
-                GetRunListLayout(curimg, curstartsector, bytespercluster, 1024, mftoffset + curoffset, &runliststr);
-                //qDebug() << "runliststr for MFT Layout:" << runliststr;
-		for(int j=0; j < runliststr.split(";", Qt::SkipEmptyParts).count(); j++)
-		{
-		    mftsize += runliststr.split(";", Qt::SkipEmptyParts).at(j).split(",").at(1).toULongLong();
-		}
-                //qDebug() << "runliststr for MFT Layout:" << runliststr << "mft size:" << mftsize;
-	        out << "MFT Layout|" << runliststr << "|Layout for the MFT in starting offset, size; format" << Qt::endl;
-                out << "Max MFT Entries|" << QString::number((mftsize)/1024) << "|Max MFT Entries allowed in the MFT" << Qt::endl;
-                runliststr = "";
-                mftsize = 0;
-            }
-            // GET VOLUME LABEL FROM THE $VOLUME_NAME SYSTEM FILE
-            if(QString::fromStdString(curimg->ReadContent(mftoffset + 3 * 1024, 4).toStdString()) == "FILE") // a proper MFT entry
-            {
-                int curoffset = qFromLittleEndian<uint16_t>(curimg->ReadContent(mftoffset + 3*1024 + 20, 2)); // offset to first attribute
-                for(uint i=0; i < qFromLittleEndian<uint16_t>(curimg->ReadContent(mftoffset + 3*1024 + 40, 2)); i++) // loop over attributes until get to next attribute id
-                {
-                    if(qFromLittleEndian<uint32_t>(curimg->ReadContent(mftoffset + 3*1024 + curoffset, 4)) == 0x60) // $VOLUME_NAME attribute to parse (always resident)
-                        break;
-                    curoffset += qFromLittleEndian<uint32_t>(curimg->ReadContent(mftoffset + 3*1024 + curoffset + 4, 4));
-                }
-                for(uint k=0; k < qFromLittleEndian<uint32_t>(curimg->ReadContent(mftoffset + 3*1024 + curoffset + 16, 4))/2; k++)
-                    partitionname += QString(QChar(qFromLittleEndian<uint16_t>(curimg->ReadContent(mftoffset + 3*1024 + curoffset + qFromLittleEndian<uint16_t>(curimg->ReadContent(mftoffset + 3*1024 + curoffset + 20, 2)) + k*2, 2))));
-                out << "Volume Label|" << partitionname << "|Volume Label for the file system." << Qt::endl;
-                partitionname += " [NTFS]";
-            }
-	}
-
-     */ 
+    // LOGICAL FILE SIZE
+    uint8_t* ls = new uint8_t[8];
+    uint64_t logicalsize = 0;
+    ReadContent(rawcontent, ls, mftoffset + curoffset + 48, 8);
+    ReturnUint64(&logicalsize, ls);
+    delete[] ls;
+    std::cout << "Logical Size: " << logicalsize << std::endl;
+    */
 }
 
-/*
-void ParseFatInfo(std::ifstream* rawcontent, fatinfo* curfat)
+uint64_t ParseNtfsPath(std::ifstream* rawcontent, ntfsinfo* curfat, uint64_t ntinode, std::string childpath)
 {
-    // BYTES PER SECTOR
-    uint8_t* bps = new uint8_t[2];
-    uint16_t bytespersector = 0;
-    ReadContent(rawcontent, bps, 11, 2);
-    ReturnUint16(&bytespersector, bps);
-    delete[] bps;
-    curfat->bytespersector = bytespersector;
-    //std::cout << "Bytes Per Sector: " << bytespersector << std::endl;
-    // FAT COUNT
-    uint8_t* fc = new uint8_t[1];
-    uint8_t fatcount = 0;
-    ReadContent(rawcontent, fc, 16, 1);
-    fatcount = (uint8_t)fc[0];
-    delete[] fc;
-    //std::cout << "Fat Count: " << (unsigned int)fatcount << std::endl;
-    // SECTORS PER CLUSTER
-    uint8_t* spc = new uint8_t[1];
-    uint8_t sectorspercluster = 0;
-    ReadContent(rawcontent, spc, 13, 1);
-    sectorspercluster = (uint8_t)spc[0];
-    delete[] spc;
-    curfat->sectorspercluster = sectorspercluster;
-    //std::cout << "Sectors per cluster: " << (unsigned int)sectorspercluster << std::endl;
-    // RESERVED AREA SIZE
-    uint8_t* ras = new uint8_t[2];
-    uint16_t reservedareasize = 0;
-    ReadContent(rawcontent, ras, 14, 2);
-    ReturnUint16(&reservedareasize, ras);
-    delete[] ras;
-    //std::cout << "Reserved Area Size: " << reservedareasize << std::endl;
-    // ROOT DIRECTORY MAX FILES
-    uint8_t* rdmf = new uint8_t[2];
-    uint16_t rootdirmaxfiles = 0;
-    ReadContent(rawcontent, rdmf, 17, 2);
-    ReturnUint16(&rootdirmaxfiles, rdmf);
-    delete[] rdmf;
-    //std::cout << "Root Dir Max Files: " << rootdirmaxfiles << std::endl;
+    uint64_t childntinode = 0;
 
-    if(curfat->fattype == 1 || curfat->fattype == 2)
-    {
-        // FAT SIZE
-        uint8_t* fs = new uint8_t[2];
-        uint16_t fatsize = 0;
-        ReadContent(rawcontent, fs, 22, 2);
-        ReturnUint16(&fatsize, fs);
-        delete[] fs;
-        curfat->fatsize = fatsize;
-        //std::cout << "Fat Size: " << fatsize << std::endl;
-        // CLUSTER AREA START
-	curfat->clusterareastart = reservedareasize + fatcount * fatsize + ((rootdirmaxfiles * 32) + (bytespersector - 1)) / bytespersector;
-        //std::cout << "Cluster Area Start: " << reservedareasize + fatcount * fatsize + ((rootdirmaxfiles * 32) + (bytespersector - 1)) / bytespersector << std::endl;
-        // ROOT DIRECTORY LAYOUT
-        curfat->rootdirlayout = std::to_string((reservedareasize + fatcount * fatsize) * bytespersector) + "," + std::to_string(rootdirmaxfiles * 32 + bytespersector - 1) + ";";
-	curfat->curdirlayout = curfat->rootdirlayout;
-        //std::cout << "Root Directory Layout: " << curfat->rootdirlayout << std::endl;
-    }
-    else if(curfat->fattype == 3) // FAT32
-    {
-        // FAT OFFSET
-        curfat->fatoffset = reservedareasize * bytespersector;
-        //std::cout << "Fat Offset: " << curfat->fatoffset << std::endl;
-	// FAT SIZE
-	uint8_t* fs = new uint8_t[4];
-	uint32_t fatsize = 0;
-	ReadContent(rawcontent, fs, 36, 4);
-	ReturnUint32(&fatsize, fs);
-	delete[] fs;
-	curfat->fatsize = fatsize;
-	//std::cout << "Fat Size: " << fatsize << std::endl;
-	// CLUSTER AREA START
-	curfat->clusterareastart = reservedareasize + (fatcount * fatsize);
-	//std::cout << "Cluster Area Start: " << curfat->clusterareastart << std::endl;
-	// ROOT DIRECTORY LAYOUT
-	uint8_t* rdc = new uint8_t[4];
-	uint32_t rootdircluster = 0;
-	ReadContent(rawcontent, rdc, 44, 4);
-	ReturnUint32(&rootdircluster, rdc);
-	delete[] rdc;
-	std::vector<uint32_t> clusterlist;
-	clusterlist.clear();
-	if(rootdircluster >= 2)
-	{
-	    clusterlist.push_back(rootdircluster);
-	    GetNextCluster(rawcontent, rootdircluster, curfat, &clusterlist);
-	}
-	if(clusterlist.size() > 0)
-	    curfat->rootdirlayout = ConvertClustersToExtents(&clusterlist, curfat);
-	clusterlist.clear();
-	curfat->curdirlayout = curfat->rootdirlayout;
-	//std::cout << "Root Directory Layout: " << curfat->rootdirlayout << std::endl;
-    }
-    else if(curfat->fattype == 4) // EXFAT
-    {
-	// FAT SIZE
-	uint8_t* fs = new uint8_t[4];
-	uint32_t fatsize = 0;
-	ReadContent(rawcontent, fs, 84, 4);
-	ReturnUint32(&fatsize, fs);
-	delete[] fs;
-	curfat->fatsize = fatsize;
-	//std::cout << "FAT Size: " << fatsize << std::endl;
-	// BYTES PER SECTOR
-	uint8_t* bps = new uint8_t[1];
-	ReadContent(rawcontent, bps, 108, 1);
-	uint8_t bpspow = (uint8_t)bps[0];
-	delete[] bps;
-	uint16_t bytespersector = pow(2, bpspow);
-	//std::cout << "Bytes Per Sector: " << bytespersector << std::endl;
-	curfat->bytespersector = bytespersector;
-	// SECTORS PER CLUSTER
-	uint8_t* spc = new uint8_t[1];
-	ReadContent(rawcontent, spc, 109, 1);
-	uint8_t spcpow = (uint8_t)spc[0];
-	delete[] spc;
-	uint16_t sectorspercluster = pow(2, spcpow);
-	//std::cout << "Sectors Per Cluster: " << sectorspercluster << std::endl;
-	curfat->sectorspercluster = sectorspercluster;
-	// FAT OFFSET
-	uint8_t* fo = new uint8_t[4];
-	uint32_t foff = 0;
-	ReadContent(rawcontent, fo, 80, 4);
-	ReturnUint32(&foff, fo);
-	delete[] fo;
-	curfat->fatoffset = foff * curfat->bytespersector;
-	//std::cout << "FAT Offset: " << curfat->fatoffset << std::endl;
-	// CLUSTER AREA START
-	uint8_t* cas = new uint8_t[4];
-	uint32_t clusterareastart = 0;
-	ReadContent(rawcontent, cas, 88, 4);
-	ReturnUint32(&clusterareastart, cas);
-	delete[] cas;
-	curfat->clusterareastart = clusterareastart;
-	//std::cout << "Cluster Area Start: " << clusterareastart << std::endl;
-	// ROOT DIRECTORY LAYOUT
-	uint8_t* rdc = new uint8_t[4];
-	uint32_t rootdircluster = 0;
-	ReadContent(rawcontent, rdc, 96, 4);
-	ReturnUint32(&rootdircluster, rdc);
-	delete[] rdc;
-	std::vector<uint32_t> clusterlist;
-	clusterlist.clear();
-	if(rootdircluster >= 2)
-	{
-	    clusterlist.push_back(rootdircluster);
-	    GetNextCluster(rawcontent, rootdircluster, curfat, &clusterlist);
-	}
-	if(clusterlist.size() > 0)
-	    curfat->rootdirlayout = ConvertClustersToExtents(&clusterlist, curfat);
-	clusterlist.clear();
-	curfat->curdirlayout = curfat->rootdirlayout;
-	//std::cout << "Root Directory Layout: " << curfat->rootdirlayout << std::endl;
-    }
+    return childntinode;
 }
-*/
 
 void ParseNtfsForensics(std::string filename, std::string mntptstr, std::string devicestr, uint8_t ftype)
 {
@@ -606,6 +439,43 @@ void ParseNtfsForensics(std::string filename, std::string mntptstr, std::string 
     ntfsinfo curnt;
     // GET NTFS FILESYSTEM INFO
     ParseNtfsInfo(&devicebuffer, &curnt);
+    std::string pathstring = "";
+    if(mntptstr.compare("/") == 0)
+        pathstring = filename;
+    else
+    {
+        std::size_t initpos = filename.find(mntptstr);
+        pathstring = filename.substr(initpos + mntptstr.size());
+    }
+    std::cout << "pathstring: " << pathstring << std::endl;
+    // SPLIT CURRENT FILE PATH INTO DIRECTORY STEPS
+    std::vector<std::string> pathvector;
+    std::istringstream iss(pathstring);
+    std::string pp;
+    while(getline(iss, pp, '/'))
+        pathvector.push_back(pp);
+
+    if(pathvector.size() > 2)
+    {
+        uint64_t childntinode = 0;
+        childntinode = ParseNtfsPath(&devicebuffer, &curnt, 5, pathvector.at(1)); // parse root directory for child directory
+        //std::string nextdirlayout = "";
+	//nextdirlayout = ParseFatPath(&devicebuffer, &curfat, pathvector.at(1));
+        //curfat.curdirlayout = nextdirlayout;
+	//std::cout << "child path: " << pathvector.at(1) << "'s layout: " << nextdirlayout << std::endl;
+
+        std::cout << "path vector size: " << pathvector.size() << std::endl;
+	for(int i=1; i < pathvector.size() - 2; i++)
+        {
+            std::cout << "get next directory..";
+	    //nextdirlayout = ParseFatPath(&devicebuffer, &curfat, pathvector.at(i+1));
+	    //curfat.curdirlayout = nextdirlayout;
+	    //std::cout << "child path: " << pathvector.at(i+1) << "'s layout: " << nextdirlayout << std::endl;
+	}
+    }
+    //std::cout << "now to parse fat file: " << pathvector.at(pathvector.size() - 1) << std::endl;
+    //std::string forensicsinfo = ParseFatFile(&devicebuffer, &curfat, pathvector.at(pathvector.size() - 1));
+    //std::cout << forensicsinfo << std::endl;
 
     /*
      *
@@ -620,22 +490,7 @@ void ParseNtfsForensics(std::string filename, std::string mntptstr, std::string 
 /*
 void ParseFatForensics(std::string filename, std::string mntptstr, std::string devicestr, uint8_t ftype)
 {
-    std::ifstream devicebuffer(devicestr.c_str(), std::ios::in|std::ios::binary);
-    std::cout << filename << " || " << mntptstr << " || " << devicestr  << " || " << (int)ftype << std::endl;
-    // FTYPE = 1 (FAT12) = 2 (FAT16) = 3 (FAT32) = 4 (EXFAT)
     
-    fatinfo curfat;
-    curfat.fattype = ftype;
-    // GET FAT FILESYSTEM INFO
-    ParseFatInfo(&devicebuffer, &curfat);
-    std::string pathstring = "";
-    if(mntptstr.compare("/") == 0)
-        pathstring = filename;
-    else
-    {
-        std::size_t initpos = filename.find(mntptstr);
-        pathstring = filename.substr(initpos + mntptstr.size());
-    }
     //std::cout << "pathstring: " << pathstring << std::endl;
     // SPLIT CURRENT FILE PATH INTO DIRECTORY STEPS
     std::vector<std::string> pathvector;

@@ -7,6 +7,7 @@ struct ntfsinfo
     uint8_t sectorspercluster = 0;
     uint8_t mftentrysize = 0;
     uint64_t mftstartingcluster = 0;
+    uint64_t maxmftentrycount = 0;
     std::string mftlayout = "";
 };
 /*
@@ -18,6 +19,10 @@ std::string ParseFatPath(std::ifstream* rawcontent, fatinfo* curfat, std::string
 std::string ParseFatFile(std::ifstream* rawcontent, fatinfo* curfat, std::string childfile);
 
 */
+
+std::string GetDataAttributeLayout(std::ifstream* rawcontent, ntfsinfo* curnt, uint64_t mftoffset);
+
+uint64_t ParseNtfsPath(std::ifstream* rawcontent, ntfsinfo* curfat, uint64_t ntinode, std::string childpath);
 
 void GetRunListLayout(std::ifstream* rawcontent, ntfsinfo* curnt, uint64_t curoffset, uint32_t attributelength, std::string* runliststr);
 
