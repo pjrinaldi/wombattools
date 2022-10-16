@@ -557,6 +557,7 @@ uint64_t ParseNtfsPath(std::ifstream* rawcontent, ntfsinfo* curnt, uint64_t ntin
     std::cout << "MFT Entry Offset: " << mftentryoffset << std::endl;
     std::string indexlayout = GetIndexAttributesLayout(rawcontent, curnt, mftentryoffset);
     std::cout << "Index Layout: " << indexlayout << std::endl;
+    // PARSE INDEX ROOT AND ALLOCATION TO DETERMINE THE DIR/FILE NAME/INODE AND SEE IF THEY MATCH
 
 
     return childntinode;
