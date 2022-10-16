@@ -8,7 +8,7 @@ struct ntfsinfo
     uint8_t mftentrysize = 0;
     uint64_t mftstartingcluster = 0;
     uint64_t maxmftentrycount = 0;
-    std::string mftlayout = "";
+    //std::string mftlayout = "";
 };
 /*
 std::string ConvertDosTimeToHuman(uint16_t* dosdate, uint16_t* dostime);
@@ -21,8 +21,9 @@ std::string ParseFatFile(std::ifstream* rawcontent, fatinfo* curfat, std::string
 */
 
 std::string GetDataAttributeLayout(std::ifstream* rawcontent, ntfsinfo* curnt, uint64_t mftoffset);
+std::string GetIndexAttributesLayout(std::ifstream* rawcontent, ntfsinfo* curnt, uint64_t mftentryoffset);
 
-uint64_t ParseNtfsPath(std::ifstream* rawcontent, ntfsinfo* curfat, uint64_t ntinode, std::string childpath);
+uint64_t ParseNtfsPath(std::ifstream* rawcontent, ntfsinfo* curnt, uint64_t ntinode, std::string childpath);
 
 void GetRunListLayout(std::ifstream* rawcontent, ntfsinfo* curnt, uint64_t curoffset, uint32_t attributelength, std::string* runliststr);
 

@@ -98,6 +98,95 @@ void GetRunListLayout(std::ifstream* rawcontent, ntfsinfo* curnt, uint64_t curof
     runlenlist.clear();
 }
 
+std::string GetIndexAttributesLayout(std::ifstream* rawcontent, ntfsinfo* curnt, uint64_t mftentryoffset)
+{
+    std::string indexlayout = "";
+    uint8_t* mes = new uint8_t[5];
+    ReadContent(rawcontent, mes, mftentryoffset, 4);
+    mes[4] = '\0';
+    std::string mestr((char*)mes);
+    delete[] mes;
+    //std::cout << "MFT Entry 0 Signature: " << me0str << std::endl;
+    if(mestr.compare("FILE") == 0) // A PROPER MFT ENTRY
+    {
+        // OFFSET TO THE FIRST ATTRIBUTE
+        uint8_t* fao = new uint8_t[2];
+        uint16_t firstattributeoffset = 0;
+        ReadContent(rawcontent, fao, mftentryoffset + 20, 2);
+        ReturnUint16(&firstattributeoffset, fao);
+        delete[] fao;
+        std::cout << "First Attribute Offset: " << firstattributeoffset << std::endl;
+        /*
+        // NEXT ATTRIBUTE ID
+        uint8_t* nai = new uint8_t[2];
+        uint16_t nextattributeid = 0;
+        ReadContent(rawcontent, nai, mftoffset + 40, 2);
+        ReturnUint16(&nextattributeid, nai);
+        delete[] nai;
+        std::cout << "Next Attribute ID: " << nextattributeid << std::endl;
+        */
+        uint64_t indexrootoffset = 0;
+        uint32_t indexrootlength = 0;
+        std::string indexallocationlayout = "";
+        // LOOP OVER ATTRIBUTES TO FIND DATA ATTRIBUTE
+        uint16_t curoffset = firstattributeoffset;
+        while(curoffset < curnt->mftentrysize * curnt->sectorspercluster * curnt->bytespersector)
+        {
+            std::cout << "Current Offset: " << curoffset << std::endl;
+            // ATTRIBUTE LENGTH
+            uint8_t* al = new uint8_t[4];
+            uint32_t attributelength = 0;
+            ReadContent(rawcontent, al, mftentryoffset + curoffset + 4, 4);
+            ReturnUint32(&attributelength, al);
+            delete[] al;
+            std::cout << "Attribute Length: " << attributelength << std::endl;
+            // ATTRIBUTE TYPE
+            uint8_t* at = new uint8_t[4];
+            uint32_t attributetype = 0;
+            ReadContent(rawcontent, at, mftentryoffset + curoffset, 4);
+            ReturnUint32(&attributetype, at);
+            delete[] at;
+            std::cout << "Attribute Type: 0x" << std::hex << attributetype << std::dec << std::endl;
+            if(attributetype == 0x90) // $INDEX_ROOT - ALWAYS RESIDENT
+            {
+                // ATTRIBUTE CONTENT LENGTH
+                uint8_t* cl = new uint8_t[4];
+                uint32_t contentlength = 0;
+                ReadContent(rawcontent, cl, mftentryoffset + curoffset + 16, 4);
+                ReturnUint32(&contentlength, cl);
+                delete[] cl;
+                indexrootlength = contentlength;
+                // ATTRIBUTE CONTENT OFFSET
+                uint8_t* co = new uint8_t[2];
+                uint16_t contentoffset = 0;
+                ReadContent(rawcontent, co, mftentryoffset + curoffset + 20, 2);
+                ReturnUint16(&contentoffset, co);
+                delete[] co;
+                indexrootoffset = mftentryoffset + curoffset + contentoffset;
+            }
+            else if(attributetype == 0xa0) // $INDEX_ALLOCATION - ALWAYS NON-RESIDENT
+            {
+                 GetRunListLayout(rawcontent, curnt, mftentryoffset + curoffset, attributelength, &indexallocationlayout);
+            }
+            curoffset += attributelength;
+            if(attributelength == 0 || attributetype == 0xffffffff)
+                break;
+        }
+        indexlayout = std::to_string(indexrootoffset) + "," + std::to_string(indexrootlength) + ";";
+        if(!indexallocationlayout.empty())
+            indexlayout += indexallocationlayout;
+
+        std::cout << "Index Root Offset: " << indexrootoffset << " Length: " << indexrootlength << std::endl;
+        std::cout << "Index Allocation Layout: " << indexallocationlayout << std::endl;
+
+        return indexlayout;
+    }
+
+    return "";
+
+}
+// will need to fix this so it accounts for resident and non-resident...
+// right now it is non-resident only since the mft is always non-resident..
 std::string GetDataAttributeLayout(std::ifstream* rawcontent, ntfsinfo* curnt, uint64_t mftoffset)
 {
     uint8_t* me0s = new uint8_t[5];
@@ -116,6 +205,7 @@ std::string GetDataAttributeLayout(std::ifstream* rawcontent, ntfsinfo* curnt, u
         ReturnUint16(&firstattributeoffset, fao);
         delete[] fao;
         std::cout << "First Attribute Offset: " << firstattributeoffset << std::endl;
+        /*
         // NEXT ATTRIBUTE ID
         uint8_t* nai = new uint8_t[2];
         uint16_t nextattributeid = 0;
@@ -123,12 +213,19 @@ std::string GetDataAttributeLayout(std::ifstream* rawcontent, ntfsinfo* curnt, u
         ReturnUint16(&nextattributeid, nai);
         delete[] nai;
         std::cout << "Next Attribute ID: " << nextattributeid << std::endl;
+        */
         // LOOP OVER ATTRIBUTES TO FIND DATA ATTRIBUTE
         uint16_t curoffset = firstattributeoffset;
-        //for(int i=0; i < nextattributeid; i++)
         while(curoffset < curnt->mftentrysize * curnt->sectorspercluster * curnt->bytespersector)
         {
             std::cout << "Current Offset: " << curoffset << std::endl;
+            // IS RESIDENT/NON-RESIDENT
+            uint8_t* rf = new uint8_t[1];
+            uint8_t isnonresident = 0; // 0 - Resident | 1 - Non-Resident
+            ReadContent(rawcontent, rf, mftoffset + curoffset + 8, 1);
+            isnonresident = (uint8_t)rf[0];
+            delete[] rf;
+            std::cout << "Is None Resident: " << (int)isnonresident << std::endl;
             // ATTRIBUTE LENGTH
             uint8_t* al = new uint8_t[4];
             uint32_t attributelength = 0;
@@ -153,11 +250,17 @@ std::string GetDataAttributeLayout(std::ifstream* rawcontent, ntfsinfo* curnt, u
                 std::cout << "Attribute Name Length: " << (int)attributenamelength << std::endl;
                 if(attributenamelength == 0) // DEFAULT DATA ENTRY
                 {
-                    // GET RUN LIST AND RETURN LAYOUT
-                    uint64_t totalmftsize = 0;
-                    GetRunListLayout(rawcontent, curnt, mftoffset + curoffset, attributelength, &runliststr);
-                    std::cout << "Run List Layout: " << runliststr << std::endl;
-                    break;
+                    if(isnonresident == 1)
+                    {
+                        // GET RUN LIST AND RETURN LAYOUT
+                        uint64_t totalmftsize = 0;
+                        GetRunListLayout(rawcontent, curnt, mftoffset + curoffset, attributelength, &runliststr);
+                        std::cout << "Run List Layout: " << runliststr << std::endl;
+                        break;
+                    }
+                    else // is resident 0
+                    {
+                    }
                 }
             }
             curoffset += attributelength;
@@ -396,7 +499,7 @@ void ParseNtfsInfo(std::ifstream* rawcontent, ntfsinfo* curnt)
     // MFT LAYOUT
     uint64_t mftoffset = mftstartingcluster * sectorspercluster * bytespersector;
     std::string mftlayout = GetDataAttributeLayout(rawcontent, curnt, mftoffset);
-    curnt->mftlayout = mftlayout;
+    //curnt->mftlayout = mftlayout;
     std::vector<std::string> mftlayoutlist;
     mftlayoutlist.clear();
     std::istringstream mll(mftlayout);
@@ -424,128 +527,46 @@ void ParseNtfsInfo(std::ifstream* rawcontent, ntfsinfo* curnt)
     */
 }
 
-uint64_t ParseNtfsPath(std::ifstream* rawcontent, ntfsinfo* curfat, uint64_t ntinode, std::string childpath)
+uint64_t ParseNtfsPath(std::ifstream* rawcontent, ntfsinfo* curnt, uint64_t ntinode, std::string childpath)
 {
     uint64_t childntinode = 0;
+    uint64_t mftentryoffset = 0;
+    uint64_t mftoffset = curnt->mftstartingcluster * curnt->sectorspercluster * curnt->bytespersector;
+    uint64_t mftlength = 0;
+    std::string mftlayout = GetDataAttributeLayout(rawcontent, curnt, mftoffset);
+    std::vector<std::string> mftlayoutlist;
+    mftlayoutlist.clear();
+    std::istringstream mll(mftlayout);
+    std::string mls;
+    uint64_t relativentinode = ntinode;
+    uint64_t mftsize = 0;
+    while(getline(mll, mls, ';'))
+        mftlayoutlist.push_back(mls);
+    for(int i=0; i < mftlayoutlist.size(); i++)
+    {
+        std::size_t layoutsplit = mftlayoutlist.at(i).find(",");
+        mftoffset = std::stoull(mftlayoutlist.at(i).substr(0, layoutsplit));
+        mftlength = std::stoull(mftlayoutlist.at(i).substr(layoutsplit+1));
+        uint64_t curmaxntinode = mftlength / (curnt->mftentrysize * curnt->sectorspercluster * curnt->bytespersector);
+        if(relativentinode < curmaxntinode)
+            break;
+        else
+            relativentinode = relativentinode - curmaxntinode;
+    }
+    mftentryoffset = mftoffset + relativentinode * curnt->mftentrysize * curnt->sectorspercluster * curnt->bytespersector;
+    std::cout << "MFT Entry Offset: " << mftentryoffset << std::endl;
+    std::string indexlayout = GetIndexAttributesLayout(rawcontent, curnt, mftentryoffset);
+    std::cout << "Index Layout: " << indexlayout << std::endl;
+
 
     return childntinode;
     /*
-    QString mftlayout = "";
-    uint16_t mftentrybytes = 0;
-    uint32_t bytespercluster = 0;
-    quint64 maxmftentries = 0;
-    quint64 inodecnt = 0;
-
-    if(!parfilename.isEmpty())
-	inodecnt = parinode + 1;
-
-    QFile propfile(curimg->MountPath() + "/p" + QString::number(ptreecnt) + "/prop");
-    if(!propfile.isOpen())
-	propfile.open(QIODevice::ReadOnly | QIODevice::Text);
-    if(propfile.isOpen())
-    {
-        while(!propfile.atEnd())
-        {
-            QString line = propfile.readLine();
-	    if(line.startsWith("MFT Layout|"))
-		mftlayout = line.split("|").at(1);
-	    else if(line.startsWith("MFT Entry Bytes|"))
-		mftentrybytes = line.split("|").at(1).toUInt();
-	    else if(line.startsWith("Bytes Per Cluster|"))
-		bytespercluster = line.split("|").at(1).toUInt();
-            else if(line.startsWith("Max MFT Entries|"))
-                maxmftentries = line.split("|").at(1).toULongLong();
-	}
-	propfile.close();
-    }
-    //qDebug() << "mft layout:" << mftlayout << "mft entry bytes:" << mftentrybytes << "bytes per cluster:" << bytespercluster;
-    //qDebug() << "mft entry offset:" << parentntinode * mftentrybytes;
-
-
-    quint64 mftoffset = 0;
-    quint64 mftentryoffset = 0;
-    if(parlayout.isEmpty())
-    {
-	// THIS MATH IS WORKING, BUT MIGHT BE OFF BY 1 DUE TO THE MFT STARTING AT 0, WILL HAVE TO TEST WITH THE ROOT DIR.
-	quint64 curmaxntinode = 0;
-	quint64 oldmaxntinode = 0;
-	quint64 relativeparntinode = parentntinode;
-	for(int i=0; i < mftlayout.split(";", Qt::SkipEmptyParts).count(); i++)
-	{
-	    //qDebug() << "mftoffset:" << mftlayout.split(";", Qt::SkipEmptyParts).at(i).split(",").at(0).toULongLong() << "mftlayout length:" << mftlayout.split(";", Qt::SkipEmptyParts).at(i).split(",").at(1).toULongLong();
-	    //qDebug() << "parentntinode:" << parentntinode << "i:" << i << "mft entries:" << mftlayout.split(";", Qt::SkipEmptyParts).at(i).split(",").at(1).toULongLong() / mftentrybytes;
-	    curmaxntinode = mftlayout.split(";", Qt::SkipEmptyParts).at(i).split(",").at(1).toULongLong() / mftentrybytes;
-	    //qDebug() << "curmaxntinode:" << curmaxntinode;
-	    if(relativeparntinode < curmaxntinode)
-	    {
-		mftoffset = mftlayout.split(";", Qt::SkipEmptyParts).at(i).split(",").at(0).toULongLong();
-		break;
-	    }
-	    else
-		relativeparntinode = relativeparntinode - curmaxntinode;
-	}
-	//qDebug() << "final mftoffset:" << mftoffset;
-	//qDebug() << "relative parent nt inode:" << relativeparntinode;
-
-	//qDebug() << "mftoffset:" << mftoffset;
-	mftentryoffset = mftoffset + relativeparntinode * mftentrybytes;
-    }
-    else // use existing parent layout which is the offset and 1024 for the current dir
-    {
-	//if(parentntinode == 7797)
-	    //qDebug() << "parntinode:" << parentntinode << "inode:" << parinode << "parlayout:" << parlayout;
-	mftentryoffset = parlayout.split(";", Qt::SkipEmptyParts).at(0).split(",").at(0).toULongLong();
-    }
-    //if(parentntinode == 7797)
-	//qDebug() << "mftentryoffset:" << mftentryoffset;
-    //quint64 mftentryoffset = mftoffset + parentntinode * mftentrybytes;
-    //qDebug() << "actual mftentryoffset:" << mftentryoffset;
-    // PARSE MFT ENTRY FOR THE DIRECTORY SO I CAN THEN GET IT's CONTENTS AND PARSE THE INDIVIDUAL FILES WITHIN IT...
-    quint64 curoffset = 0;
-    uint16_t firstattroffset = qFromLittleEndian<uint16_t>(curimg->ReadContent(mftentryoffset + 20, 2));
-    uint16_t attrcount = qFromLittleEndian<uint16_t>(curimg->ReadContent(mftentryoffset + 40, 2));
-    uint32_t attrlength = 0;
-    curoffset = mftentryoffset + firstattroffset;
-    //qDebug() << "first attr offset:" << firstattroffset << "attrcount:" << attrcount;
     quint64 indxrootoffset = 0;
     uint32_t indxrootlength = 0;
     QList<quint64> indxallocoffset;
     QList<quint64> indxalloclength;
     indxallocoffset.clear();
     indxalloclength.clear();
-    for(uint16_t i=0; i < attrcount; i++)
-    {
-	//qDebug() << "curoffset:" << curoffset;
-	uint32_t attrtype = qFromLittleEndian<uint32_t>(curimg->ReadContent(curoffset, 4)); // attribute type
-	//qDebug() << "attrtype:" << QString::number(attrtype, 16);
-	uint8_t namelength = qFromLittleEndian<uint8_t>(curimg->ReadContent(curoffset + 9, 1)); // length of attribute name
-	attrlength = qFromLittleEndian<uint32_t>(curimg->ReadContent(curoffset + 4, 4)); // attribute length
-	uint16_t nameoffset = qFromLittleEndian<uint16_t>(curimg->ReadContent(curoffset + 10, 2)); // offset to the attribute name
-	QString attrname = "";
-	uint16_t attrdataflags = qFromLittleEndian<uint16_t>(curimg->ReadContent(curoffset + 12, 2)); // attrdata flags
-	if(attrtype == 0x90) // $INDEX_ROOT - ALWAYS RESIDENT
-	{
-	    uint32_t contentlength = qFromLittleEndian<uint32_t>(curimg->ReadContent(curoffset + 16, 4)); // attribute content length
-	    uint16_t contentoffset = qFromLittleEndian<uint16_t>(curimg->ReadContent(curoffset + 20, 2)); // attribute content offset
-	    indxrootoffset = curoffset + contentoffset;
-	    indxrootlength = contentlength;
-	}
-	else if(attrtype == 0xa0) // $INDEX_ALLOCATION - ALWAYS NON_RESIDENT
-	{
-	    QString layout = "";
-	    GetRunListLayout(curimg, curstartsector, bytespercluster, mftentrybytes, curoffset, &layout);
-	    //if(parentntinode == 7797)
-		//qDebug() << "curoffset:" << curoffset << "layout:" << layout;
-	    for(int j=0; j < layout.split(";", Qt::SkipEmptyParts).count(); j++)
-	    {
-		indxallocoffset.append(layout.split(";", Qt::SkipEmptyParts).at(j).split(",").at(0).toULongLong() / bytespercluster);
-		indxalloclength.append(layout.split(";", Qt::SkipEmptyParts).at(j).split(",").at(1).toULongLong() / bytespercluster);
-	    }
-	}
-	else if(attrtype == 0xffffffff)
-	    break;
-	curoffset += attrlength;
-    }
 
     uint32_t indxrecordsize = qFromLittleEndian<uint32_t>(curimg->ReadContent(indxrootoffset + 8, 4)); // INDEX RECORD SIZE (bytes)
     //qDebug() << "indxrecordsize:" << indxrecordsize;
@@ -700,7 +721,7 @@ void ParseNtfsForensics(std::string filename, std::string mntptstr, std::string 
     while(getline(iss, pp, '/'))
         pathvector.push_back(pp);
 
-    if(pathvector.size() > 2)
+    if(pathvector.size() > 1)
     {
         uint64_t childntinode = 0;
         childntinode = ParseNtfsPath(&devicebuffer, &curnt, 5, pathvector.at(1)); // parse root directory for child directory
@@ -709,16 +730,16 @@ void ParseNtfsForensics(std::string filename, std::string mntptstr, std::string 
         //curfat.curdirlayout = nextdirlayout;
 	//std::cout << "child path: " << pathvector.at(1) << "'s layout: " << nextdirlayout << std::endl;
 
-        std::cout << "path vector size: " << pathvector.size() << std::endl;
+        //std::cout << "path vector size: " << pathvector.size() << std::endl;
 	for(int i=1; i < pathvector.size() - 2; i++)
         {
-            std::cout << "get next directory..";
+            //std::cout << "get next directory..";
 	    //nextdirlayout = ParseFatPath(&devicebuffer, &curfat, pathvector.at(i+1));
 	    //curfat.curdirlayout = nextdirlayout;
 	    //std::cout << "child path: " << pathvector.at(i+1) << "'s layout: " << nextdirlayout << std::endl;
 	}
     }
-    //std::cout << "now to parse fat file: " << pathvector.at(pathvector.size() - 1) << std::endl;
+    //std::cout << "now to parse ntfs file: " << pathvector.at(pathvector.size() - 1) << std::endl;
     //std::string forensicsinfo = ParseFatFile(&devicebuffer, &curfat, pathvector.at(pathvector.size() - 1));
     //std::cout << forensicsinfo << std::endl;
 
