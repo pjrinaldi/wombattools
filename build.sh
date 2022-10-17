@@ -49,7 +49,8 @@ echo "Building wombatlogical"
 
 g++ -O3 -o wombatlogical wombatlogical.cpp -ltar -lzstd -lpthread -L. -lblake3
 
-echo "Building wombatfileforensics"
+# Moved to it's own repository
+#echo "Building wombatfileforensics"
 
-g++ -O3 -o wombatfileforensics common.cpp ntfs.cpp fatfs.cpp extfs.cpp wombatfileforensics.cpp -lpthread -L. -lblake3
+#g++ -O3 -o wombatfileforensics common.cpp ntfs.cpp fatfs.cpp extfs.cpp wombatfileforensics.cpp -lpthread -L. -lblake3
 
