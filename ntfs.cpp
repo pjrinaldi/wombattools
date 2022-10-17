@@ -675,6 +675,8 @@ uint64_t ParseNtfsPath(std::ifstream* rawcontent, ntfsinfo* curnt, uint64_t ntin
                                     filename += (char)singleletter;
                                 }
                                 std::cout << "File Name to compare to child name: " << filename << " " << childpath << std::endl;
+                                if(filename.compare(childpath) == 0)
+                                    return childntinode;
                             }
                         }
                     }
@@ -684,6 +686,30 @@ uint64_t ParseNtfsPath(std::ifstream* rawcontent, ntfsinfo* curnt, uint64_t ntin
         }
         else // $INDEX_ALLOCATION
         {
+            uint32_t indexrecordcount = indexlength / indexrecordsize;
+            std::cout << "Index Record Count: " << indexrecordcount << std::endl;
+            uint64_t curpos = indexoffset;
+            for(uint32_t j=0; j < indexrecordcount; j++)
+            {
+                // START OFFSET
+                uint8_t* so = new uint8_t[4];
+                uint32_t startoffset = 0;
+                ReadContent(rawcontent, so, curpos + 24, 4);
+                ReturnUint32(&startoffset, so);
+                delete[] so;
+                std::cout << "Start Offset: " << startoffset << std::endl;
+                // END OFFSET
+                uint8_t* eo = new uint8_t[4];
+                uint32_t endoffset = 0;
+                ReadContent(rawcontent, eo, curpos + 28, 4);
+                ReturnUint32(&endoffset, eo);
+                delete[] eo;
+                std::cout << "End Offset: " << endoffset << std::endl;
+                curpos = curpos + 24 + startoffset + j*indexrecordsize;
+                while(curpos < indexoffset + j*indexrecordsize + indexrecordsize)
+                {
+                }
+            }
         }
     }
 
@@ -693,55 +719,6 @@ uint64_t ParseNtfsPath(std::ifstream* rawcontent, ntfsinfo* curnt, uint64_t ntin
     uint32_t indxrootlength = 0;
     QList<quint64> indxallocoffset;
     QList<quint64> indxalloclength;
-    // PARE $INDEX_ROOT RECORD
-    uint curpos = indxrootoffset + 16 + startoffset;
-    //qDebug() << "initial curpos:" << curpos << "initial end pos:" << indxrootoffset + 16 + startoffset + allocoffset;
-    while(curpos < indxrootoffset + 16 + startoffset + allocoffset)
-    {
-	//qDebug() << "curpos:" << curpos - indxrootoffset - startoffset - 16;
-	uint16_t indxentrylength = qFromLittleEndian<uint16_t>(curimg->ReadContent(curpos + 8, 2));
-	uint16_t filenamelength = qFromLittleEndian<uint16_t>(curimg->ReadContent(curpos + 10, 2));
-	uint16_t i30seqid = qFromLittleEndian<uint16_t>(curimg->ReadContent(curpos + 6, 2)); // seq number of index entry
-	uint64_t ntinode = qFromLittleEndian<uint64_t>(curimg->ReadContent(curpos, 6));
-	ntinode = ntinode & 0x00ffffffffffffff;
-	//qDebug() << "ntinode:" << ntinode;
-	//if((ntinode == 0 && relativeparntinode == 5) || (indxentrylength > 0 && filenamelength > 0 && ntinode <= maxmftentries && indxentrylength < indxrecordsize && filenamelength < indxentrylength && filenamelength > 66 && indxentrylength % 4 == 0))
-	if((indxentrylength > 0 && filenamelength > 0 && ntinode <= maxmftentries && indxentrylength < indxrecordsize && filenamelength < indxentrylength && filenamelength > 66 && indxentrylength % 4 == 0))
-	{
-	    curpos = curpos + 16;
-	    uint8_t fnametype = qFromLittleEndian<uint8_t>(curimg->ReadContent(curpos + 65, 1));
-	    if(fnametype != 0x02)
-	    {
-		uint8_t fnamelength = qFromLittleEndian<uint8_t>(curimg->ReadContent(curpos + 64, 1));
-		QString filename = "";
-		for(uint8_t i=0; i < fnamelength; i++)
-		    filename += QString(QChar(qFromLittleEndian<uint16_t>(curimg->ReadContent(curpos + 66 + i*2, 2))));
-		if(filename != "." && filename != ".." && !filename.isEmpty())
-		{
-		    uint64_t parntinode = qFromLittleEndian<uint64_t>(curimg->ReadContent(curpos, 6));
-		    uint16_t i30parseqid = qFromLittleEndian<uint16_t>(curimg->ReadContent(curpos + 6, 2));
-		    quint64 i30create = qFromLittleEndian<uint64_t>(curimg->ReadContent(curpos + 8, 8));
-		    quint64 i30modify = qFromLittleEndian<uint64_t>(curimg->ReadContent(curpos + 16, 8));
-		    quint64 i30status = qFromLittleEndian<uint64_t>(curimg->ReadContent(curpos + 24, 8));
-		    quint64 i30access = qFromLittleEndian<uint64_t>(curimg->ReadContent(curpos + 32, 8));
-		    //qDebug() << "Filename:" << filename;
-		    parntinode = parntinode & 0x00ffffffffffffff;
-		    if(parntinode <= maxmftentries)
-		    {
-			if(ntinodehash->contains(ntinode) && ntinodehash->value(ntinode) == i30seqid)
-			{
-			    //qDebug() << "indxroot: do nothing because ntinode already parsed and sequence id is equal.";
-			}
-			else
-			    inodecnt = GetMftEntryContent(curimg, curstartsector, ptreecnt, ntinode, parentntinode, parntinode, mftlayout, mftentrybytes, bytespercluster, inodecnt, filename, parinode, parfilename, i30seqid, i30parseqid, i30create, i30modify, i30status, i30access, curpos, indxrootoffset + 16 + startoffset + endoffset, dirntinodehash, ntinodehash);
-		    }
-		}
-	    }
-	    curpos = curpos - 16 + indxentrylength;
-	}
-	else
-	    curpos = curpos + 4;
-    }
     if(indxallocoffset.count() > 0) // INDX ALLOC EXISTS, SO LETS PARSE IT
     {
         for(int i=0; i < indxallocoffset.count(); i++)
@@ -749,8 +726,6 @@ uint64_t ParseNtfsPath(std::ifstream* rawcontent, ntfsinfo* curnt, uint64_t ntin
             uint32_t indxrecordcount = (indxalloclength.at(i) * bytespercluster) / indxrecordsize;
             for(uint32_t j=0; j < indxrecordcount; j++)
             {
-                quint64 curpos = indxallocoffset.at(i) * bytespercluster;
-                uint32_t startoffset = qFromLittleEndian<uint32_t>(curimg->ReadContent(curpos + 24, 4));
                 uint32_t endoffset = qFromLittleEndian<uint32_t>(curimg->ReadContent(curpos + 28, 4));
                 uint32_t allocoffset = qFromLittleEndian<uint32_t>(curimg->ReadContent(curpos + 32, 4));
                 curpos = curpos + 24 + startoffset + j*indxrecordsize;
