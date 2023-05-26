@@ -137,6 +137,9 @@ static int wombat_read(const char *path, char *buf, size_t size, off_t offset, s
     size_t readcount = 0;
     size_t outcount = 0;
 
+    // maybe loop through without reading anything, just to get the uncompressed offset and then once it's found
+    // i can jump to that point based on compressed block info and the uncompressed info and read that into a buffer...
+    // when i work on this, i need to document this code better so i don't have to relearn it everytime.
     while( (read = fread_orDie(bufin, toread, fout)) )
     {
         readcount = readcount + read;
