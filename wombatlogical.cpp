@@ -1,9 +1,8 @@
 #include <stdint.h>
 #include <fcntl.h>
-#include <linux/fs.h>
-#include <sys/ioctl.h>
-#include <libudev.h>
-#include <stdio.h>
+//#include <linux/fs.h>
+//#include <sys/ioctl.h>
+//#include <libudev.h>
 #include <unistd.h>
 #include <errno.h>
 #include <stdio.h>
@@ -11,6 +10,7 @@
 #include <string.h>
 #include <limits.h>
 #include <stdlib.h>
+#include <sys/stat.h>
 
 #include <string>
 #include <vector>
@@ -18,8 +18,8 @@
 #include <iostream>
 #include <fstream>
 
-#include <tar.h>
-#include <libtar.h>
+//#include <tar.h>
+//#include <libtar.h>
 
 #include "blake3.h"
 
@@ -29,6 +29,12 @@
 #define DTTMFMT "%F %T %z"
 #define DTTMSZ 35
 
+struct joey_metadata
+{
+
+};
+
+/*
 struct wfi_metadata
 {
     uint32_t skipframeheader; // skippable frame header - 4
@@ -45,6 +51,7 @@ struct wfi_metadata
     char description[128]; // 128 character string - 128
     uint8_t devhash[32]; // blake3 source hash - 32
 } wfimd; // 256
+*/
 
 static char* GetDateTime(char *buff)
 {
@@ -57,13 +64,13 @@ void ShowUsage(int outtype)
 {
     if(outtype == 0)
     {
-        printf("Create logical forensic image IMAGE_NAME.wli, log file IMAGE_NAME.log from device FILES, automatically generates tar, applies zstd compression, and optionally validates forensic image.\n\n");
+        printf("Create logical forensic image IMAGE_NAME.wli, log file IMAGE_NAME.log from device FILES, applies zstd compression.\n\n");
         printf("Usage :\n");
-        printf("\twombatlogical [args] IMAGE_NAME FILES\n\n");
+        printf("\twombatlogical IMAGE_NAME FILES\n\n");
         printf("IMAGE_NAME\t: the file name for the forensic image without an extension.\n");
-        printf("FILES\t: a device to image such as /dev/sdX\n");
+        printf("FILES\t: list of directories and files to add to the logical image\n");
         printf("Arguments :\n");
-	printf("-c\t: calculate and store hash for each file in logical image.\n");
+	//printf("-c\t: calculate and store hash for each file in logical image.\n");
 	//printf("-v\t: Perform image verification.\n");
         printf("-V\t: Prints Version information\n");
         printf("-h\t: Prints help information\n\n");
@@ -190,9 +197,33 @@ int main(int argc, char* argv[])
     }
     // get all the input strings... then run parse directory to get the list of files...
     for(int i=optind; i < argc; i++)
-    {
         filevector.push_back(std::filesystem::canonical(argv[i]));
+
+    for(int i=0; i < filevector.size(); i++)
+    {
+        struct stat buf;
+        stat(filevector.at(i).c_str(), &buf);
+        std::cout << filevector.at(i) << std::endl;
+        std::cout << filevector.at(i).parent_path() << "/ " << filevector.at(i).filename() << std::endl;
+        //std::cout << "id of containing device: " << buf.st_dev << std::endl;
+        std::cout << "inode: " << buf.st_ino << std::endl;
+        //std::cout << "mode: " << buf.st_mode << std::endl;
+        //std::cout << "link count: " << buf.st_nlink << std::endl;
+        //std::cout << "uid: " << buf.st_uid << std::endl;
+        //std::cout << "gid: " << buf.st_gid << std::endl;
+        //std::cout << "rdev: " << buf.st_rdev << std::endl;
+        std::cout << "file size: " << buf.st_size << std::endl; // LOGICAL SIZE
+        std::cout << "block size: " << buf.st_blksize << std::endl; // PHYSICAL SIZE
+        //std::cout << "block count: " << buf.st_blocks << std::endl;
+        std::cout << "access time: " << ctime(&buf.st_atime) << std::endl; // ACCESS TIME
+        std::cout << "modify time: " << ctime(&buf.st_mtime) << std::endl; // MODIFY TIME
+        std::cout << "change time: " << ctime(&buf.st_ctime) << std::endl; // CREATE TIME
+        //std::cout << "create time: " << ctime(&buf.st_crtime) << std::endl;
+        //std::cout << filevector.at(i) << std::endl;
     }
+
+
+    /*
     // when i replace vector with filelist, this works to get the device for reach file, so i can determine the
     // filesystem and then get the forensic properties for the file.
     for(int i=0; i < filevector.size(); i++)
@@ -211,6 +242,7 @@ int main(int argc, char* argv[])
 	}
 	std::cout << fileinfo << "\n";
     }
+    */
 
 
     /*
