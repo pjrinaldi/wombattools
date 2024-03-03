@@ -1,0 +1,75 @@
+#!/bin/sh
+
+# enterpriseimager DEVICE IMGNAME
+
+# Shell script to improve forensic imaging speed using parallel to image a bunch of pieces at once.
+# These pieces will be stored in a squashfs image to take up less space.
+
+# GET THREADCOUNT FOR CPUS
+threadcount=$(cat /sys/devices/cpu_core/cpus | cut -d '-' -f 2)
+threadcount=$((threadcount + 1));
+
+echo "threadcount: $threadcount";
+
+# GET DEVICE SIZE
+dsize=$(blockdev --getsize64 $1)
+
+echo "dsize: $dsize";
+
+# GET MEMORY SIZE
+memsize=$(grep MemTotal /proc/meminfo | awk '{print $2}');
+memsize=$((memsize * 1024));
+
+echo "memsize: $memsize";
+
+# PIECE SIZE CHOICES (MB, but I need GB, so ADD MORE ACCORDINGLY
+piecesizechoice=(8589934592 4294967296 2147483648 1073741824 536870912 268435456 134217728 67108864 33554432 16777216 8388608 4194304 1048576 524288 131072 65536 32768 16384 8192 4096 2048 1024 512)
+
+# DETERMINE PIECE SIZE BASED ON TOTAL MEMORY AND THREADCOUNT
+maxpiecesize=$(($memsize / $threadcount))
+
+curpiecesize=0;
+echo "max piece size: $maxpiecesize";
+
+for i in ${piecesizechoice[@]}; do
+    if [ $maxpiecesize -gt $i ]
+    then
+	curpiecesize=$i;
+	break;
+    fi
+done
+
+echo "cur piece size: $curpiecesize";
+
+# NEED TO GET THE LIST OF PIECE OFFSETS FOR EACH DD PIECE
+# piececount = dsize / curpiecesize
+
+piececount=$((dsize / curpiecesize ));
+
+echo "piece count: $piececount";
+
+padding=${#piececount}
+
+echo "padding $padding"
+
+mkdir $2
+cd $2
+touch $2.log
+
+# dd if=DEVICE skip=$j count=$curpiecesize
+
+# parallel gzip --best ::: *.html
+# parallel lame {} -o {.}.mp3 ::: *.wav
+
+# dating the image time for comparison to regular imaging
+date
+
+parallel dd if=$1 bs=$curpiecesize of={}.dd skip={} count=1 status=none ::: $(seq -f "%0$((padding))g" 0 $piececount)
+
+date
+
+cd ..
+
+mksquashfs $2 $2.sfs -quiet
+
+rm -r $2
