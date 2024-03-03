@@ -125,9 +125,10 @@ static int wombat_read(const char *path, char *buf, size_t size, off_t offset, s
 
     while(curoffset < size)
     {
-	size_t const result = ZSTD_seekable_decompress(seekable, bufout, MIN(bufoutsize, size), offset);
+	size_t const result = ZSTD_seekable_decompress(seekable, tmpbuffer, size, offset);
+	//size_t const result = ZSTD_seekable_decompress(seekable, bufout, MIN(bufoutsize, size), offset);
 	//memcpy(tmpbuffer+curoffset, (char*)bufout, MIN(size, bufoutsize));
-	curoffset += result;
+	//curoffset += result;
 	/*
 	//memcpy(tmpbuffer+result, bufout, MIN(size, bufoutsize));
 	//curoffset += MIN(size, bufoutsize);
