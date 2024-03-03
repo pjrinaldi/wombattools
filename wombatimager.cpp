@@ -17,12 +17,16 @@
 #include <iostream>
 
 #include "blake3/blake3.h"
-#include "zstdcommon.h"
-#include "zstd_seekable.h"
-#include <zstd.h>
+
+#define ZSTD_STATIC_LINKING_ONLY
+
+#include "zstd/zstdcommon.h"
+#include "zstd/zstd_seekable.h"
+#include "zstd/zstd.h"
 
 #define DTTMFMT "%F %T %z"
 #define DTTMSZ 35
+
 
 struct wfi_metadata
 {
@@ -166,14 +170,14 @@ int main(int argc, char* argv[])
 	    wfimd.skipframeheader = 0x184d2a5f;
             wfimd.skipframesize = 256;
 	    wfimd.sectorsize = sectorsize;
-	    wfimd.version = 0x01;
+	    wfimd.version = 0x02;
             wfimd.reserved1 = 0x0;
 	    wfimd.reserved2 = 0x0;
 	    wfimd.totalbytes = totalbytes;
 
             time_t starttime = time(NULL);
             char dtbuf[35];
-            fprintf(filelog, "wombatimager v0.1 zstd Compressed Raw Forensic Image started at: %s\n", GetDateTime(dtbuf));
+            fprintf(filelog, "wombatimager v0.2 Seekable zstd Compressed Raw Forensic Image started at: %s\n", GetDateTime(dtbuf));
             fprintf(filelog, "\nSource Device\n");
             fprintf(filelog, "-------------\n");
 
@@ -234,6 +238,31 @@ int main(int argc, char* argv[])
 	    blake3_hasher srchasher;
 	    blake3_hasher_init(&srchasher);
 
+/*
+    size_t read, toRead = buffInSize;
+    while( (read = fread_orDie(buffIn, toRead, fin)) ) {
+        ZSTD_inBuffer input = { buffIn, read, 0 };
+        while (input.pos < input.size) {
+            ZSTD_outBuffer output = { buffOut, buffOutSize, 0 };
+            toRead = ZSTD_seekable_compressStream(cstream, &output , &input);   // toRead is guaranteed to be <= ZSTD_CStreamInSize()
+            if (ZSTD_isError(toRead)) { fprintf(stderr, "ZSTD_seekable_compressStream() error : %s \n", ZSTD_getErrorName(toRead)); exit(12); }
+            if (toRead > buffInSize) toRead = buffInSize;   // Safely handle case when `buffInSize` is manually changed to a value < ZSTD_CStreamInSize()
+            fwrite_orDie(buffOut, output.pos, fout);
+        }
+    }
+    while (1) {
+        ZSTD_outBuffer output = { buffOut, buffOutSize, 0 };
+        size_t const remainingToFlush = ZSTD_seekable_endStream(cstream, &output);   // close stream
+        if (ZSTD_isError(remainingToFlush)) { fprintf(stderr, "ZSTD_seekable_endStream() error : %s \n", ZSTD_getErrorName(remainingToFlush)); exit(13); }
+        fwrite_orDie(buffOut, output.pos, fout);
+        if (!remainingToFlush) break;
+    }
+    ZSTD_seekable_freeCStream(cstream);
+    fclose_orDie(fout);
+    fclose_orDie(fin);
+    free(buffIn);
+    free(buffOut);
+*/ 
 	    // USE ZSTD STREAM COMPRESSION
 	    size_t bufinsize = ZSTD_CStreamInSize();
 	    void* bufin = malloc_orDie(bufinsize);
@@ -241,10 +270,35 @@ int main(int argc, char* argv[])
 	    void* bufout = malloc_orDie(bufoutsize);
 	    size_t writecount = 0;
 
-	    ZSTD_CCtx* cctx = ZSTD_createCCtx();
-	    CHECK(cctx != NULL, "ZSTD_createCCtx() failed");
-
+	    ZSTD_seekable_CStream* const cstream = ZSTD_seekable_createCStream();
+	    size_t const initresult = ZSTD_seekable_initCStream(cstream, ZSTD_CLEVEL_DEFAULT, 1, 0);
+	    //ZSTD_CCtx* cctx = ZSTD_createCCtx();
+	    //CHECK(cctx != NULL, "ZSTD_createCCtx() failed");
+	    size_t read = bufinsize;
 	    size_t toread = bufinsize;
+	    while((read = fread_orDie(bufin, toread, fin)))
+	    {
+		blake3_hasher_update(&srchasher, bufin, read);
+
+		ZSTD_inBuffer input = { bufin, read, 0 };
+		while(input.pos < input.size)
+		{
+		    ZSTD_outBuffer output = { bufout, bufoutsize, 0 };
+		    toread = ZSTD_seekable_compressStream(cstream, &output, &input);
+		    if(toread > bufinsize)
+			toread = bufinsize;
+		    fwrite_orDie(bufout, output.pos, fout);
+		}
+	    }
+	    while(1)
+	    {
+		ZSTD_outBuffer output = { bufout, bufoutsize, 0 };
+		size_t const remainingtoflush = ZSTD_seekable_endStream(cstream, &output);
+		fwrite_orDie(bufout, output.pos, fout);
+		if(!remainingtoflush) break;
+	    }
+	    ZSTD_seekable_freeCStream(cstream);
+	    /*
 	    for(;;)
 	    {
 		size_t read = fread_orDie(bufin, toread, fin);
@@ -272,6 +326,7 @@ int main(int argc, char* argv[])
 		    break;
 	    }
 	    ZSTD_freeCCtx(cctx);
+	    */
 
 	    blake3_hasher_finalize(&srchasher, srchash, BLAKE3_OUT_LEN);
             memcpy(wfimd.devhash, srchash, BLAKE3_OUT_LEN);

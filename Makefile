@@ -3,8 +3,10 @@ blake3:
 	make blake3
 	cd ..
 
-wombatimager:
-	g++ -O3 -o wombatimager wombatimager.cpp -lzstd -ludev -lpthread blake3/libblake3.a
+SEEKABLE_OBJS = zstd/zstdseek_compress.c zstd/zstdseek_decompress.c
+
+wombatimager: $(SEEKABLE_OBJS)
+	g++ -O3 -o wombatimager $(SEEKABLE_OBJS) wombatimager.cpp -ludev -lpthread zstd/libzstd.a blake3/libblake3.a
 
 wombatinfo:
 	gcc -O3 -o wombatinfo wombatinfo.c
