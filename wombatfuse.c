@@ -4,6 +4,7 @@
 #include <string.h>
 #include <errno.h>
 #include <unistd.h>
+#include <sys/param.h>
 
 #define ZSTD_STATIC_LINKING_ONLY
 
@@ -116,17 +117,29 @@ static int wombat_read(const char *path, char *buf, size_t size, off_t offset, s
     void* bufin = malloc_orDie(bufinsize);
     size_t bufoutsize = ZSTD_DStreamOutSize();
     void* bufout = malloc_orDie(bufoutsize);
+    char* tmpbuffer = malloc_orDie(size);
+    uint64_t curoffset = 0;
+
+    ZSTD_seekable* const seekable = ZSTD_seekable_create();
+    size_t const initresult = ZSTD_seekable_initFile(seekable, fout);
+    while(offset < offset + size)
+    {
+	size_t const result = ZSTD_seekable_decompress(seekable, bufout, MIN(bufoutsize, size), offset);
+	memcpy(tmpbuffer+result, bufout, MIN(size, bufoutsize));
+	curoffset += MIN(size, bufoutsize);
+	//memcpy(buf, bufout, size);
+                //memcpy(tmpbuffer+(bufblkoff*bufoutsize), bufout, bufoutsize);
+                //bufblkoff++;
+	if(!result)
+	    break;
+    }
+    ZSTD_seekable_free(seekable);
+    memcpy(buf, tmpbuffer, size);
 /*
     FILE* const fin  = fopen_orDie(fname, "rb");
     FILE* const fout = stdout;
     size_t const buffOutSize = ZSTD_DStreamOutSize();  // Guarantee to successfully flush at least one complete compressed block in all circumstances.
     void*  const buffOut = malloc_orDie(buffOutSize);
-
-    ZSTD_seekable* const seekable = ZSTD_seekable_create();
-    if (seekable==NULL) { fprintf(stderr, "ZSTD_seekable_create() error \n"); exit(10); }
-
-    size_t const initResult = ZSTD_seekable_initFile(seekable, fin);
-    if (ZSTD_isError(initResult)) { fprintf(stderr, "ZSTD_seekable_init() error : %s \n", ZSTD_getErrorName(initResult)); exit(11); }
 
     while (startOffset < endOffset) {
         size_t const result = ZSTD_seekable_decompress(seekable, buffOut, MIN(endOffset - startOffset, buffOutSize), startOffset);
@@ -148,6 +161,10 @@ static int wombat_read(const char *path, char *buf, size_t size, off_t offset, s
     fclose_orDie(fout);
     free(buffOut);
 */ 
+
+
+
+    /*
     ZSTD_DCtx* dctx = ZSTD_createDCtx();
     CHECK(dctx != NULL, "ZSTD_createDCtx() failed");
 
@@ -207,6 +224,7 @@ static int wombat_read(const char *path, char *buf, size_t size, off_t offset, s
         return 0;
     }
     ZSTD_freeDCtx(dctx);
+    */
     fclose_orDie(fout);
     free(bufin);
     free(bufout);
