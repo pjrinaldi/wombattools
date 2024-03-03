@@ -118,24 +118,32 @@ static int wombat_read(const char *path, char *buf, size_t size, off_t offset, s
     size_t bufoutsize = ZSTD_DStreamOutSize();
     void* bufout = malloc_orDie(bufoutsize);
     char* tmpbuffer = malloc_orDie(size);
-    uint64_t curoffset = 0;
+    off_t curoffset = 0;
 
     ZSTD_seekable* const seekable = ZSTD_seekable_create();
     size_t const initresult = ZSTD_seekable_initFile(seekable, fout);
-    while(offset < offset + size)
+
+    while(curoffset < size)
     {
 	size_t const result = ZSTD_seekable_decompress(seekable, bufout, MIN(bufoutsize, size), offset);
-	memcpy(tmpbuffer+result, bufout, MIN(size, bufoutsize));
-	curoffset += MIN(size, bufoutsize);
+	//memcpy(tmpbuffer+curoffset, (char*)bufout, MIN(size, bufoutsize));
+	curoffset += result;
+	/*
+	//memcpy(tmpbuffer+result, bufout, MIN(size, bufoutsize));
+	//curoffset += MIN(size, bufoutsize);
 	//memcpy(buf, bufout, size);
-                //memcpy(tmpbuffer+(bufblkoff*bufoutsize), bufout, bufoutsize);
-                //bufblkoff++;
 	if(!result)
 	    break;
+	*/
+	curoffset = size;
     }
+    //buf = (char*)bufout;
+    //memcpy(buf, tmpbuffer, size);
     ZSTD_seekable_free(seekable);
-    memcpy(buf, tmpbuffer, size);
+
 /*
+static void decompressFile_orDie(const char* fname, off_t startOffset, off_t endOffset)
+{
     FILE* const fin  = fopen_orDie(fname, "rb");
     FILE* const fout = stdout;
     size_t const buffOutSize = ZSTD_DStreamOutSize();  // Guarantee to successfully flush at least one complete compressed block in all circumstances.
@@ -225,6 +233,7 @@ static int wombat_read(const char *path, char *buf, size_t size, off_t offset, s
     }
     ZSTD_freeDCtx(dctx);
     */
+
     fclose_orDie(fout);
     free(bufin);
     free(bufout);
