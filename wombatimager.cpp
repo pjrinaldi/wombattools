@@ -130,6 +130,8 @@ int main(int argc, char* argv[])
         std::size_t found = filestr.find_last_of("/");
         std::string pathname = filestr.substr(0, found);
         std::string filename = filestr.substr(found+1);
+	if((int)found == -1)
+	    pathname = ".";
         std::filesystem::path initpath = std::filesystem::canonical(pathname + "/");
         imagepath = initpath.string() + "/" + filename + ".wfi";
         logpath = imagepath + ".log";
