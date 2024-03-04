@@ -169,7 +169,7 @@ int main(int argc, char* argv[])
 	    fin = fopen_orDie(devicepath.c_str(), "rb");
 	    fout = fopen_orDie(imagepath.c_str(), "wb");
 
-	    wfimd.skipframeheader = 0x184d2a5f;
+	    wfimd.skipframeheader = 0x184d2a5e;
             wfimd.skipframesize = 256;
 	    wfimd.sectorsize = sectorsize;
 	    wfimd.version = 0x02;
@@ -296,14 +296,18 @@ int main(int argc, char* argv[])
 		    fwrite_orDie(bufout, output.pos, fout);
 		}
 	    }
+	    //ZSTD_outBuffer output;
 	    while(1)
 	    {
 		ZSTD_outBuffer output = { bufout, bufoutsize, 0 };
+		//size_t const remainingtoflush = ZSTD_seekable_endFrame(cstream, &output);
 		size_t const remainingtoflush = ZSTD_seekable_endStream(cstream, &output);
 		fwrite_orDie(bufout, output.pos, fout);
 		if(!remainingtoflush) break;
 	    }
+
 	    ZSTD_seekable_freeCStream(cstream);
+
 	    /*
 	    for(;;)
 	    {
@@ -337,8 +341,11 @@ int main(int argc, char* argv[])
 	    blake3_hasher_finalize(&srchasher, srchash, BLAKE3_OUT_LEN);
             memcpy(wfimd.devhash, srchash, BLAKE3_OUT_LEN);
 	    // NEED TO WRITE SKIPPABLE FRAME CONTENT HERE
-	    fwrite_orDie(&wfimd, sizeof(struct wfi_metadata), fout);
+	    //fwrite_orDie(&wfimd, sizeof(struct wfi_metadata), fout);
 	    
+	    //size_t const remainingtoflush = ZSTD_seekable_endStream(cstream, &output);
+	    //ZSTD_seekable_freeCStream(cstream);
+
 	    time_t endtime = time(NULL);
             fprintf(filelog, "Wrote %llu out of %llu bytes\n", curpos, totalbytes);
             fprintf(filelog, "%llu blocks replaced with zeroes\n", errcnt);
