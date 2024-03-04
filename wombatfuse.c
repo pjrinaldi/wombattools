@@ -133,9 +133,9 @@ static int wombat_read(const char *path, char *buf, size_t size, off_t offset, s
 	//memcpy(tmpbuffer+result, bufout, MIN(size, bufoutsize));
 	//curoffset += MIN(size, bufoutsize);
 	//memcpy(buf, bufout, size);
+	*/
 	if(!result)
 	    break;
-	*/
 	curoffset = size;
     }
     //buf = (char*)bufout;
