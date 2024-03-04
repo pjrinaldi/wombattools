@@ -270,28 +270,39 @@ int main(int argc, char* argv[])
     }
     else if(argc == 3)
     {
-        
+	char* mdstr = malloc(sizeof(char)*(strlen(argv[1])+4));
+	strcat(mdstr, argv[1]);
+	strcat(mdstr, ".md");
+	printf("mdstr: %s\n", mdstr);
+	printf("arg1: %s\n", argv[1]);
         
         printf("command run: %s %s %s\n", argv[0], argv[1], argv[2]);
         
-	/*
 	char wfistr2[256];
-	realpath(argv[1], wfistr2);
-	printf("wfistr: \"%s\"\n", wfistr2);
+	realpath(mdstr, wfistr2);
+	printf("wfistr2: \"%s\"\n", wfistr2);
 	
 	wfistr = malloc(sizeof(char)*strlen(wfistr2));
 	wfistr = wfistr2;
+	printf("wfistr: \"%s\"\n", wfistr);
 
         // get wfimd.totalbytes
         FILE* imgfile = NULL;
-        imgfile = fopen(argv[1], "rb");
-        fseek(imgfile, 0, SEEK_END);
-        fseek(imgfile, -264, SEEK_CUR);
+        imgfile = fopen(wfistr2, "rb");
+	if(imgfile == NULL)
+	    printf("fopen failed.\n");
+	else
+	    printf("fopen successful\n");
+	//printf("fseek\n");
+	//fseek(imgfile, 0, SEEK_SET);
+        //fseek(imgfile, 0, SEEK_END);
+        //fseek(imgfile, -264, SEEK_CUR);
+	printf("fread\n");
         fread(&wfimd, sizeof(struct wfi_metadata), 1, imgfile);
+	printf("fclose\n");
         fclose(imgfile);
         rawsize = wfimd.totalbytes;
         printf("totalbytes %ld\n", rawsize);
-	*/
 
         char** fargv = NULL;
         fargv = (char**)calloc(2, sizeof(char*));
