@@ -117,29 +117,29 @@ static int wombat_read(const char *path, char *buf, size_t size, off_t offset, s
     void* bufin = malloc_orDie(bufinsize);
     size_t bufoutsize = ZSTD_DStreamOutSize();
     void* bufout = malloc_orDie(bufoutsize);
-    char* tmpbuffer = malloc_orDie(size);
-    off_t curoffset = 0;
+    void* tmpbuffer = malloc_orDie(size);
+    off_t curoffset = offset;
+    off_t endoffset = offset + size;
+    off_t tmpoffset = 0;
 
     ZSTD_seekable* const seekable = ZSTD_seekable_create();
     size_t const initresult = ZSTD_seekable_initFile(seekable, fout);
+    size_t minsize = MIN(size, bufoutsize);
 
-    while(curoffset < size)
+    while(curoffset < endoffset)
     {
-	size_t const result = ZSTD_seekable_decompress(seekable, tmpbuffer, size, offset);
-	//size_t const result = ZSTD_seekable_decompress(seekable, bufout, MIN(bufoutsize, size), offset);
+	size_t const result = ZSTD_seekable_decompress(seekable, bufout, minsize, curoffset);
 	//memcpy(tmpbuffer+curoffset, (char*)bufout, MIN(size, bufoutsize));
-	//curoffset += result;
-	/*
 	//memcpy(tmpbuffer+result, bufout, MIN(size, bufoutsize));
 	//curoffset += MIN(size, bufoutsize);
-	//memcpy(buf, bufout, size);
-	*/
 	if(!result)
 	    break;
-	curoffset = size;
+	memcpy(tmpbuffer+(tmpoffset*minsize), bufout, minsize);
+	tmpoffset += result;
+	curoffset += result;
     }
     //buf = (char*)bufout;
-    //memcpy(buf, tmpbuffer, size);
+    memcpy(buf, (char*)tmpbuffer, size);
     ZSTD_seekable_free(seekable);
 
 /*
@@ -147,8 +147,14 @@ static void decompressFile_orDie(const char* fname, off_t startOffset, off_t end
 {
     FILE* const fin  = fopen_orDie(fname, "rb");
     FILE* const fout = stdout;
-    size_t const buffOutSize = ZSTD_DStreamOutSize();  // Guarantee to successfully flush at least one complete compressed block in all circumstances.
+    size_t const buffOutSize = ZSTD_DStreamOutSize();
     void*  const buffOut = malloc_orDie(buffOutSize);
+
+    ZSTD_seekable* const seekable = ZSTD_seekable_create();
+    if (seekable==NULL) { fprintf(stderr, "ZSTD_seekable_create() error \n"); exit(10); }
+
+    size_t const initResult = ZSTD_seekable_initFile(seekable, fin);
+    if (ZSTD_isError(initResult)) { fprintf(stderr, "ZSTD_seekable_init() error : %s \n", ZSTD_getErrorName(initResult)); exit(11); }
 
     while (startOffset < endOffset) {
         size_t const result = ZSTD_seekable_decompress(seekable, buffOut, MIN(endOffset - startOffset, buffOutSize), startOffset);
@@ -268,6 +274,7 @@ int main(int argc, char* argv[])
         
         printf("command run: %s %s %s\n", argv[0], argv[1], argv[2]);
         
+	/*
 	char wfistr2[256];
 	realpath(argv[1], wfistr2);
 	printf("wfistr: \"%s\"\n", wfistr2);
@@ -284,7 +291,7 @@ int main(int argc, char* argv[])
         fclose(imgfile);
         rawsize = wfimd.totalbytes;
         printf("totalbytes %ld\n", rawsize);
-
+	*/
 
         char** fargv = NULL;
         fargv = (char**)calloc(2, sizeof(char*));

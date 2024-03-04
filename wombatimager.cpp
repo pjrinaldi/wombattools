@@ -87,6 +87,7 @@ int main(int argc, char* argv[])
     std::string devicepath;
     std::string imagepath;
     std::string logpath;
+    std::string mdpath;
     uint8_t verify = 0;
 
     if(argc == 1 || (argc == 2 && strcmp(argv[1], "-h") == 0))
@@ -135,6 +136,7 @@ int main(int argc, char* argv[])
         std::filesystem::path initpath = std::filesystem::canonical(pathname + "/");
         imagepath = initpath.string() + "/" + filename + ".wfi";
         logpath = imagepath + ".log";
+	mdpath = imagepath + ".md";
         if(devicepath.empty())
         {
             ShowUsage(0);
@@ -153,6 +155,7 @@ int main(int argc, char* argv[])
         int infile = open(devicepath.c_str(), O_RDONLY | O_NONBLOCK);
 	FILE* fin = NULL;
 	FILE* fout = NULL;
+	FILE* fmd = NULL;
         FILE* filelog = NULL;
         filelog = fopen(logpath.c_str(), "w+");
         if(filelog == NULL)
@@ -341,6 +344,10 @@ int main(int argc, char* argv[])
 	    blake3_hasher_finalize(&srchasher, srchash, BLAKE3_OUT_LEN);
             memcpy(wfimd.devhash, srchash, BLAKE3_OUT_LEN);
 	    // NEED TO WRITE SKIPPABLE FRAME CONTENT HERE
+	    fmd = fopen_orDie(mdpath.c_str(), "wb");
+	    fseek(fmd, 0, SEEK_SET);
+	    fwrite_orDie(&wfimd, sizeof(struct wfi_metadata), fmd);
+	    fclose_orDie(fmd);
 	    //fwrite_orDie(&wfimd, sizeof(struct wfi_metadata), fout);
 	    
 	    //size_t const remainingtoflush = ZSTD_seekable_endStream(cstream, &output);
