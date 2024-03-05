@@ -123,9 +123,13 @@ static int wombat_read(const char *path, char *buf, size_t size, off_t offset, s
     off_t tmpoffset = 0;
 
     ZSTD_seekable* const seekable = ZSTD_seekable_create();
+    if (seekable==NULL) { fprintf(stderr, "ZSTD_seekable_create() error \n"); }
     size_t const initresult = ZSTD_seekable_initFile(seekable, fout);
+    if (ZSTD_isError(initresult)) { fprintf(stderr, "ZSTD_seekable_init() error : %s \n", ZSTD_getErrorName(initresult)); }
+    size_t result = ZSTD_seekable_decompress(seekable, (void*)buf, size, offset);
+    if (ZSTD_isError(result)) { fprintf(stderr, "ZSTD_seekable_decompress() error : %s \n", ZSTD_getErrorName(result)); }
+    /*
     size_t minsize = MIN(size, bufoutsize);
-
     while(curoffset < endoffset)
     {
 	size_t const result = ZSTD_seekable_decompress(seekable, bufout, minsize, curoffset);
@@ -140,6 +144,7 @@ static int wombat_read(const char *path, char *buf, size_t size, off_t offset, s
     }
     //buf = (char*)bufout;
     memcpy(buf, (char*)tmpbuffer, size);
+    */
     ZSTD_seekable_free(seekable);
 
 /*
@@ -244,7 +249,7 @@ static void decompressFile_orDie(const char* fname, off_t startOffset, off_t end
     fclose_orDie(fout);
     free(bufin);
     free(bufout);
-    free(tmpbuffer);
+    //free(tmpbuffer);
 
     return size;
 }
