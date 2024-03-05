@@ -73,7 +73,7 @@ parallel dd if=$1 bs=$curpiecesize of=$2.{} skip={} count=1 status=none ::: $(se
 date
 
 # verify pieces with b3hasher code prior to putting in squashfs and deleting the pieces.
-./b3hasher .
+../b3hasher .
 
 cd ..
 
