@@ -88,7 +88,8 @@ int main(int argc, char* argv[])
     blake3_hasher_finalize(&hasher, output, BLAKE3_OUT_LEN);
     std::stringstream ss;
     for(int i=0; i < BLAKE3_OUT_LEN; i++)
-        ss << std::hex << (int)output[i]; 
+        ss << std::hex  << std::setfill('0') << std::setw(2) << (int)output[i]; 
+    //printf("%02x", srchash[i]);
     std::string srcmd5 = ss.str();
     std::cout << ss.str() << std::endl;
 

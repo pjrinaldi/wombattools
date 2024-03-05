@@ -1,0 +1,20 @@
+#!/bin/sh
+
+# enterprise IMGNAME mntpt
+
+# Shell script to verify the piecewise forensic imaging speed using parallel to image a bunch of pieces at once.
+
+mkdir $2
+
+squashfuse $1 $2
+
+cd $2
+
+# verify pieces with b3hasher code prior to putting in squashfs and deleting the pieces.
+../b3hasher .
+
+cd ..
+
+fusermount -u $2
+
+rmdir $2
