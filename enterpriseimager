@@ -23,7 +23,9 @@ memsize=$((memsize * 1024));
 echo "memsize: $memsize";
 
 # PIECE SIZE CHOICES (MB, but I need GB, so ADD MORE ACCORDINGLY
-piecesizechoice=(8589934592 4294967296 2147483648 1073741824 536870912 268435456 134217728 67108864 33554432 16777216 8388608 4194304 1048576 524288 131072 65536 32768 16384 8192 4096 2048 1024 512)
+#piecesizechoice=(8589934592 4294967296 2147483648 1073741824 536870912 268435456 134217728 67108864 33554432 16777216 8388608 4194304 1048576 524288 131072 65536 32768 16384 8192 4096 2048 1024 512)
+# TESTING PURPOSES
+piecesizechoice=(134217728 67108864 33554432 16777216 8388608 4194304 1048576 524288 131072 65536 32768 16384 8192 4096 2048 1024 512)
 
 # DETERMINE PIECE SIZE BASED ON TOTAL MEMORY AND THREADCOUNT
 maxpiecesize=$(($memsize / $threadcount))
@@ -64,9 +66,14 @@ touch $2.log
 # dating the image time for comparison to regular imaging
 date
 
-parallel dd if=$1 bs=$curpiecesize of={}.dd skip={} count=1 status=none ::: $(seq -f "%0$((padding))g" 0 $piececount)
+parallel dd if=$1 bs=$curpiecesize of=$2.{} skip={} count=1 status=none ::: $(seq -f "%0$((padding))g" 0 $piececount)
+
+# update write status of the dd command as we go..
 
 date
+
+# verify pieces with b3hasher code prior to putting in squashfs and deleting the pieces.
+./b3hasher .
 
 cd ..
 

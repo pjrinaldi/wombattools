@@ -8,6 +8,9 @@ SEEKABLE_OBJS = zstd/zstdseek_compress.c zstd/zstdseek_decompress.c
 wombatimager: $(SEEKABLE_OBJS)
 	g++ -O3 -o wombatimager $(SEEKABLE_OBJS) wombatimager.cpp -ludev -lpthread zstd/libzstd.a blake3/libblake3.a
 
+b3hasher:
+	g++ -O3 -o b3hasher b3hasher.cpp -lpthread blake3/libblake3.a
+
 wombatinfo:
 	gcc -O3 -o wombatinfo wombatinfo.c
 
