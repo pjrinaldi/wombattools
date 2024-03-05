@@ -66,7 +66,7 @@ touch $2.log
 # dating the image time for comparison to regular imaging
 date
 
-parallel dd if=$1 bs=$curpiecesize of=$2.{} skip={} count=1 status=none ::: $(seq -f "%0$((padding))g" 0 $piececount)
+parallel --bar dd if=$1 bs=$curpiecesize of=$2.{} skip={} count=1 status=none ::: $(seq -f "%0$((padding))g" 0 $piececount)
 
 # update write status of the dd command as we go..
 
