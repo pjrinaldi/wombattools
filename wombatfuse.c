@@ -111,20 +111,6 @@ static int wombat_read(const char *path, char *buf, size_t size, off_t offset, s
 {
     (void)fi;
 
-    FILE* const fin = fopen_orDie(path, "rb");
-    size_t const bufoutsize = ZSTD_DStreamOutSize();
-    void* const bufout = malloc_orDie(bufoutsize);
-    size_t minsize = MIN(size, bufoutsize);
-    ZSTD_seekable* const seekable = ZSTD_seekable_create();
-    if (seekable==NULL) { fprintf(stderr, "ZSTD_seekable_create() error \n"); }
-    size_t initresult = ZSTD_seekable_initFile(seekable, fin); 
-    if (ZSTD_isError(initresult)) { fprintf(stderr, "ZSTD_seekable_init() error : %s \n", ZSTD_getErrorName(initresult)); }
-    size_t result = ZSTD_seekable_decompress(seekable, (void*)buf, size, offset);
-    if (ZSTD_isError(result)) { fprintf(stderr, "ZSTD_seekable_decompress() error : %s \n", ZSTD_getErrorName(result)); }
-    ZSTD_seekable_free(seekable);
-    fclose_orDie(fin);
-    free(bufout);
-
     /*
      * ZSTD_SEEKABLE_DECOMPRESS EXAMPLE
      *
@@ -159,6 +145,8 @@ static int wombat_read(const char *path, char *buf, size_t size, off_t offset, s
     fclose_orDie(fout);
     free(buffOut);
     */ 
+
+    // NEED TO COMBINE THE ZSTDFUSE METHOD WHICH WORKS WITH THE ZSTD_SEEKABLE METHOD AND GET IT WORKING.
 
     /* ZSTDFUSE METHOD
      *
