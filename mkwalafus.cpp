@@ -17,7 +17,7 @@
 
 #include "walafus/wltg_packer.h"
 
-// Copyright 2021-2023 Pasquale J. Rinaldi, Jr.
+// Copyright 2021-2024 Pasquale J. Rinaldi, Jr.
 // Distributed under the terms of CC0-1.0: Creative Commons Zero v1.0 Universal
 
 /*
@@ -57,8 +57,9 @@ int main(int argc, char* argv[])
 {
     WltgPacker packer;
     packer.index_real_dir("/", argv[1]);
+    std::string wfistr = argv[1] + ".wltg";
 
-    packer.write_fs_blob("pack.wltg", 11, "", true);
+    packer.write_fs_blob(wfistr, 11, "", true);
     /*
     std::vector<std::filesystem::path> filevector;
     filevector.clear();
