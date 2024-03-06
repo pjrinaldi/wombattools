@@ -3,6 +3,9 @@ blake3:
 	make blake3
 	cd ..
 
+mkwalafus:
+	g++ -O3 -o mkwalafus mkwalafus.cpp walafus/filesystem.cpp walafus/wltg_packer.cpp walafus/wltg_internal_writers.cpp -lzstd
+
 SEEKABLE_OBJS = zstd/zstdseek_compress.c zstd/zstdseek_decompress.c
 
 wombatimager: $(SEEKABLE_OBJS)
