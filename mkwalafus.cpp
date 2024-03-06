@@ -56,7 +56,9 @@ void ShowUsage(int outtype)
 int main(int argc, char* argv[])
 {
     WltgPacker packer;
-    packer.index_real_dir("/", argv[1]);
+    std::string realpath = std::filesystem::canonical(argv[1]).string();
+    std::string virtpath = "/" + std::filesystem::canonical(argv[1]).filename().string();
+    packer.index_real_dir(virtpath.c_str(), realpath.c_str());
     std::string wfistr = std::string(argv[1]) + ".wltg";
 
     packer.write_fs_blob(wfistr.c_str(), 11, "", true);
