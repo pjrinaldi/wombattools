@@ -111,48 +111,26 @@ static int wombat_read(const char *path, char *buf, size_t size, off_t offset, s
 {
     (void)fi;
 
-    FILE* fout = NULL;
-    fout = fopen_orDie(wfistr, "rb");
-    size_t bufinsize = ZSTD_DStreamInSize();
-    void* bufin = malloc_orDie(bufinsize);
-    size_t bufoutsize = ZSTD_DStreamOutSize();
-    void* bufout = malloc_orDie(bufoutsize);
-    void* tmpbuffer = malloc_orDie(size);
-    off_t curoffset = offset;
-    off_t endoffset = offset + size;
-    off_t tmpoffset = 0;
-
+    FILE* const fin = fopen_orDie(path, "rb");
+    size_t const bufoutsize = ZSTD_DStreamOutSize();
+    void* const bufout = malloc_orDie(bufoutsize);
+    size_t minsize = MIN(size, bufoutsize);
     ZSTD_seekable* const seekable = ZSTD_seekable_create();
     if (seekable==NULL) { fprintf(stderr, "ZSTD_seekable_create() error \n"); }
-    size_t const initresult = ZSTD_seekable_initFile(seekable, fout);
+    size_t initresult = ZSTD_seekable_initFile(seekable, fin); 
     if (ZSTD_isError(initresult)) { fprintf(stderr, "ZSTD_seekable_init() error : %s \n", ZSTD_getErrorName(initresult)); }
     size_t result = ZSTD_seekable_decompress(seekable, (void*)buf, size, offset);
     if (ZSTD_isError(result)) { fprintf(stderr, "ZSTD_seekable_decompress() error : %s \n", ZSTD_getErrorName(result)); }
-    /*
-    size_t minsize = MIN(size, bufoutsize);
-    while(curoffset < endoffset)
-    {
-	size_t const result = ZSTD_seekable_decompress(seekable, bufout, minsize, curoffset);
-	//memcpy(tmpbuffer+curoffset, (char*)bufout, MIN(size, bufoutsize));
-	//memcpy(tmpbuffer+result, bufout, MIN(size, bufoutsize));
-	//curoffset += MIN(size, bufoutsize);
-	if(!result)
-	    break;
-	memcpy(tmpbuffer+(tmpoffset*minsize), bufout, minsize);
-	tmpoffset += result;
-	curoffset += result;
-    }
-    //buf = (char*)bufout;
-    memcpy(buf, (char*)tmpbuffer, size);
-    */
     ZSTD_seekable_free(seekable);
+    fclose_orDie(fin);
+    free(bufout);
 
-/*
-static void decompressFile_orDie(const char* fname, off_t startOffset, off_t endOffset)
-{
+    /*
+     * ZSTD_SEEKABLE_DECOMPRESS EXAMPLE
+     *
     FILE* const fin  = fopen_orDie(fname, "rb");
     FILE* const fout = stdout;
-    size_t const buffOutSize = ZSTD_DStreamOutSize();
+    size_t const buffOutSize = ZSTD_DStreamOutSize();  // Guarantee to successfully flush at least one complete compressed block in all circumstances.
     void*  const buffOut = malloc_orDie(buffOutSize);
 
     ZSTD_seekable* const seekable = ZSTD_seekable_create();
@@ -180,11 +158,17 @@ static void decompressFile_orDie(const char* fname, off_t startOffset, off_t end
     fclose_orDie(fin);
     fclose_orDie(fout);
     free(buffOut);
-*/ 
+    */ 
 
+    /* ZSTDFUSE METHOD
+     *
+    FILE* fout = NULL;
+    fout = fopen_orDie(zststr, "rb");
+    size_t bufinsize = ZSTD_DStreamInSize();
+    void* bufin = malloc_orDie(bufinsize);
+    size_t bufoutsize = ZSTD_DStreamOutSize();
+    void* bufout = malloc_orDie(bufoutsize);
 
-
-    /*
     ZSTD_DCtx* dctx = ZSTD_createDCtx();
     CHECK(dctx != NULL, "ZSTD_createDCtx() failed");
 
@@ -208,9 +192,6 @@ static void decompressFile_orDie(const char* fname, off_t startOffset, off_t end
     size_t readcount = 0;
     size_t outcount = 0;
 
-    // maybe loop through without reading anything, just to get the uncompressed offset and then once it's found
-    // i can jump to that point based on compressed block info and the uncompressed info and read that into a buffer...
-    // when i work on this, i need to document this code better so i don't have to relearn it everytime.
     while( (read = fread_orDie(bufin, toread, fout)) )
     {
         readcount = readcount + read;
@@ -244,12 +225,12 @@ static void decompressFile_orDie(const char* fname, off_t startOffset, off_t end
         return 0;
     }
     ZSTD_freeDCtx(dctx);
-    */
-
     fclose_orDie(fout);
     free(bufin);
     free(bufout);
-    //free(tmpbuffer);
+    free(tmpbuffer);
+
+     */ 
 
     return size;
 }
