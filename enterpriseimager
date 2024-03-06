@@ -78,7 +78,7 @@ date
 cd ..
 
 # if i go with walafus, the below command would simply be
-mkwalafus $2
+./mkwalafus $2
 # mksquashfs $2 $2.sfs -quiet
 
 rm -r $2
