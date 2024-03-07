@@ -46,13 +46,15 @@ int main(int argc, char* argv[])
     blake3_hasher_init(&hasher);
 
     uint64_t curoff = 0;
-    while(curoff < handle->size())
+    while(curoff < handle->size()+1)
     {
-	handle->seek(65536);
-	std::vector<ubyte> data = handle->read(65536);
+//2147483648 1073741824 
+//1016332288
+	handle->seek(curoff);
+	std::vector<ubyte> data = handle->read(1016332288);
 	char* b3buf = (char*)static_cast<unsigned char*>(&data[0]);
-	blake3_hasher_update(&hasher, b3buf, 65536);
-	curoff += 65536;
+	blake3_hasher_update(&hasher, b3buf, 1016332288);
+	curoff += 1016332288;
 	printf("Read %llu of %llu bytes\r", curoff, handle->size());
 	fflush(stdout);
     }
