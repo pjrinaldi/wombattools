@@ -75,10 +75,12 @@ date
 # verify pieces with b3hasher code prior to putting in squashfs and deleting the pieces.
 ../b3hasher .
 
+parallel --bar gzip $2.{} ::: $(seq -f "%0$((padding))g" 0 $piececount)
+
 cd ..
 
 # if i go with walafus, the below command would simply be
-./mkwalafus $2
+#./mkwalafus $2
 # mksquashfs $2 $2.sfs -quiet
 
-rm -r $2
+#rm -r $2
