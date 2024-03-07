@@ -48,11 +48,11 @@ int main(int argc, char* argv[])
     uint64_t curoff = 0;
     while(curoff < handle->size())
     {
-	handle->seek(512);
-	std::vector<ubyte> data = handle->read(512);
+	handle->seek(65536);
+	std::vector<ubyte> data = handle->read(65536);
 	char* b3buf = (char*)static_cast<unsigned char*>(&data[0]);
-	blake3_hasher_update(&hasher, b3buf, 512);
-	curoff += 512;
+	blake3_hasher_update(&hasher, b3buf, 65536);
+	curoff += 65536;
 	printf("Read %llu of %llu bytes\r", curoff, handle->size());
 	fflush(stdout);
     }
