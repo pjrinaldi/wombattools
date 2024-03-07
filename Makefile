@@ -6,6 +6,9 @@ blake3:
 mkwalafus:
 	g++ -O3 -o mkwalafus mkwalafus.cpp walafus/filesystem.cpp walafus/wltg_packer.cpp walafus/wltg_internal_writers.cpp -lzstd
 
+rdwalafus:
+	g++ -O3 -o rdwalafus rdwalafus.cpp walafus/filesystem.cpp walafus/wltg_reader.cpp walafus/wltg_packer.cpp walafus/wltg_internal_readers.cpp walafus/wltg_internal_writers.cpp -lzstd blake3/libblake3.a
+
 SEEKABLE_OBJS = zstd/zstdseek_compress.c zstd/zstdseek_decompress.c
 
 wombatimager: $(SEEKABLE_OBJS)
