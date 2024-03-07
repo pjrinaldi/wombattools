@@ -6,8 +6,8 @@
 # These pieces will be stored in a squashfs image to take up less space.
 
 # GET THREADCOUNT FOR CPUS
-threadcount=$(cat /sys/devices/cpu_core/cpus | cut -d '-' -f 2)
-threadcount=$((threadcount + 1));
+threadcount=$(nproc --all)
+#threadcount=$((threadcount + 1));
 
 echo "threadcount: $threadcount";
 
@@ -23,9 +23,9 @@ memsize=$((memsize * 1024));
 echo "memsize: $memsize";
 
 # PIECE SIZE CHOICES (MB, but I need GB, so ADD MORE ACCORDINGLY
-#piecesizechoice=(8589934592 4294967296 2147483648 1073741824 536870912 268435456 134217728 67108864 33554432 16777216 8388608 4194304 1048576 524288 131072 65536 32768 16384 8192 4096 2048 1024 512)
+piecesizechoice=(8589934592 4294967296 2147483648 1073741824 536870912 268435456 134217728 67108864 33554432 16777216 8388608 4194304 1048576 524288 131072 65536 32768 16384 8192 4096 2048 1024 512)
 # TESTING PURPOSES
-piecesizechoice=(134217728 67108864 33554432 16777216 8388608 4194304 1048576 524288 131072 65536 32768 16384 8192 4096 2048 1024 512)
+#piecesizechoice=(134217728 67108864 33554432 16777216 8388608 4194304 1048576 524288 131072 65536 32768 16384 8192 4096 2048 1024 512)
 
 # DETERMINE PIECE SIZE BASED ON TOTAL MEMORY AND THREADCOUNT
 maxpiecesize=$(($memsize / $threadcount))
@@ -72,17 +72,19 @@ parallel --bar dd if=$1 bs=$curpiecesize of=$2.{} skip={} count=1 status=none ::
 
 date
 
+# OPTIONAL
 # verify pieces with b3hasher code prior to putting in squashfs and deleting the pieces.
-../b3hasher .
+#../b3hasher .
 
 #parallel --bar gzip $2.{} ::: $(seq -f "%0$((padding))g" 0 $piececount)
 
 cd ..
 
-7z a $2.zip $2/
+#OPTIONAL
+#7z a $2.zip $2/
+#rm -r $2
 
 # if i go with walafus, the below command would simply be
 #./mkwalafus $2
 # mksquashfs $2 $2.sfs -quiet
 
-#rm -r $2
