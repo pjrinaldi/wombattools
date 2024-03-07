@@ -45,6 +45,12 @@ int main(int argc, char* argv[])
     blake3_hasher hasher;
     blake3_hasher_init(&hasher);
 
+    std::vector<ubyte> data = handle->read();
+    std::cout << "data read size: " << data.size() << std::endl;
+    char* b3buf = new char[data.size() + 1];
+    b3buf = (char*)static_cast<unsigned char*>(&data[0]);
+    blake3_hasher_update(&hasher, b3buf, data.size());
+    /*
     uint64_t curoff = 0;
     while(curoff < handle->size()+1)
     {
@@ -58,6 +64,7 @@ int main(int argc, char* argv[])
 	printf("Read %llu of %llu bytes\r", curoff, handle->size());
 	fflush(stdout);
     }
+    */
     uint8_t output[BLAKE3_OUT_LEN];
     blake3_hasher_finalize(&hasher, output, BLAKE3_OUT_LEN);
     std::stringstream ss;
