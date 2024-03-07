@@ -7,7 +7,7 @@
 
 # GET THREADCOUNT FOR CPUS
 threadcount=$(nproc --all)
-threadcount=$((threadcount / 2));
+threadcount=$((threadcount - 2));
 
 echo "threadcount: $threadcount";
 
@@ -15,6 +15,7 @@ echo "threadcount: $threadcount";
 dsize=$(blockdev --getsize64 $1)
 
 echo "dsize: $dsize";
+
 
 # GET MEMORY SIZE
 memsize=$(grep MemTotal /proc/meminfo | awk '{print $2}');
@@ -58,35 +59,43 @@ mkdir $2
 cd $2
 touch $2.log
 
+echo "$(date) - Starting Creation of Forensic Image" >> $2.log
+
+# CREATE SPARSE IMAGE OF THE DEVICE USING DD
+dd if=/dev/zero of=$2.dd bs=1 count=0 seek=$dsize status=none
+echo "Sparse Image Created: $(date)" >> $2.log;
+
 # dd if=DEVICE skip=$j count=$curpiecesize
 
 # parallel gzip --best ::: *.html
 # parallel lame {} -o {.}.mp3 ::: *.wav
 
 # dating the image time for comparison to regular imaging
-date
 
-parallel -j $threadcount --bar dd if=$1 bs=$curpiecesize of=$2.{} skip={} count=1 status=none ::: $(seq -f "%0$((padding))g" 0 $piececount)
+#parallel -j $threadcount --bar dd if=$1 bs=$curpiecesize of=$2.{} skip={} count=1 status=none ::: $(seq -f "%0$((padding))g" 0 $piececount)
 
 # can also try the following for the dd command into a single image file
-# parallel -j $threadcount --bar dd if=$1 bs=$curpiecesize of=$2.dd skip={} seek={} count=1 status=none ::: $(seq 0 $piececount)
+parallel -j $threadcount --bar dd if=$1 bs=$curpiecesize of=$2.dd skip={} seek={} count=1 status=none ::: $(seq 0 $piececount)
 # update write status of the dd command as we go..
 
-date
+b3sum $1 >> $2.log
+b3sum $2.dd >> $2.log
 
 # OPTIONAL
 # verify pieces with b3hasher code prior to putting in squashfs and deleting the pieces.
-#../b3hasher .
+#echo "B3../b3hasher . >> $2.log
 
 #parallel --bar gzip $2.{} ::: $(seq -f "%0$((padding))g" 0 $piececount)
 
 cd ..
 
 #OPTIONAL
-#7z a $2.zip $2/
-#rm -r $2
+7z a $2.zip $2/
+./mkwalafus $2
+mksquashfs $2 $2.sfs -quiet
+rm -r $2
+
+7z x -so $2.zip $2/$2.log
 
 # if i go with walafus, the below command would simply be
-#./mkwalafus $2
-# mksquashfs $2 $2.sfs -quiet
 
