@@ -7,7 +7,7 @@
 
 # GET THREADCOUNT FOR CPUS
 threadcount=$(nproc --all)
-#threadcount=$((threadcount + 1));
+threadcount=$((threadcount / 2));
 
 echo "threadcount: $threadcount";
 
@@ -66,8 +66,10 @@ touch $2.log
 # dating the image time for comparison to regular imaging
 date
 
-parallel --bar dd if=$1 bs=$curpiecesize of=$2.{} skip={} count=1 status=none ::: $(seq -f "%0$((padding))g" 0 $piececount)
+parallel -j $threadcount --bar dd if=$1 bs=$curpiecesize of=$2.{} skip={} count=1 status=none ::: $(seq -f "%0$((padding))g" 0 $piececount)
 
+# can also try the following for the dd command into a single image file
+# parallel -j $threadcount --bar dd if=$1 bs=$curpiecesize of=$2.dd skip={} seek={} count=1 status=none ::: $(seq 0 $piececount)
 # update write status of the dd command as we go..
 
 date
