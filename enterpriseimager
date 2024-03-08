@@ -93,10 +93,16 @@ echo "ending b3sum";
 
 cd ..
 
+echo "starting compression";
 #OPTIONAL
 #7z a $2.zip $2/
+#./mkwfi $2
 ./mkwalafus $2
 #mksquashfs $2 $2.sfs -quiet
+echo "ending compression"
+
+echo "cleanup"
 rm -r $2
 
+#echo "log display"
 #7z x -so $2.zip $2/$2.log

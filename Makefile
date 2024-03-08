@@ -9,6 +9,12 @@ mkwalafus:
 rdwalafus:
 	g++ -O3 -o rdwalafus rdwalafus.cpp walafus/filesystem.cpp walafus/wltg_reader.cpp walafus/wltg_packer.cpp walafus/wltg_internal_readers.cpp walafus/wltg_internal_writers.cpp zstd/libzstd.a blake3/libblake3.a
 
+mkwfi:
+	g++ -O3 -o mkwfi mkwfi.cpp -lzip
+
+rdwfi:
+	g++ -O3 -o rdwfi rdwfi.cpp -lzip blake3/libblake3.a
+
 SEEKABLE_OBJS = zstd/zstdseek_compress.c zstd/zstdseek_decompress.c
 
 wombatimager: $(SEEKABLE_OBJS)
