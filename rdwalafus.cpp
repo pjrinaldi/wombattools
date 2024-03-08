@@ -33,7 +33,7 @@ int main(int argc, char* argv[])
     size_t found = wltgimg.rfind(".");
     std::string wltgrawimg = wltgimg.substr(0, found) + ".dd";
     std::string virtpath = "/" + wltgimg.substr(0, found) + "/" + wltgrawimg;
-    virtpath = "/" + wltgrawimg;
+    //virtpath = "/" + wltgrawimg;
     std::cout << virtpath << std::endl;
     
     std::unique_ptr<BaseFileStream> handle = wltgfilesystem.open_file_read(virtpath.c_str());

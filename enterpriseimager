@@ -101,6 +101,7 @@ echo "starting compression";
 #mksquashfs $2 $2.sfs -quiet
 echo "ending compression"
 
+cat $2/$2.log
 echo "cleanup"
 rm -r $2
 
