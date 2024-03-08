@@ -24,7 +24,7 @@
 int main(int argc, char* argv[])
 {
     Filesystem wltgfilesystem;
-    WltgReader pack_wltg(argv[1], "");
+    WltgReader pack_wltg(argv[1]);
     std::cout << "argv1: " << argv[1] << std::endl;
 
     wltgfilesystem.add_source(&pack_wltg);
@@ -47,12 +47,12 @@ int main(int argc, char* argv[])
     blake3_hasher hasher;
     blake3_hasher_init(&hasher);
 
-    char buf[512];
+    char buf[131072];
     uint64_t curoffset = 0;
     while(curoffset < handle->size())
     {
 	handle->seek(curoffset);
-	uint64_t bytesread = handle->read_into(buf, 512);
+	uint64_t bytesread = handle->read_into(buf, 131072);
 	//std::cout << "1st 4 bytes read at curoffset: " << std::hex << (uint)buf[0] << (uint)buf[1] << (uint)buf[2] << (uint)buf[3] << std::dec << std::endl;
 	blake3_hasher_update(&hasher, buf, bytesread);
 	printf("Read %llu of %llu bytes\r", curoffset, handle->size());

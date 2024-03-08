@@ -63,7 +63,7 @@ int main(int argc, char* argv[])
     packer.index_real_dir(virtpath.c_str(), realpath.c_str());
     std::string wfistr = std::string(argv[1]) + ".wltg";
 
-    packer.write_fs_blob(wfistr.c_str(), 11, "", true);
+    packer.write_fs_blob(wfistr.c_str());
     /*
     std::vector<std::filesystem::path> filevector;
     filevector.clear();
