@@ -25,6 +25,7 @@ int main(int argc, char* argv[])
 {
     Filesystem wltgfilesystem;
     WltgReader pack_wltg(argv[1], "");
+    std::cout << "argv1: " << argv[1] << std::endl;
 
     wltgfilesystem.add_source(&pack_wltg);
 
@@ -32,21 +33,31 @@ int main(int argc, char* argv[])
     size_t found = wltgimg.rfind(".");
     std::string wltgrawimg = wltgimg.substr(0, found) + ".dd";
     std::string virtpath = "/" + wltgimg.substr(0, found) + "/" + wltgrawimg;
-    
-    //std::unique_ptr<BaseFileStream> handle = wltgfilesystem.open_file_read(virtpath.c_str());
+    virtpath = "/" + wltgrawimg;
     std::cout << virtpath << std::endl;
-    /*
+    
+    std::unique_ptr<BaseFileStream> handle = wltgfilesystem.open_file_read(virtpath.c_str());
     if(!handle)
     {
 	std::cout << "failed to open file" << std::endl;
 	return 1;
     }
     std::cout << handle->size() << std::endl;
-    */
 
-    //blake3_hasher hasher;
-    //blake3_hasher_init(&hasher);
+    blake3_hasher hasher;
+    blake3_hasher_init(&hasher);
 
+    char buf[1048576];
+    uint64_t curoffset = 0;
+    while(curoffset < handle->size())
+    {
+	uint64_t bytesread = handle->read_into(buf, 1048576);
+	blake3_hasher_update(&hasher, buf, bytesread);
+	printf("Read %llu of %llu bytes\r", curoffset, handle->size());
+	fflush(stdout);
+	curoffset += bytesread;
+    }
+    /*
     std::vector<ubyte> data = wltgfilesystem.read_file(virtpath.c_str());
     std::cout << "bytes read: " << data.size() << std::endl;
     std::string virtlog = "/" + wltgimg.substr(0, found) + "/" + wltgimg.substr(0, found) + ".log";
@@ -56,6 +67,7 @@ int main(int argc, char* argv[])
     for(int i=0; i < data2.size(); i++)
 	std::cout << data2[i];
     std::cout << std::endl;
+    */
     //std::vector<ubyte> Filesystem::read_file(std::string_view filename) {
     //std::vector<ubyte> data = handle->read();
     //std::cout << "data read size: " << data.size() << std::endl;
@@ -78,7 +90,6 @@ int main(int argc, char* argv[])
     }
     */
 
-    /*
     uint8_t output[BLAKE3_OUT_LEN];
     blake3_hasher_finalize(&hasher, output, BLAKE3_OUT_LEN);
     std::stringstream ss;
@@ -87,7 +98,6 @@ int main(int argc, char* argv[])
     //printf("%02x", srchash[i]);
     std::string srcmd5 = ss.str();
     std::cout << ss.str() << std::endl;
-    */
 
     return 0;
 }
