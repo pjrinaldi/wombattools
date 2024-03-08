@@ -31,7 +31,7 @@ int main(int argc, char* argv[])
     std::string wltgimg = std::filesystem::path(argv[1]).filename().string();
     size_t found = wltgimg.rfind(".");
     std::string wltgrawimg = wltgimg.substr(0, found) + ".dd";
-    std::string virtpath = "/" + wltgrawimg;
+    std::string virtpath = "/" + wltgimg.substr(0, found) + "/" + wltgrawimg;
     
     //std::unique_ptr<BaseFileStream> handle = wltgfilesystem.open_file_read(virtpath.c_str());
     std::cout << virtpath << std::endl;
@@ -49,6 +49,13 @@ int main(int argc, char* argv[])
 
     std::vector<ubyte> data = wltgfilesystem.read_file(virtpath.c_str());
     std::cout << "bytes read: " << data.size() << std::endl;
+    std::string virtlog = "/" + wltgimg.substr(0, found) + "/" + wltgimg.substr(0, found) + ".log";
+    std::vector<ubyte> data2 = wltgfilesystem.read_file(virtlog.c_str());
+    std::cout << "bytes read: " << data2.size() << std::endl;
+    std::cout << "data content:" << std::endl;
+    for(int i=0; i < data2.size(); i++)
+	std::cout << data2[i];
+    std::cout << std::endl;
     //std::vector<ubyte> Filesystem::read_file(std::string_view filename) {
     //std::vector<ubyte> data = handle->read();
     //std::cout << "data read size: " << data.size() << std::endl;

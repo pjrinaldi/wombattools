@@ -57,7 +57,7 @@ int main(int argc, char* argv[])
 {
     WltgPacker packer;
     std::string realpath = std::filesystem::canonical(argv[1]).string();
-    std::string virtpath = "/" + std::filesystem::canonical(argv[1]).filename().string();
+    std::string virtpath = "/" + std::filesystem::canonical(argv[1]).filename().string() + "/";
     std::cout << "virtpath: " << virtpath << std::endl;
     packer.index_real_dir(virtpath.c_str(), realpath.c_str());
     std::string wfistr = std::string(argv[1]) + ".wltg";

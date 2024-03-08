@@ -78,8 +78,12 @@ echo "Sparse Image Created: $(date)" >> $2.log;
 parallel -j $threadcount --bar dd if=$1 bs=$curpiecesize of=$2.dd skip={} seek={} count=1 status=none ::: $(seq 0 $piececount)
 # update write status of the dd command as we go..
 
+echo "starting b3sum";
+
 b3sum $1 >> $2.log
 b3sum $2.dd >> $2.log
+
+echo "ending b3sum";
 
 # OPTIONAL
 # verify pieces with b3hasher code prior to putting in squashfs and deleting the pieces.
