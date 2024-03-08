@@ -95,7 +95,4 @@ cd ..
 #mksquashfs $2 $2.sfs -quiet
 rm -r $2
 
-7z x -so $2.zip $2/$2.log
-
-# if i go with walafus, the below command would simply be
-
+#7z x -so $2.zip $2/$2.log
