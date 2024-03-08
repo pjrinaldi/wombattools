@@ -47,11 +47,13 @@ int main(int argc, char* argv[])
     blake3_hasher hasher;
     blake3_hasher_init(&hasher);
 
-    char buf[1048576];
+    char buf[512];
     uint64_t curoffset = 0;
     while(curoffset < handle->size())
     {
-	uint64_t bytesread = handle->read_into(buf, 1048576);
+	handle->seek(curoffset);
+	uint64_t bytesread = handle->read_into(buf, 512);
+	//std::cout << "1st 4 bytes read at curoffset: " << std::hex << (uint)buf[0] << (uint)buf[1] << (uint)buf[2] << (uint)buf[3] << std::dec << std::endl;
 	blake3_hasher_update(&hasher, buf, bytesread);
 	printf("Read %llu of %llu bytes\r", curoffset, handle->size());
 	fflush(stdout);
@@ -97,7 +99,7 @@ int main(int argc, char* argv[])
         ss << std::hex  << std::setfill('0') << std::setw(2) << (int)output[i]; 
     //printf("%02x", srchash[i]);
     std::string srcmd5 = ss.str();
-    std::cout << ss.str() << std::endl;
+    std::cout << std::endl << ss.str() << std::endl;
 
     return 0;
 }
