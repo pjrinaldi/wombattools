@@ -90,9 +90,9 @@ b3sum $2.dd >> $2.log
 cd ..
 
 #OPTIONAL
-7z a $2.zip $2/
+#7z a $2.zip $2/
 ./mkwalafus $2
-mksquashfs $2 $2.sfs -quiet
+#mksquashfs $2 $2.sfs -quiet
 rm -r $2
 
 7z x -so $2.zip $2/$2.log

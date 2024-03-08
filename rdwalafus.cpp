@@ -33,23 +33,28 @@ int main(int argc, char* argv[])
     std::string wltgrawimg = wltgimg.substr(0, found) + ".dd";
     std::string virtpath = "/" + wltgrawimg;
     
-    std::unique_ptr<BaseFileStream> handle = wltgfilesystem.open_file_read(virtpath.c_str());
+    //std::unique_ptr<BaseFileStream> handle = wltgfilesystem.open_file_read(virtpath.c_str());
     std::cout << virtpath << std::endl;
+    /*
     if(!handle)
     {
 	std::cout << "failed to open file" << std::endl;
 	return 1;
     }
     std::cout << handle->size() << std::endl;
+    */
 
-    blake3_hasher hasher;
-    blake3_hasher_init(&hasher);
+    //blake3_hasher hasher;
+    //blake3_hasher_init(&hasher);
 
-    std::vector<ubyte> data = handle->read();
-    std::cout << "data read size: " << data.size() << std::endl;
-    char* b3buf = new char[data.size() + 1];
-    b3buf = (char*)static_cast<unsigned char*>(&data[0]);
-    blake3_hasher_update(&hasher, b3buf, data.size());
+    std::vector<ubyte> data = wltgfilesystem.read_file(virtpath.c_str());
+    std::cout << "bytes read: " << data.size() << std::endl;
+    //std::vector<ubyte> Filesystem::read_file(std::string_view filename) {
+    //std::vector<ubyte> data = handle->read();
+    //std::cout << "data read size: " << data.size() << std::endl;
+    //char* b3buf = new char[data.size() + 1];
+    //b3buf = (char*)static_cast<unsigned char*>(&data[0]);
+    //blake3_hasher_update(&hasher, b3buf, data.size());
     /*
     uint64_t curoff = 0;
     while(curoff < handle->size()+1)
@@ -65,6 +70,8 @@ int main(int argc, char* argv[])
 	fflush(stdout);
     }
     */
+
+    /*
     uint8_t output[BLAKE3_OUT_LEN];
     blake3_hasher_finalize(&hasher, output, BLAKE3_OUT_LEN);
     std::stringstream ss;
@@ -73,6 +80,7 @@ int main(int argc, char* argv[])
     //printf("%02x", srchash[i]);
     std::string srcmd5 = ss.str();
     std::cout << ss.str() << std::endl;
+    */
 
     return 0;
 }

@@ -4,10 +4,10 @@ blake3:
 	cd ..
 
 mkwalafus:
-	g++ -O3 -o mkwalafus mkwalafus.cpp walafus/filesystem.cpp walafus/wltg_packer.cpp walafus/wltg_internal_writers.cpp -lzstd
+	g++ -O3 -o mkwalafus mkwalafus.cpp walafus/filesystem.cpp walafus/wltg_packer.cpp walafus/wltg_internal_writers.cpp zstd/libzstd.a
 
 rdwalafus:
-	g++ -O3 -o rdwalafus rdwalafus.cpp walafus/filesystem.cpp walafus/wltg_reader.cpp walafus/wltg_packer.cpp walafus/wltg_internal_readers.cpp walafus/wltg_internal_writers.cpp -lzstd blake3/libblake3.a
+	g++ -O3 -o rdwalafus rdwalafus.cpp walafus/filesystem.cpp walafus/wltg_reader.cpp walafus/wltg_packer.cpp walafus/wltg_internal_readers.cpp walafus/wltg_internal_writers.cpp zstd/libzstd.a blake3/libblake3.a
 
 SEEKABLE_OBJS = zstd/zstdseek_compress.c zstd/zstdseek_decompress.c
 
