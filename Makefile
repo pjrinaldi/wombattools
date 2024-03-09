@@ -15,7 +15,7 @@ mkwfi:
 rdwfi:
 	g++ -O3 -o rdwfi rdwfi.cpp -lzip blake3/libblake3.a
 
-SEEKABLE_OBJS = zstd/zstdseek_compress.c zstd/zstdseek_decompress.c
+SEEKABLE_OBJS = zstd/zstdseek_compress.c zstd/zstdseek_decompress.c zstd/zstd-seek.c
 
 wombatimager: $(SEEKABLE_OBJS)
 	g++ -O3 -o wombatimager $(SEEKABLE_OBJS) wombatimager.cpp -ludev -lpthread zstd/libzstd.a blake3/libblake3.a

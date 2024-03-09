@@ -30,6 +30,8 @@ piecesizechoice=(8589934592 4294967296 2147483648 1073741824 536870912 268435456
 
 # DETERMINE PIECE SIZE BASED ON TOTAL MEMORY AND THREADCOUNT
 maxpiecesize=$(($memsize / $threadcount))
+if [ $dsize -lt $maxpiecesize ]
+    maxpiecesize=$dsize;
 
 curpiecesize=0;
 echo "max piece size: $maxpiecesize";

@@ -8,6 +8,7 @@
 
 #define ZSTD_STATIC_LINKING_ONLY
 
+#include "zstd/zstd-seek.h"
 #include "zstd/zstdcommon.h"
 #include "zstd/zstd_seekable.h"
 #include "zstd/zstd.h"
@@ -29,7 +30,8 @@ struct wfi_metadata
     uint8_t devhash[32]; // blake3 source hash
 } wfimd;
 
-static const char* wfistr = NULL;
+//static const char* wfistr = NULL;
+static const char* fullwfipath = NULL;
 static off_t rawsize = 0;
 
 void ShowUsage(int outtype)
@@ -110,6 +112,17 @@ static int wombat_open(const char *path, struct fuse_file_info *fi)
 static int wombat_read(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info *fi)
 {
     (void)fi;
+
+    ZSTDSeek_Context* zsc = ZSTDSeek_createFromFile(fullwfipath);
+    //ZSTDSeek_Context* sctx = ZSTDSeek_createFromFileWithoutJumpTable(path);
+    if(!zsc)
+    {
+	fprintf(stderr, "Can't create the context\n");
+	return -1;
+    }
+    int seek = ZSTDSeek_seek(zsc, offset, SEEK_SET);
+    size_t bytesread = ZSTDSeek_read(buf, size, zsc);
+    ZSTDSeek_free(zsc);
 
     /*
      * ZSTD_SEEKABLE_DECOMPRESS EXAMPLE
@@ -249,21 +262,31 @@ int main(int argc, char* argv[])
 	strcat(mdstr, ".md");
 	printf("mdstr: %s\n", mdstr);
 	printf("arg1: %s\n", argv[1]);
+	//char* wfistr = malloc(sizeof(char)*(strlen(argv[1])+5));
+	char* wfistr = argv[1];
+	//strcat(wfistr, argv[1]);
+	//strcat(wfistr, ".wfi");
+	printf("wfistr: %s\n", wfistr);
         
         printf("command run: %s %s %s\n", argv[0], argv[1], argv[2]);
         
-	char wfistr2[256];
-	realpath(mdstr, wfistr2);
-	printf("wfistr2: \"%s\"\n", wfistr2);
+	char mdpath[256];
+	realpath(mdstr, mdpath);
+	printf("mdpath: \"%s\"\n", mdpath);
+
+	char wfipath[256];
+	realpath(wfistr, wfipath);
+	printf("wfipath: \"%s\"\n", wfipath);
+	fullwfipath = wfipath;
 	
-	wfistr = malloc(sizeof(char)*strlen(wfistr2));
-	wfistr = wfistr2;
-	printf("wfistr: \"%s\"\n", wfistr);
+	//wfistr = malloc(sizeof(char)*strlen(wfistr2));
+	//wfistr = wfistr2;
+	//printf("wfistr: \"%s\"\n", wfistr);
 
         // get wfimd.totalbytes
-        FILE* imgfile = NULL;
-        imgfile = fopen(wfistr2, "rb");
-	if(imgfile == NULL)
+        FILE* mdfile = NULL;
+        mdfile = fopen(mdpath, "rb");
+	if(mdfile == NULL)
 	    printf("fopen failed.\n");
 	else
 	    printf("fopen successful\n");
@@ -272,9 +295,9 @@ int main(int argc, char* argv[])
         //fseek(imgfile, 0, SEEK_END);
         //fseek(imgfile, -264, SEEK_CUR);
 	printf("fread\n");
-        fread(&wfimd, sizeof(struct wfi_metadata), 1, imgfile);
+        fread(&wfimd, sizeof(struct wfi_metadata), 1, mdfile);
 	printf("fclose\n");
-        fclose(imgfile);
+        fclose(mdfile);
         rawsize = wfimd.totalbytes;
         printf("totalbytes %ld\n", rawsize);
 
