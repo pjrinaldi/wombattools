@@ -73,8 +73,6 @@ void WritePiece(uint64_t offset, uint64_t size, std::string devpath, std::string
     lseek(outfile, offset, SEEK_SET);
     char inbuf[size];
     memset(inbuf, 0, sizeof(inbuf));
-    //char outbuf[size];
-    //memset(outbuf, 0, sizeof(outbuf));
     ssize_t bytesread = read(infile, inbuf, size);
     close(infile);
     if(bytesread == -1)
@@ -85,77 +83,7 @@ void WritePiece(uint64_t offset, uint64_t size, std::string devpath, std::string
     close(outfile);
     printf("Wrote %llu bytes\r", offset + size);
     fflush(stdout);
-    /*
-    lseek(infile, 0, SEEK_SET);
-    lseek(outfile, 0, SEEK_SET);
-    uint8_t sourcehash[BLAKE3_OUT_LEN];
-    uint8_t forimghash[BLAKE3_OUT_LEN];
-    int i;
-    blake3_hasher srchash;
-    blake3_hasher imghash;
-    blake3_hasher_init(&srchash);
-    blake3_hasher_init(&imghash);
-    while(curpos < totalbytes)
-    {
-	char bytebuf[sectorsize];
-	memset(bytebuf, 0, sizeof(bytebuf));
-	char imgbuf[sectorsize];
-	memset(imgbuf, 0, sizeof(imgbuf));
-	ssize_t bytesread = read(infile, bytebuf, sectorsize);
-	if(bytesread == -1)
-	{
-	    memset(bytebuf, 0, sizeof(bytebuf));
-	    errorcount++;
-	    perror("Read Error, Writing zeros instead.");
-	}
-	ssize_t byteswrite = write(outfile, bytebuf, sectorsize);
-	if(byteswrite == -1)
-	    perror("Write error, I haven't accounted for this yet so you probably want to use dc3dd instead.");
-	blake3_hasher_update(&srchash, bytebuf, bytesread);
-	ssize_t byteswrote = pread(outfile, imgbuf, sectorsize, curpos);
-	blake3_hasher_update(&imghash, imgbuf, byteswrote);
-	curpos = curpos + sectorsize;
-	printf("Wrote %llu out of %llu bytes\r", curpos, totalbytes);
-	fflush(stdout);
-    }
-    close(infile);
-    close(outfile);
-    */ 
 }
-
-/*
-void HashFile(std::string filename, std::string whlfile)
-{
-    std::ifstream fin(filename.c_str());
-    char tmpchar[65536];
-    blake3_hasher hasher;
-    blake3_hasher_init(&hasher);
-    while(fin)
-    {
-	fin.read(tmpchar, 65536);
-	size_t cnt = fin.gcount();
-	blake3_hasher_update(&hasher, tmpchar, cnt);
-	if(!cnt)
-	    break;
-    }
-    uint8_t output[BLAKE3_OUT_LEN];
-    blake3_hasher_finalize(&hasher, output, BLAKE3_OUT_LEN);
-    std::stringstream ss;
-    for(int i=0; i < BLAKE3_OUT_LEN; i++)
-        ss << std::hex << (int)output[i]; 
-    std::string srcmd5 = ss.str();
-    std::string whlstr = srcmd5 + "," + filename + "\n";
-    if(whlfile.compare("") == 0)
-        std::cout << whlstr;
-    else
-    {
-        FILE* whlptr = NULL;
-        whlptr = fopen(whlfile.c_str(), "a");
-        fwrite(whlstr.c_str(), strlen(whlstr.c_str()), 1, whlptr);
-        fclose(whlptr);
-    }
-}
-*/ 
 
 int main(int argc, char* argv[])
 {
@@ -318,6 +246,17 @@ int main(int argc, char* argv[])
 	    uint64_t piececount = totalbytes / piecesize;
 	    std::cout << "piece count: " << piececount << std::endl;
 
+	    // GET HASH PIECE SIZE
+	    uint64_t hashsize = piecesize;
+	    for(int i=0; i < piecesizechoice.size(); i++)
+	    {
+		if(totalbytes % piecesizechoice.at(i) == 0)
+		{
+		    hashsize = piecesizechoice.at(i);
+		    break;
+		}
+	    }
+	    std::cout << "hash size: " << hashsize << std::endl;
 
 	    /*
 	    // OPEN FILEINFO AND START POPULATING THE INFORMATION
@@ -381,10 +320,6 @@ int main(int argc, char* argv[])
             }
             udev_enumerate_unref(enumerate);
             udev_unref(udev);
-            
-	    //fseek(fin, 0, SEEK_SET);
-	    //fout = fopen(imagepath.c_str(), "wb");
-	    //fseek(fout, 0, SEEK_SET);
 	    
 	    // MULTI THREAD THE raw image creation process
 	    for(int i=0; i < piececount; i++)
@@ -392,278 +327,88 @@ int main(int argc, char* argv[])
 		std::thread tmp(WritePiece, i*piecesize, piecesize, devicepath, imagepath);
 		tmp.join();
 	    }
-
-	    /*
-	    parallel -j $threadcount --bar dd if=$1 bs=$curpiecesize of=$2.dd skip={} seek={} count=1 status=none ::: $(seq 0 $piececount)
-	    for(int i=0; i < filelist.size(); i++)
-	    {
-		std::thread tmp(HashFile, filelist.at(i).string(), whlstr);
-		tmp.join();
-	    }
-	    */ 
-
-            // BLAKE3_OUT_LEN IS 32 BYTES LONG
-            //uint8_t srchash[BLAKE3_OUT_LEN];
-            //uint8_t wfihash[BLAKE3_OUT_LEN];
-
-	    //blake3_hasher srchasher;
-	    //blake3_hasher_init(&srchasher);
-	    
-
-/*
-    size_t read, toRead = buffInSize;
-    while( (read = fread_orDie(buffIn, toRead, fin)) ) {
-        ZSTD_inBuffer input = { buffIn, read, 0 };
-        while (input.pos < input.size) {
-            ZSTD_outBuffer output = { buffOut, buffOutSize, 0 };
-            toRead = ZSTD_seekable_compressStream(cstream, &output , &input);   // toRead is guaranteed to be <= ZSTD_CStreamInSize()
-            if (ZSTD_isError(toRead)) { fprintf(stderr, "ZSTD_seekable_compressStream() error : %s \n", ZSTD_getErrorName(toRead)); exit(12); }
-            if (toRead > buffInSize) toRead = buffInSize;   // Safely handle case when `buffInSize` is manually changed to a value < ZSTD_CStreamInSize()
-            fwrite_orDie(buffOut, output.pos, fout);
-        }
-    }
-    while (1) {
-        ZSTD_outBuffer output = { buffOut, buffOutSize, 0 };
-        size_t const remainingToFlush = ZSTD_seekable_endStream(cstream, &output);   // close stream
-        if (ZSTD_isError(remainingToFlush)) { fprintf(stderr, "ZSTD_seekable_endStream() error : %s \n", ZSTD_getErrorName(remainingToFlush)); exit(13); }
-        fwrite_orDie(buffOut, output.pos, fout);
-        if (!remainingToFlush) break;
-    }
-    ZSTD_seekable_freeCStream(cstream);
-    fclose_orDie(fout);
-    fclose_orDie(fin);
-    free(buffIn);
-    free(buffOut);
-*/ 
-	    /*
-	    // USE ZSTD STREAM COMPRESSION
-	    size_t bufinsize = ZSTD_CStreamInSize();
-	    void* bufin = malloc_orDie(bufinsize);
-	    size_t bufoutsize = ZSTD_CStreamOutSize();
-	    void* bufout = malloc_orDie(bufoutsize);
-	    size_t writecount = 0;
-
-	    ZSTD_seekable_CStream* const cstream = ZSTD_seekable_createCStream();
-	    size_t const initresult = ZSTD_seekable_initCStream(cstream, ZSTD_CLEVEL_DEFAULT, 1, 0);
-	    //ZSTD_CCtx* cctx = ZSTD_createCCtx();
-	    //CHECK(cctx != NULL, "ZSTD_createCCtx() failed");
-	    size_t read = bufinsize;
-	    size_t toread = bufinsize;
-	    while((read = fread_orDie(bufin, toread, fin)))
-	    {
-		writecount = writecount + read;
-		printf("Writing %llu of %llu bytes\r", writecount, totalbytes);
-		fflush(stdout);
-
-		blake3_hasher_update(&srchasher, bufin, read);
-
-		ZSTD_inBuffer input = { bufin, read, 0 };
-		while(input.pos < input.size)
-		{
-		    ZSTD_outBuffer output = { bufout, bufoutsize, 0 };
-		    toread = ZSTD_seekable_compressStream(cstream, &output, &input);
-		    if(toread > bufinsize)
-			toread = bufinsize;
-		    fwrite_orDie(bufout, output.pos, fout);
-		}
-	    }
-	    //ZSTD_outBuffer output;
-	    while(1)
-	    {
-		ZSTD_outBuffer output = { bufout, bufoutsize, 0 };
-		//size_t const remainingtoflush = ZSTD_seekable_endFrame(cstream, &output);
-		size_t const remainingtoflush = ZSTD_seekable_endStream(cstream, &output);
-		fwrite_orDie(bufout, output.pos, fout);
-		if(!remainingtoflush) break;
-	    }
-
-	    ZSTD_seekable_freeCStream(cstream);
-	    */
-
-	    /*
-	    for(;;)
-	    {
-		size_t read = fread_orDie(bufin, toread, fin);
-		writecount = writecount + read;
-		printf("Writing %llu of %llu bytes\r", writecount, totalbytes);
-		fflush(stdout);
-
-		blake3_hasher_update(&srchasher, bufin, read);
-
-		int lastchunk = (read < toread);
-		ZSTD_EndDirective mode = lastchunk ? ZSTD_e_end : ZSTD_e_continue;
-		ZSTD_inBuffer input = { bufin, read, 0 };
-		int finished;
-		do
-		{
-		    ZSTD_outBuffer output = { bufout, bufoutsize, 0 };
-		    size_t remaining = ZSTD_compressStream2(cctx, &output, &input, mode);
-		    CHECK_ZSTD(remaining);
-		    fwrite_orDie(bufout, output.pos, fout);
-		    finished = lastchunk ? (remaining == 0) : (input.pos == input.size);
-		} while (!finished);
-		CHECK(input.pos == input.size, "Impossible, zstd only returns 0 when the input is completely consumed");
-
-		if(lastchunk)
-		    break;
-	    }
-	    ZSTD_freeCCtx(cctx);
-	    */
-
-	    //blake3_hasher_finalize(&srchasher, srchash, BLAKE3_OUT_LEN);
-            //memcpy(wfimd.devhash, srchash, BLAKE3_OUT_LEN);
-	    // NEED TO WRITE SKIPPABLE FRAME CONTENT HERE
-	    //fmd = fopen_orDie(mdpath.c_str(), "wb");
-	    //fseek(fmd, 0, SEEK_SET);
-	    //fwrite_orDie(&wfimd, sizeof(struct wfi_metadata), fmd);
-	    //fclose_orDie(fmd);
-	    //fwrite_orDie(&wfimd, sizeof(struct wfi_metadata), fout);
-	    
-	    //size_t const remainingtoflush = ZSTD_seekable_endStream(cstream, &output);
-	    //ZSTD_seekable_freeCStream(cstream);
-
 	    time_t endtime = time(NULL);
-            fprintf(filelog, "Wrote %llu out of %llu bytes\n", curpos, totalbytes);
-            fprintf(filelog, "%llu blocks replaced with zeroes\n", errcnt);
+            fprintf(filelog, "Wrote %llu bytes\n", totalbytes);
+            //fprintf(filelog, "%llu blocks replaced with zeroes\n", errcnt);
             fprintf(filelog, "Forensic Image: %s\n", imagepath.c_str());
             fprintf(filelog, "Forensic Image finished at: %s\n", GetDateTime(dtbuf));
             fprintf(filelog, "Forensic Image created in: %f seconds\n\n", difftime(endtime, starttime));
             printf("\nForensic Image Creation Finished\n");
-	    /*
+
+	    time_t devhashstart = time(NULL);
+	    // HASH THE DEVICE | BLAKE3_OUT_LEN IS 32 BYTES LONG
+            uint8_t devhash[BLAKE3_OUT_LEN];
+	    blake3_hasher devhasher;
+	    blake3_hasher_init(&devhasher);
+	    fin = fopen(devicepath.c_str(), "rb");	    
+	    fseek(fin, 0, SEEK_SET);
+	    int curpos = 0;
+	    while(curpos < totalbytes)
+	    {
+		char inbuf[hashsize];
+		memset(inbuf, 0, sizeof(inbuf));
+		ssize_t bytesread = fread(inbuf, hashsize, 1, fin);
+		//ssize_t bytesread = fread(fin, inbuf, hashsize);
+		curpos = curpos + hashsize;
+		blake3_hasher_update(&devhasher, inbuf, bytesread);
+		printf("Hashing %llu of %llu bytes\r", curpos, totalbytes);
+		fflush(stdout);
+	    }
+	    blake3_hasher_finalize(&devhasher, devhash, BLAKE3_OUT_LEN);
+	    fclose(fin);
+
             for(size_t i=0; i < BLAKE3_OUT_LEN; i++)
             {
-                fprintf(filelog, "%02x", srchash[i]);
-                printf("%02x", srchash[i]);
+                fprintf(filelog, "%02x", devhash[i]);
+                printf("%02x", devhash[i]);
             }
-	    */
             printf(" - BLAKE3 Source Device\n");
             fprintf(filelog, " - BLAKE3 Source Device\n");
+	    time_t devhashend = time(NULL);
+            fprintf(filelog, "Hashed %llu bytes\n", totalbytes);
+            fprintf(filelog, "Hash of Source Device finished at: %s\n", GetDateTime(dtbuf));
+            fprintf(filelog, "Hash of Source Device created in: %f seconds\n\n", difftime(devhashend, devhashstart));
+            printf("\nSource Device Hashing Finished\n");
 
-	    //fclose(fin);
-	    //fclose(fout);
-
-	    /*
-	    fclose_orDie(fout);
-	    fclose_orDie(fin);
-	    free(bufin);
-	    free(bufout);
-	    */
-
+	    // START VERIFYING THE FORENSIC IMAGE IF ENABLED
 	    if(verify == 1) // start verification
 	    {
+		time_t imghashstart = time(NULL);
                 fprintf(filelog, "Verification started at: %s\n", GetDateTime(dtbuf));
                 printf("Verification Started\n");
                 uint8_t forimghash[BLAKE3_OUT_LEN];
-                //blake3_hasher imghasher;
-                //blake3_hasher_init(&imghasher);
-                
-		/*
-		fout = fopen_orDie(imagepath.c_str(), "rb");
-		size_t bufinsize = ZSTD_DStreamInSize();
-		void* bufin = malloc_orDie(bufinsize);
-		size_t bufoutsize = ZSTD_DStreamOutSize();
-		void* bufout = malloc_orDie(bufoutsize);
-		*/
-/*
-    FILE* const fin  = fopen_orDie(fname, "rb");
-    FILE* const fout = stdout;
-    size_t const buffOutSize = ZSTD_DStreamOutSize();  // Guarantee to successfully flush at least one complete compressed block in all circumstances.
-    void*  const buffOut = malloc_orDie(buffOutSize);
-
-    ZSTD_seekable* const seekable = ZSTD_seekable_create();
-    if (seekable==NULL) { fprintf(stderr, "ZSTD_seekable_create() error \n"); exit(10); }
-
-    size_t const initResult = ZSTD_seekable_initFile(seekable, fin);
-    if (ZSTD_isError(initResult)) { fprintf(stderr, "ZSTD_seekable_init() error : %s \n", ZSTD_getErrorName(initResult)); exit(11); }
-
-    while (startOffset < endOffset) {
-        size_t const result = ZSTD_seekable_decompress(seekable, buffOut, MIN(endOffset - startOffset, buffOutSize), startOffset);
-        if (!result) {
-            break;
-        }
-
-        if (ZSTD_isError(result)) {
-            fprintf(stderr, "ZSTD_seekable_decompress() error : %s \n",
-                    ZSTD_getErrorName(result));
-            exit(12);
-        }
-        fwrite_orDie(buffOut, result, fout);
-        startOffset += result;
-    }
-
-    ZSTD_seekable_free(seekable);
-    fclose_orDie(fin);
-    fclose_orDie(fout);
-    free(buffOut);
-*/ 
-		/*
-		ZSTD_DCtx* dctx = ZSTD_createDCtx();
-		CHECK(dctx != NULL, "ZSTD_createDCtx() failed");
-
-		size_t toread = bufinsize;
-		size_t read;
-		size_t lastret = 0;
-		int isempty = 1;
-		size_t readcount = 0;
-		while( (read = fread_orDie(bufin, toread, fout)) )
+                blake3_hasher imghasher;
+                blake3_hasher_init(&imghasher); 
+		fout = fopen(imagepath.c_str(), "rb");
+		fseek(fout, 0, SEEK_SET);
+		int curpos = 0;
+		while(curpos < totalbytes)
 		{
-		    isempty = 0;
-		    ZSTD_inBuffer input = { bufin, read, 0 };
-		    while(input.pos < input.size)
-		    {
-			ZSTD_outBuffer output = { bufout, bufoutsize, 0 };
-			size_t ret = ZSTD_decompressStream(dctx, &output, &input);
-			CHECK_ZSTD(ret);
-			blake3_hasher_update(&imghasher, bufout, output.pos);
-			lastret = ret;
-			readcount = readcount + output.pos;
-			printf("Read %llu of %llu bytes\r", readcount, totalbytes);
-			fflush(stdout);
-		    }
+		    char inbuf[hashsize];
+		    memset(inbuf, 0, sizeof(inbuf));
+		    ssize_t bytesread = fread(inbuf, hashsize, 1, fin);
+		    //ssize_t bytesread = fread(fout, inbuf, hashsize);
+		    curpos = curpos + hashsize;
+		    blake3_hasher_update(&imghasher, inbuf, bytesread);
+		    printf("Hashing %llu of %llu bytes\r", curpos, totalbytes);
+		    fflush(stdout);
 		}
-		printf("\nVerification Finished\n");
-
-		if(isempty)
-		{
-		    printf("input is empty\n");
-		    return 1;
-		}
-
-		if(lastret != 0)
-		{
-		    printf("EOF before end of stream: %zu\n", lastret);
-		    exit(1);
-		}
-		ZSTD_freeDCtx(dctx);
-		fclose_orDie(fout);
-		free(bufin);
-		free(bufout);
-		*/
-
-		/*
-                blake3_hasher_finalize(&imghasher, forimghash, BLAKE3_OUT_LEN);
-
-		for(size_t i=0; i < BLAKE3_OUT_LEN; i++)
-		{
-		    fprintf(filelog, "%02x", srchash[i]);
-		    printf("%02x", srchash[i]);
-		}
-		*/
-		printf(" - BLAKE3 Source Device\n");
-		fprintf(filelog, " - BLAKE3 Source Device\n");
-
-		/*
+		blake3_hasher_finalize(&imghasher, forimghash, BLAKE3_OUT_LEN);
+		fclose(fout);
                 for(size_t i=0; i < BLAKE3_OUT_LEN; i++)
                 {
 		    fprintf(filelog, "%02x", forimghash[i]);
                     printf("%02x", forimghash[i]);
                 }
-		*/
                 printf(" - Forensic Image Hash\n");
                 fprintf(filelog, " - Forensic Image Hash\n");
+		time_t imghashend = time(NULL);
+		fprintf(filelog, "Hashed %llu bytes\n", totalbytes);
+		fprintf(filelog, "Hash of Forensic Image finished at: %s\n", GetDateTime(dtbuf));
+		fprintf(filelog, "Hash of Forensic Image created in: %f seconds\n\n", difftime(imghashend, imghashstart));
+		printf("\nForensic Image Hashing Finished\n");
 		printf("\n");
-		/*
-		if(memcmp(&srchash, &forimghash, BLAKE3_OUT_LEN) == 0)
+		if(memcmp(&devhash, &forimghash, BLAKE3_OUT_LEN) == 0)
 		{
 		    printf("Verification Successful\n");
 		    fprintf(filelog, "Verification Successful\n");
@@ -674,7 +419,6 @@ int main(int argc, char* argv[])
 		    fprintf(filelog, "Verification Failed\n");
 		}
 		printf("\n");
-		*/
 	    }
 	}
 	else
@@ -684,6 +428,7 @@ int main(int argc, char* argv[])
 	}
 	fclose(filelog);
 	fclose(fileinfo);
+	//std::uintmax_t n{std::filesystem::remove_all(
 	/*
 	std::uintmax_t n{fs::remove_all(tmp / "abcdef")};
 	std::cout << "Deleted " << n << " files or directories\n";
