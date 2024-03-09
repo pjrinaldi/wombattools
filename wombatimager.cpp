@@ -22,35 +22,8 @@
 #include "walafus/wltg_packer.h"
 #include "walafus/wltg_reader.h"
 
-/*
-#define ZSTD_STATIC_LINKING_ONLY
-
-#include "zstd/zstdcommon.h"
-#include "zstd/zstd_seekable.h"
-#include "zstd/zstd.h"
-*/
-
 #define DTTMFMT "%F %T %z"
 #define DTTMSZ 35
-
-/*
-struct wfi_metadata
-{
-    uint32_t skipframeheader; // skippable frame header - 4
-    uint32_t skipframesize; // skippable frame content size (not including header and this size) - 4
-    uint16_t sectorsize; // raw forensic image sector size - 2
-    uint16_t version; // version # for forensic image format
-    uint16_t reserved1;
-    uint32_t reserved2;
-    //int64_t reserved; // reserved
-    int64_t totalbytes; // raw forensic image total size - 8
-    char casenumber[24]; // 24 character string - 24
-    char evidencenumber[24]; // 24 character string - 24
-    char examiner[24]; // 24 character string - 24
-    char description[128]; // 128 character string - 128
-    uint8_t devhash[32]; // blake3 source hash - 32
-} wfimd; // 256
-*/
 
 static char* GetDateTime(char *buff)
 {
@@ -81,7 +54,7 @@ void ShowUsage(int outtype)
     }
     else if(outtype == 1)
     {
-        printf("wombatimager v0.1\n");
+        printf("wombatimager v0.2\n");
 	printf("License CC0-1.0: Creative Commons Zero v1.0 Universal\n");
         printf("This software is in the public domain\n");
         printf("There is NO WARRANTY, to the extent permitted by law.\n\n");
@@ -91,12 +64,6 @@ void ShowUsage(int outtype)
 
 int main(int argc, char* argv[])
 {
-    // TESTING
-    /*
-    argc = 3;
-    argv[1] = (char*)std::string("a").c_str();
-    argv[2] = (char*)std::string("b").c_str();
-    */
     std::string devicepath;
     std::string imagepath;
     std::string logpath;
@@ -127,7 +94,8 @@ int main(int argc, char* argv[])
         ioctl(infile, BLKGETSIZE64, &totalbytes);
 	ioctl(infile, BLKSSZGET, &sectorsize);
         close(infile);
-	infocontent = "wombatimager v0.2 - Raw Forensic Image with Log and Info File Stored in a Read-Only ZSTD Compressed Walafus File System.\n\n";
+	infocontent = "wombatimager v0.2]\n\n";
+	infocontent += "Wombat Forensic Image v0.2 - Raw Forensic Image with Log and Info File Stored in a Read-Only ZSTD Compressed Walafus File System.\n\n";
 	infocontent += "Raw Media Size:  " + std::to_string(totalbytes) + " bytes\n";
         for(int i=3; i < argc; i++)
         {
@@ -153,11 +121,7 @@ int main(int argc, char* argv[])
                 infocontent += "Description:\t " + std::string(argv[i+1]) + "\n";
         }
 	//printf("Command called: %s %s %s\n", argv[0], argv[1], argv[2]);
-	// TESTING PURPOSES
-	//devicepath = "/dev/mmcblk0";
         std::string filestr = argv[2];
-	// TESTING PURPOSES
-	//filestr = "WFI";
         std::size_t found = filestr.find_last_of("/");
         std::string pathname = filestr.substr(0, found);
         std::string filename = filestr.substr(found+1);
@@ -170,9 +134,10 @@ int main(int argc, char* argv[])
         imagepath = imgdirpath + "/" + filename + ".dd";
         logpath = imgdirpath + "/" + filename + ".log";
 	infopath = imgdirpath + "/" + filename + ".info";
-	//std::cout << "image path: " << imagepath << std::endl;
-	//std::cout << "log path: " << logpath << std::endl;
-	//std::cout << "info path: " << infopath << std::endl;
+	std::cout << "image path: " << imagepath << std::endl;
+	std::cout << "log path: " << logpath << std::endl;
+	std::cout << "info path: " << infopath << std::endl;
+	std::cout << "wfi path: " << wfipath << std::endl;
         if(devicepath.empty())
         {
             ShowUsage(0);
@@ -197,21 +162,10 @@ int main(int argc, char* argv[])
             printf("Error opening log file.\n");
             return 1;
         }
-	/*
-	FILE* fileinfo = NULL;
-	fileinfo = fopen(infopath.c_str(), "w+");
-	if(fileinfo == NULL)
-	{
-	    printf("Error opening info file.\n");
-	    return 1;
-	}
-	*/
-
         if(infile >= 0)
         {
 	    close(infile);
 	    fin = fopen(devicepath.c_str(), "rb");
-	    //fout = fopen_orDie(imagepath.c_str(), "wb");
 
 	    // CREATE THE SPARSE IMAGE FILE
 	    int file = 0;
@@ -225,6 +179,7 @@ int main(int argc, char* argv[])
 	    ftruncate(file, totalbytes);
 	    close(file);
 
+	    //fout = fopen_orDie(imagepath.c_str(), "wb");
 	    /*
 	    for(int i=0; i < filelist.size(); i++)
 	    {
@@ -232,28 +187,8 @@ int main(int argc, char* argv[])
 		tmp.join();
 	    }
 	    */ 
-	    /*
-	    wfimd.skipframeheader = 0x184d2a5e;
-            wfimd.skipframesize = 256;
-	    wfimd.sectorsize = sectorsize;
-	    wfimd.version = 0x02;
-            wfimd.reserved1 = 0x0;
-	    wfimd.reserved2 = 0x0;
-	    wfimd.totalbytes = totalbytes;
-	    */
-	    /*
-	    printf("\nwombatinfo v0.1\n\n");
-	    printf("Raw Media Size: %llu bytes\n", wfimd.totalbytes);
-	    printf("Case Number:\t %s\n", wfimd.casenumber);
-	    printf("Examiner:\t %s\n", wfimd.examiner);
-	    printf("Evidence Number: %s\n", wfimd.evidencenumber);
-	    printf("Description:\t %s\n", wfimd.description);
-	    printf("BLAKE3 Hash:\t ");
-	    for(size_t i=0; i < 32; i++)
-		printf("%02x", wfimd.devhash[i]);
-	    printf("\n");
-	     */ 
 
+	    /*
 	    // OPEN FILEINFO AND START POPULATING THE INFORMATION
 	    fileinfo = fopen(infopath.c_str(), "w+");
 	    if(fileinfo == NULL)
@@ -261,10 +196,11 @@ int main(int argc, char* argv[])
 		printf("Error opening info file.\n");
 		return 1;
 	    }
+	    */
 
             time_t starttime = time(NULL);
             char dtbuf[35];
-            fprintf(filelog, "wombatimager v0.2 Seekable zstd Compressed Raw Forensic Image started at: %s\n", GetDateTime(dtbuf));
+            fprintf(filelog, "wombatimager v0.2 Raw Forensic Image started at: %s\n", GetDateTime(dtbuf));
             fprintf(filelog, "\nSource Device\n");
             fprintf(filelog, "-------------\n");
 
@@ -322,8 +258,10 @@ int main(int argc, char* argv[])
             uint8_t srchash[BLAKE3_OUT_LEN];
             uint8_t wfihash[BLAKE3_OUT_LEN];
 
-	    //blake3_hasher srchasher;
-	    //blake3_hasher_init(&srchasher);
+	    blake3_hasher srchasher;
+	    blake3_hasher_init(&srchasher);
+	    
+	    fout = fopen(imagepath.c_str(), "wb");
 
 /*
     size_t read, toRead = buffInSize;
