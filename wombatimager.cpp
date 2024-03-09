@@ -66,9 +66,25 @@ void ShowUsage(int outtype)
 
 void WritePiece(uint64_t offset, uint64_t size, std::string devpath, std::string imgpath)
 {
-    //int infile = open(inputstr+3, O_RDONLY | O_NONBLOCK);
-    //int outfile = open(outputstr+3, O_RDWR | O_CREAT | O_TRUNC | O_APPEND, S_IRWXU);
-    //std::cout << "offset: " << offset << " size: " << size << std::endl;
+    int infile = open(devpath.c_str(), O_RDONLY | O_NONBLOCK);
+    int outfile = open(imgpath.c_str(), O_RDWR | O_APPEND, S_IRWXU);
+    lseek(infile, 0, SEEK_SET);
+    lseek(infile, offset, SEEK_SET);
+    lseek(outfile, offset, SEEK_SET);
+    char inbuf[size];
+    memset(inbuf, 0, sizeof(inbuf));
+    //char outbuf[size];
+    //memset(outbuf, 0, sizeof(outbuf));
+    ssize_t bytesread = read(infile, inbuf, size);
+    close(infile);
+    if(bytesread == -1)
+    {
+	memset(inbuf, 0, sizeof(inbuf));
+    }
+    ssize_t byteswrite = write(outfile, inbuf, size);
+    close(outfile);
+    printf("Wrote %llu bytes\r", offset + size);
+    fflush(stdout);
     /*
     lseek(infile, 0, SEEK_SET);
     lseek(outfile, 0, SEEK_SET);
@@ -290,7 +306,7 @@ int main(int argc, char* argv[])
 	    uint64_t piecesize = 0;
 	    for(int i=0; i < piecesizechoice.size(); i++)
 	    {
-		std::cout << i << ": " << piecesizechoice.at(i) << " " << totalbytes / piecesizechoice.at(i) << " " << totalbytes % piecesizechoice.at(i) << std::endl;
+		//std::cout << i << ": " << piecesizechoice.at(i) << " " << totalbytes / piecesizechoice.at(i) << " " << totalbytes % piecesizechoice.at(i) << std::endl;
 		if(maxpiecesize > piecesizechoice.at(i) && totalbytes % piecesizechoice.at(i) == 0)
 		{
 		    piecesize = piecesizechoice.at(i);
