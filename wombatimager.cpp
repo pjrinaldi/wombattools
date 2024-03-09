@@ -163,11 +163,11 @@ int main(int argc, char* argv[])
         imagepath = imgdirpath + "/" + filename + ".dd";
         logpath = imgdirpath + "/" + filename + ".log";
 	infopath = imgdirpath + "/" + filename + ".info";
-	std::cout << "device path: " << devicepath << std::endl;
-	std::cout << "image path: " << imagepath << std::endl;
-	std::cout << "log path: " << logpath << std::endl;
-	std::cout << "info path: " << infopath << std::endl;
-	std::cout << "wfi path: " << wfipath << std::endl;
+	//std::cout << "device path: " << devicepath << std::endl;
+	//std::cout << "image path: " << imagepath << std::endl;
+	//std::cout << "log path: " << logpath << std::endl;
+	//std::cout << "info path: " << infopath << std::endl;
+	//std::cout << "wfi path: " << wfipath << std::endl;
         if(devicepath.empty())
         {
             ShowUsage(0);
@@ -211,19 +211,19 @@ int main(int argc, char* argv[])
 	    // GET THE CPU THREAD COUNT FOR CONCURRENCY PURPOSES
 	    unsigned int threadcount = std::thread::hardware_concurrency();
 	    threadcount = threadcount - 2;
-	    std::cout << "thread count: " << threadcount << std::endl;
+	    //std::cout << "thread count: " << threadcount << std::endl;
 
 	    // GET THE TOTAL SYSTEM RAM
 	    struct sysinfo info;
 	    int syserr = sysinfo(&info);
 	    uint64_t totalram = info.totalram;
-	    std::cout << "total ram: " << totalram << std::endl;
+	    //std::cout << "total ram: " << totalram << std::endl;
 
-	    std::cout << "device bytes: " << totalbytes << std::endl;
+	    //std::cout << "device bytes: " << totalbytes << std::endl;
 
 	    // MAX PIECE SIZE
 	    uint64_t maxpiecesize = totalram / threadcount;
-	    std::cout << "max piece size: " << maxpiecesize << std::endl;
+	    //std::cout << "max piece size: " << maxpiecesize << std::endl;
 
 	    // IF DEVICE SIZE < MAX PIECE SIZE, MAKE MAX PIECE SIZE = DEVICE SIZE
 	    if(totalbytes < maxpiecesize)
@@ -242,10 +242,10 @@ int main(int argc, char* argv[])
 		    break;
 		}
 	    }
-	    std::cout << "piece size: " << piecesize << std::endl;
+	    //std::cout << "piece size: " << piecesize << std::endl;
 
 	    uint64_t piececount = totalbytes / piecesize;
-	    std::cout << "piece count: " << piececount << std::endl;
+	    //std::cout << "piece count: " << piececount << std::endl;
 
 	    // GET HASH PIECE SIZE
 	    uint64_t hashsize = piecesize;
@@ -257,7 +257,7 @@ int main(int argc, char* argv[])
 		    break;
 		}
 	    }
-	    std::cout << "hash size: " << hashsize << std::endl;
+	    //std::cout << "hash size: " << hashsize << std::endl;
 
             time_t starttime = time(NULL);
             char dtbuf[35];
@@ -331,43 +331,21 @@ int main(int argc, char* argv[])
             uint8_t devhash[BLAKE3_OUT_LEN];
 	    blake3_hasher devhasher;
 	    blake3_hasher_init(&devhasher);
-	    /*
-    int infile = open(devpath.c_str(), O_RDONLY | O_NONBLOCK);
-    int outfile = open(imgpath.c_str(), O_RDWR, S_IRWXU);
-    lseek(infile, offset, SEEK_SET);
-    lseek(outfile, 0, SEEK_SET);
-    lseek(outfile, offset, SEEK_SET);
-    char inbuf[size];
-    memset(inbuf, 0, sizeof(inbuf));
-    ssize_t bytesread = read(infile, inbuf, size);
-    close(infile);
-    if(bytesread == -1)
-    {
-	memset(inbuf, 0, sizeof(inbuf));
-    }
-    ssize_t byteswrite = write(outfile, inbuf, size);
-    close(outfile);
-	     */ 
-	    std::ifstream instream(devicepath, std::ifstream::binary);
-	    //fin = fopen(devicepath.c_str(), "rb");	    
-	    //fseek(fin, 0, SEEK_SET);
+	    int infile = open(devicepath.c_str(), O_RDONLY | O_NONBLOCK);
+	    lseek(infile, 0, SEEK_SET);
 	    int curpos = 0;
-	    //while(curpos < totalbytes)
-	    while(!instream.eof())
+	    while(curpos < totalbytes)
 	    {
 		char inbuf[hashsize];
 		memset(inbuf, 0, sizeof(inbuf));
-		instream.read(inbuf, hashsize);
-		//ssize_t bytesread = fread(inbuf, hashsize, 1, fin);
-		//ssize_t bytesread = fread(fin, inbuf, hashsize);
-		curpos = curpos + hashsize;
-		blake3_hasher_update(&devhasher, inbuf, hashsize);
-		//blake3_hasher_update(&devhasher, inbuf, bytesread);
-		printf("Hashing %llu of %llu bytes\r", instream.gcount(), totalbytes);
+		ssize_t bytesread = read(infile, inbuf, hashsize);
+		curpos = curpos + bytesread;
+		blake3_hasher_update(&devhasher, inbuf, bytesread);
+		printf("Hashing %llu of %llu bytes\r", curpos, totalbytes);
 		fflush(stdout);
 	    }
+	    close(infile);
 	    blake3_hasher_finalize(&devhasher, devhash, BLAKE3_OUT_LEN);
-	    //fclose(fin);
 
 	    // OPEN FILEINFO AND START POPULATING THE INFORMATION
 	    fileinfo = fopen(infopath.c_str(), "w+");
@@ -378,7 +356,7 @@ int main(int argc, char* argv[])
 	    }
 
 	    fprintf(filelog, "%s", infocontent);
-	    std::cout << infocontent << std::endl;
+	    //std::cout << infocontent << std::endl;
 
             for(size_t i=0; i < BLAKE3_OUT_LEN; i++)
             {
@@ -404,48 +382,30 @@ int main(int argc, char* argv[])
                 uint8_t forimghash[BLAKE3_OUT_LEN];
                 blake3_hasher imghasher;
                 blake3_hasher_init(&imghasher); 
-	    /*
-    int infile = open(devpath.c_str(), O_RDONLY | O_NONBLOCK);
-    int outfile = open(imgpath.c_str(), O_RDWR, S_IRWXU);
-    lseek(infile, offset, SEEK_SET);
-    lseek(outfile, 0, SEEK_SET);
-    lseek(outfile, offset, SEEK_SET);
-    char inbuf[size];
-    memset(inbuf, 0, sizeof(inbuf));
-    ssize_t bytesread = read(infile, inbuf, size);
-    close(infile);
-    if(bytesread == -1)
-    {
-	memset(inbuf, 0, sizeof(inbuf));
-    }
-    ssize_t byteswrite = write(outfile, inbuf, size);
-    close(outfile);
-	     */ 
-		FILE* fout = fopen(imagepath.c_str(), "rb");
-		fseek(fout, 0, SEEK_SET);
+		int outfile = open(imagepath.c_str(), O_RDONLY, O_NONBLOCK);
+		lseek(outfile, 0, SEEK_SET);
 		int curpos = 0;
 		while(curpos < totalbytes)
 		{
 		    char inbuf[hashsize];
 		    memset(inbuf, 0, sizeof(inbuf));
-		    ssize_t bytesread = fread(inbuf, hashsize, 1, fout);
-		    //ssize_t bytesread = fread(fout, inbuf, hashsize);
+		    ssize_t bytesread = read(outfile, inbuf, hashsize);
 		    curpos = curpos + bytesread;
 		    blake3_hasher_update(&imghasher, inbuf, bytesread);
 		    printf("Hashing %llu of %llu bytes\r", curpos, totalbytes);
 		    fflush(stdout);
 		}
+		close(outfile);
 		blake3_hasher_finalize(&imghasher, forimghash, BLAKE3_OUT_LEN);
-		fclose(fout);
                 for(size_t i=0; i < BLAKE3_OUT_LEN; i++)
                 {
 		    fprintf(filelog, "%02x", forimghash[i]);
                     printf("%02x", forimghash[i]);
 		    fprintf(fileinfo, "%02x", forimghash[i]);
                 }
-                printf(" - Forensic Image Hash\n");
-                fprintf(filelog, " - Forensic Image Hash\n");
-                fprintf(fileinfo, " - Forensic Image Hash\n");
+                printf(" - BLAKE3 Forensic Image\n");
+                fprintf(filelog, " - BLAKE3 Forensic Image\n");
+                fprintf(fileinfo, " - BLAKE3 Forensic Image\n");
 		time_t imghashend = time(NULL);
 		fprintf(filelog, "Hashed %llu bytes\n", totalbytes);
 		fprintf(filelog, "Hash of Forensic Image finished at: %s\n", GetDateTime(dtbuf));
@@ -472,8 +432,18 @@ int main(int argc, char* argv[])
 	}
 	fclose(filelog);
 	fclose(fileinfo);
+
+	// CREATE WALAFUS FILE HERE
+	WltgPacker packer;
+	std::string virtpath = "/" + filename + "/";
+	//std::cout << "virtpath: " << virtpath << std::endl;
+	//std::cout << "realpath: " << imgdirpath << std::endl;
+	packer.index_real_dir(virtpath.c_str(), imgdirpath.c_str());
+	packer.write_fs_blob(wfipath.c_str());
+
+	// DELETE RAW IMG TMP DIRECTORY
 	std::uintmax_t rmcnt = std::filesystem::remove_all(imgdirpath);
-	std::cout << "Deleted: " << rmcnt << " files or directories" << std::endl;
+	//std::cout << "Deleted: " << rmcnt << " files or directories" << std::endl;
     }
     else
     {
