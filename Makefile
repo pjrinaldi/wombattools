@@ -20,8 +20,13 @@ rdwfi:
 
 SEEKABLE_OBJS = zstd/zstdseek_compress.c zstd/zstdseek_decompress.c zstd/zstd-seek.c
 
-wombatimager: $(SEEKABLE_OBJS)
-	g++ -O3 -o wombatimager $(SEEKABLE_OBJS) wombatimager.cpp -ludev -lpthread zstd/libzstd.a blake3/libblake3.a
+#wombatimager: $(SEEKABLE_OBJS)
+#	g++ -O3 -o wombatimager $(SEEKABLE_OBJS) wombatimager.cpp -ludev -lpthread zstd/libzstd.a blake3/libblake3.a
+
+WALAFUS_OBJS = walafus/filesystem.cpp walafus/wltg_reader.cpp walafus/wltg_packer.cpp walafus/wltg_internal_readers.cpp walafus/wltg_internal_writers.cpp
+
+wombatimager: $(WALAFUS_OBJS)
+	g++ -O3 -o wombatimager $(WALAFUS_OBJS) wombatimager.cpp -ludev -lpthread -lzstd blake3/libblake3.a
 
 b3hasher:
 	g++ -O3 -o b3hasher b3hasher.cpp -lpthread blake3/libblake3.a

@@ -17,6 +17,8 @@
 
 #include "walafus/wltg_packer.h"
 
+#include "blake3/blake3.h"
+
 // Copyright 2021-2024 Pasquale J. Rinaldi, Jr.
 // Distributed under the terms of CC0-1.0: Creative Commons Zero v1.0 Universal
 
@@ -53,8 +55,29 @@ void ShowUsage(int outtype)
 };
 */
 
+/*
 int main(int argc, char* argv[])
 {
+    #include <unistd.h>
+    #include <fcntl.h>
+    
+    #include <sys/stat.h>
+    
+    int
+    main(void)
+    {
+	int file;
+	int mode;
+
+	mode = S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH;
+	file = open("sparsefile", O_WRONLY | O_CREAT, mode);
+	if (file == -1)
+	    return -1;
+	ftruncate(file, 0x100000);
+	close(file);
+
+	return 0;
+    }
     WltgPacker packer;
     std::string realpath = std::filesystem::canonical(argv[1]).string();
     std::string virtpath = "/" + std::filesystem::canonical(argv[1]).filename().string() + "/";
@@ -64,6 +87,7 @@ int main(int argc, char* argv[])
     std::string wfistr = std::string(argv[1]) + ".wltg";
 
     packer.write_fs_blob(wfistr.c_str());
+*/
     /*
     std::vector<std::filesystem::path> filevector;
     filevector.clear();
@@ -103,6 +127,7 @@ int main(int argc, char* argv[])
     std::string srcmd5 = ss.str();
     std::cout << ss.str() << std::endl;
     */
-
+/*
     return 0;
 }
+*/

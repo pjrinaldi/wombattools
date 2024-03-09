@@ -2,7 +2,6 @@
 #include <fcntl.h>
 #include <linux/fs.h>
 #include <sys/ioctl.h>
-#include <sys/stat.h>
 #include <libudev.h>
 #include <stdio.h>
 #include <unistd.h>
@@ -12,28 +11,23 @@
 #include <string.h>
 #include <limits.h>
 #include <stdlib.h>
+
 #include <string>
 #include <filesystem>
 #include <iostream>
 
 #include "blake3/blake3.h"
 
-#include "walafus/filesystem.h"
-#include "walafus/wltg_packer.h"
-#include "walafus/wltg_reader.h"
-
-/*
 #define ZSTD_STATIC_LINKING_ONLY
 
 #include "zstd/zstdcommon.h"
 #include "zstd/zstd_seekable.h"
 #include "zstd/zstd.h"
-*/
 
 #define DTTMFMT "%F %T %z"
 #define DTTMSZ 35
 
-/*
+
 struct wfi_metadata
 {
     uint32_t skipframeheader; // skippable frame header - 4
@@ -50,7 +44,6 @@ struct wfi_metadata
     char description[128]; // 128 character string - 128
     uint8_t devhash[32]; // blake3 source hash - 32
 } wfimd; // 256
-*/
 
 static char* GetDateTime(char *buff)
 {
@@ -63,16 +56,16 @@ void ShowUsage(int outtype)
 {
     if(outtype == 0)
     {
-        printf("Create forensic image IMAGE_NAME.wfi, info file IMAGE_NAME.info, log file IMAGE_NAME.log from device DEVICE_PATH, automatically generates blake3 hash, packs into a read-only zstd-compressed walafus fs, and optionally validates the forensic image.\n\n");
+        printf("Create forensic image IMAGE_NAME.wfi, log file IMAGE_NAME.log from device DEVICE_PATH, automatically generates blake3 hash, applies zstd compression, and optionally validates forensic image.\n\n");
         printf("Usage :\n");
         printf("\twombatimager DEVICE_PATH IMAGE_NAME [arg]\n\n");
         printf("DEVICE_PATH\t: a device to image such as /dev/sdX\n");
         printf("IMAGE_NAME\t: the file name for the forensic image without an extension.\n");
         printf("Arguments :\n");
-        printf("-c\t: Provide a case number\n");
-        printf("-e\t: Provide an examiner name\n");
-        printf("-n\t: Provide an evidence number\n");
-        printf("-d\t: Provide a description\n");
+        printf("-c\t: Provide a case number (24 character limit)\n");
+        printf("-e\t: Provide an examiner name (24 character limit)\n");
+        printf("-n\t: Provide an evidence number (24 character limit)\n");
+        printf("-d\t: Provide a description (128 character limit)\n");
 	printf("-v\t: Perform image verification.\n");
         printf("-V\t: Prints Version information\n");
         printf("-h\t: Prints help information\n\n");
@@ -94,7 +87,7 @@ int main(int argc, char* argv[])
     std::string devicepath;
     std::string imagepath;
     std::string logpath;
-    std::string infopath;
+    std::string mdpath;
     uint8_t verify = 0;
 
     if(argc == 1 || (argc == 2 && strcmp(argv[1], "-h") == 0))
@@ -176,23 +169,9 @@ int main(int argc, char* argv[])
             ioctl(infile, BLKGETSIZE64, &totalbytes);
 	    ioctl(infile, BLKSSZGET, &sectorsize);
             close(infile);
-	    //fin = fopen_orDie(devicepath.c_str(), "rb");
-	    //fout = fopen_orDie(imagepath.c_str(), "wb");
-	    // CREATE THE SPARSE IMAGE FILE
-	    int file = 0;
-	    mode = S_IRUSR | S_IRWUSR | S_IRGRP | S_IROTH;
-	    file = open(
-	    /*
-	    int file;
-	    int mode;
+	    fin = fopen_orDie(devicepath.c_str(), "rb");
+	    fout = fopen_orDie(imagepath.c_str(), "wb");
 
-	    mode = S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH;
-	    file = open("sparsefile", O_WRONLY | O_CREAT, mode);
-	    if (file == -1)
-		return -1;
-	    ftruncate(file, 0x100000);
-	    close(file);
-	    */
 	    wfimd.skipframeheader = 0x184d2a5e;
             wfimd.skipframesize = 256;
 	    wfimd.sectorsize = sectorsize;
@@ -289,7 +268,6 @@ int main(int argc, char* argv[])
     free(buffIn);
     free(buffOut);
 */ 
-	    /*
 	    // USE ZSTD STREAM COMPRESSION
 	    size_t bufinsize = ZSTD_CStreamInSize();
 	    void* bufin = malloc_orDie(bufinsize);
@@ -332,7 +310,6 @@ int main(int argc, char* argv[])
 	    }
 
 	    ZSTD_seekable_freeCStream(cstream);
-	    */
 
 	    /*
 	    for(;;)
@@ -367,10 +344,10 @@ int main(int argc, char* argv[])
 	    blake3_hasher_finalize(&srchasher, srchash, BLAKE3_OUT_LEN);
             memcpy(wfimd.devhash, srchash, BLAKE3_OUT_LEN);
 	    // NEED TO WRITE SKIPPABLE FRAME CONTENT HERE
-	    //fmd = fopen_orDie(mdpath.c_str(), "wb");
-	    //fseek(fmd, 0, SEEK_SET);
-	    //fwrite_orDie(&wfimd, sizeof(struct wfi_metadata), fmd);
-	    //fclose_orDie(fmd);
+	    fmd = fopen_orDie(mdpath.c_str(), "wb");
+	    fseek(fmd, 0, SEEK_SET);
+	    fwrite_orDie(&wfimd, sizeof(struct wfi_metadata), fmd);
+	    fclose_orDie(fmd);
 	    //fwrite_orDie(&wfimd, sizeof(struct wfi_metadata), fout);
 	    
 	    //size_t const remainingtoflush = ZSTD_seekable_endStream(cstream, &output);
@@ -391,12 +368,10 @@ int main(int argc, char* argv[])
             printf(" - BLAKE3 Source Device\n");
             fprintf(filelog, " - BLAKE3 Source Device\n");
 
-	    /*
 	    fclose_orDie(fout);
 	    fclose_orDie(fin);
 	    free(bufin);
 	    free(bufout);
-	    */
 
 	    if(verify == 1) // start verification
 	    {
@@ -406,13 +381,11 @@ int main(int argc, char* argv[])
                 blake3_hasher imghasher;
                 blake3_hasher_init(&imghasher);
                 
-		/*
 		fout = fopen_orDie(imagepath.c_str(), "rb");
 		size_t bufinsize = ZSTD_DStreamInSize();
 		void* bufin = malloc_orDie(bufinsize);
 		size_t bufoutsize = ZSTD_DStreamOutSize();
 		void* bufout = malloc_orDie(bufoutsize);
-		*/
 /*
     FILE* const fin  = fopen_orDie(fname, "rb");
     FILE* const fout = stdout;
@@ -445,7 +418,6 @@ int main(int argc, char* argv[])
     fclose_orDie(fout);
     free(buffOut);
 */ 
-		/*
 		ZSTD_DCtx* dctx = ZSTD_createDCtx();
 		CHECK(dctx != NULL, "ZSTD_createDCtx() failed");
 
@@ -487,7 +459,6 @@ int main(int argc, char* argv[])
 		fclose_orDie(fout);
 		free(bufin);
 		free(bufout);
-		*/
 
                 blake3_hasher_finalize(&imghasher, forimghash, BLAKE3_OUT_LEN);
 
