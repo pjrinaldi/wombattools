@@ -7,7 +7,10 @@ mkwalafus:
 	g++ -O3 -o mkwalafus mkwalafus.cpp walafus/filesystem.cpp walafus/wltg_packer.cpp walafus/wltg_internal_writers.cpp zstd/libzstd.a
 
 rdwalafus:
-	g++ -O3 -o rdwalafus rdwalafus.cpp walafus/filesystem.cpp walafus/wltg_reader.cpp walafus/wltg_packer.cpp walafus/wltg_internal_readers.cpp walafus/wltg_internal_writers.cpp zstd/libzstd.a blake3/libblake3.a
+	g++ -O3 -o rdwalafus rdwalafus.cpp walafus/filesystem.cpp walafus/wltg_reader.cpp walafus/wltg_packer.cpp walafus/wltg_internal_readers.cpp walafus/wltg_internal_writers.cpp zstd/libzstd.a
+
+verifywalafus:
+	g++ -O3 -o verifywalafus verifywalafus.cpp walafus/filesystem.cpp walafus/wltg_reader.cpp walafus/wltg_packer.cpp walafus/wltg_internal_readers.cpp walafus/wltg_internal_writers.cpp zstd/libzstd.a blake3/libblake3.a
 
 mkwfi:
 	g++ -O3 -o mkwfi mkwfi.cpp -lzip
