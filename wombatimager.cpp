@@ -67,9 +67,9 @@ void ShowUsage(int outtype)
 void WritePiece(uint64_t offset, uint64_t size, std::string devpath, std::string imgpath)
 {
     int infile = open(devpath.c_str(), O_RDONLY | O_NONBLOCK);
-    int outfile = open(imgpath.c_str(), O_RDWR | O_APPEND, S_IRWXU);
-    lseek(infile, 0, SEEK_SET);
+    int outfile = open(imgpath.c_str(), O_RDWR, S_IRWXU);
     lseek(infile, offset, SEEK_SET);
+    lseek(outfile, 0, SEEK_SET);
     lseek(outfile, offset, SEEK_SET);
     char inbuf[size];
     memset(inbuf, 0, sizeof(inbuf));
