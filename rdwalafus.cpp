@@ -15,8 +15,6 @@
 #include <fstream>
 #include <thread>
 
-#include "blake3/blake3.h"
-
 #include "walafus/filesystem.h"
 #include "walafus/wltg_packer.h"
 #include "walafus/wltg_reader.h"
@@ -33,7 +31,6 @@ int main(int argc, char* argv[])
     size_t found = wltgimg.rfind(".");
     std::string wltgrawimg = wltgimg.substr(0, found) + ".dd";
     std::string virtpath = "/" + wltgimg.substr(0, found) + "/" + wltgrawimg;
-    //virtpath = "/" + wltgrawimg;
     //std::cout << virtpath << std::endl;
     
     std::unique_ptr<BaseFileStream> handle = wltgfilesystem.open_file_read(virtpath.c_str());
@@ -43,9 +40,6 @@ int main(int argc, char* argv[])
 	return 1;
     }
     //std::cout << handle->size() << std::endl;
-
-    //blake3_hasher hasher;
-    //blake3_hasher_init(&hasher);
 
     FILE* fout = stdout;
     //fout = fopen(stdout, "w+");
@@ -57,56 +51,10 @@ int main(int argc, char* argv[])
 	handle->seek(curoffset);
 	uint64_t bytesread = handle->read_into(buf, 131072);
 	//std::cout << "1st 4 bytes read at curoffset: " << std::hex << (uint)buf[0] << (uint)buf[1] << (uint)buf[2] << (uint)buf[3] << std::dec << std::endl;
-	//blake3_hasher_update(&hasher, buf, bytesread);
 	curoffset += bytesread;
 	fwrite(buf, 1, bytesread, fout);
-	//printf("Read %llu of %llu bytes\r", curoffset, handle->size());
-	//fflush(stdout);
     }
     fclose(fout);
-    /*
-    std::vector<ubyte> data = wltgfilesystem.read_file(virtpath.c_str());
-    std::cout << "bytes read: " << data.size() << std::endl;
-    std::string virtlog = "/" + wltgimg.substr(0, found) + "/" + wltgimg.substr(0, found) + ".log";
-    std::vector<ubyte> data2 = wltgfilesystem.read_file(virtlog.c_str());
-    std::cout << "bytes read: " << data2.size() << std::endl;
-    std::cout << "data content:" << std::endl;
-    for(int i=0; i < data2.size(); i++)
-	std::cout << data2[i];
-    std::cout << std::endl;
-    */
-    //std::vector<ubyte> Filesystem::read_file(std::string_view filename) {
-    //std::vector<ubyte> data = handle->read();
-    //std::cout << "data read size: " << data.size() << std::endl;
-    //char* b3buf = new char[data.size() + 1];
-    //b3buf = (char*)static_cast<unsigned char*>(&data[0]);
-    //blake3_hasher_update(&hasher, b3buf, data.size());
-    /*
-    uint64_t curoff = 0;
-    while(curoff < handle->size()+1)
-    {
-//2147483648 1073741824 
-//1016332288
-	handle->seek(curoff);
-	std::vector<ubyte> data = handle->read(1016332288);
-	char* b3buf = (char*)static_cast<unsigned char*>(&data[0]);
-	blake3_hasher_update(&hasher, b3buf, 1016332288);
-	curoff += 1016332288;
-	printf("Read %llu of %llu bytes\r", curoff, handle->size());
-	fflush(stdout);
-    }
-    */
-
-    /*
-    uint8_t output[BLAKE3_OUT_LEN];
-    blake3_hasher_finalize(&hasher, output, BLAKE3_OUT_LEN);
-    std::stringstream ss;
-    for(int i=0; i < BLAKE3_OUT_LEN; i++)
-        ss << std::hex  << std::setfill('0') << std::setw(2) << (int)output[i]; 
-    //printf("%02x", srchash[i]);
-    std::string srcmd5 = ss.str();
-    std::cout << std::endl << ss.str() << std::endl;
-    */
 
     return 0;
 }
