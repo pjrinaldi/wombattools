@@ -91,11 +91,24 @@ void ShowUsage(int outtype)
 
 int main(int argc, char* argv[])
 {
+    // TESTING
+    /*
+    argc = 3;
+    argv[1] = (char*)std::string("a").c_str();
+    argv[2] = (char*)std::string("b").c_str();
+    */
     std::string devicepath;
     std::string imagepath;
     std::string logpath;
     std::string infopath;
+    std::string wfipath;
+    std::string infocontent = "";
+    int64_t totalbytes = 0;
+    int16_t sectorsize = 0;
     uint8_t verify = 0;
+
+    int infile = 0;
+    FILE* fileinfo = NULL;
 
     if(argc == 1 || (argc == 2 && strcmp(argv[1], "-h") == 0))
     {
@@ -109,18 +122,17 @@ int main(int argc, char* argv[])
     }
     else if(argc >= 3)
     {
+	devicepath = argv[1];
+        infile = open(devicepath.c_str(), O_RDONLY | O_NONBLOCK);
+        ioctl(infile, BLKGETSIZE64, &totalbytes);
+	ioctl(infile, BLKSSZGET, &sectorsize);
+        close(infile);
+	infocontent = "wombatimager v0.2 - Raw Forensic Image with Log and Info File Stored in a Read-Only ZSTD Compressed Walafus File System.\n\n";
+	infocontent += "Raw Media Size:  " + std::to_string(totalbytes) + " bytes\n";
         for(int i=3; i < argc; i++)
         {
             if(strcmp(argv[i], "-v") == 0)
                 verify=1;
-            else if(strcmp(argv[i], "-c") == 0)
-                strcpy(wfimd.casenumber, argv[i+1]);
-            else if(strcmp(argv[i], "-e") == 0)
-                strcpy(wfimd.examiner, argv[i+1]);
-            else if(strcmp(argv[i], "-n") == 0)
-                strcpy(wfimd.evidencenumber, argv[i+1]);
-            else if(strcmp(argv[i], "-d") == 0)
-                strcpy(wfimd.description, argv[i+1]);
             else if(strcmp(argv[i], "-V") == 0)
             {
                 ShowUsage(1);
@@ -131,19 +143,36 @@ int main(int argc, char* argv[])
                 ShowUsage(0);
                 return 1;
             }
+            else if(strcmp(argv[i], "-c") == 0)
+                infocontent += "Case Number: \t" + std::string(argv[i+1]) + "\n";
+            else if(strcmp(argv[i], "-e") == 0)
+                infocontent += "Examiner: \t" + std::string(argv[i+1]) + "\n";
+            else if(strcmp(argv[i], "-n") == 0)
+                infocontent += "Evidence Number: " + std::string(argv[i+1]) + "\n";
+            else if(strcmp(argv[i], "-d") == 0)
+                infocontent += "Description:\t " + std::string(argv[i+1]) + "\n";
         }
 	//printf("Command called: %s %s %s\n", argv[0], argv[1], argv[2]);
-        devicepath = argv[1];
+	// TESTING PURPOSES
+	//devicepath = "/dev/mmcblk0";
         std::string filestr = argv[2];
+	// TESTING PURPOSES
+	//filestr = "WFI";
         std::size_t found = filestr.find_last_of("/");
         std::string pathname = filestr.substr(0, found);
         std::string filename = filestr.substr(found+1);
 	if((int)found == -1)
 	    pathname = ".";
         std::filesystem::path initpath = std::filesystem::canonical(pathname + "/");
-        imagepath = initpath.string() + "/" + filename + ".wfi";
-        logpath = imagepath + ".log";
-	mdpath = imagepath + ".md";
+	std::string imgdirpath = initpath.string() + "/" + filename;
+	std::filesystem::create_directory(imgdirpath);
+	wfipath = initpath.string() + "/" + filename + ".wfi";
+        imagepath = imgdirpath + "/" + filename + ".dd";
+        logpath = imgdirpath + "/" + filename + ".log";
+	infopath = imgdirpath + "/" + filename + ".info";
+	//std::cout << "image path: " << imagepath << std::endl;
+	//std::cout << "log path: " << logpath << std::endl;
+	//std::cout << "info path: " << infopath << std::endl;
         if(devicepath.empty())
         {
             ShowUsage(0);
@@ -155,11 +184,9 @@ int main(int argc, char* argv[])
             return 1;
         }
 
-        int64_t totalbytes = 0;
-        int16_t sectorsize = 0;
         int64_t curpos = 0;
         int64_t errcnt = 0;
-        int infile = open(devicepath.c_str(), O_RDONLY | O_NONBLOCK);
+        infile = open(devicepath.c_str(), O_RDONLY | O_NONBLOCK);
 	FILE* fin = NULL;
 	FILE* fout = NULL;
 	FILE* fmd = NULL;
@@ -170,29 +197,42 @@ int main(int argc, char* argv[])
             printf("Error opening log file.\n");
             return 1;
         }
+	/*
+	FILE* fileinfo = NULL;
+	fileinfo = fopen(infopath.c_str(), "w+");
+	if(fileinfo == NULL)
+	{
+	    printf("Error opening info file.\n");
+	    return 1;
+	}
+	*/
 
         if(infile >= 0)
         {
-            ioctl(infile, BLKGETSIZE64, &totalbytes);
-	    ioctl(infile, BLKSSZGET, &sectorsize);
-            close(infile);
-	    //fin = fopen_orDie(devicepath.c_str(), "rb");
+	    close(infile);
+	    fin = fopen(devicepath.c_str(), "rb");
 	    //fout = fopen_orDie(imagepath.c_str(), "wb");
+
 	    // CREATE THE SPARSE IMAGE FILE
 	    int file = 0;
-	    mode = S_IRUSR | S_IRWUSR | S_IRGRP | S_IROTH;
-	    file = open(
-	    /*
-	    int file;
-	    int mode;
-
-	    mode = S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH;
-	    file = open("sparsefile", O_WRONLY | O_CREAT, mode);
-	    if (file == -1)
+	    mode_t mode = S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH;
+	    file = open(imagepath.c_str(), O_WRONLY | O_CREAT, mode);
+	    if(file == -1)
+	    {
+		printf("Error opening image file.\n");
 		return -1;
-	    ftruncate(file, 0x100000);
+	    }
+	    ftruncate(file, totalbytes);
 	    close(file);
-	    */
+
+	    /*
+	    for(int i=0; i < filelist.size(); i++)
+	    {
+		std::thread tmp(HashFile, filelist.at(i).string(), whlstr);
+		tmp.join();
+	    }
+	    */ 
+	    /*
 	    wfimd.skipframeheader = 0x184d2a5e;
             wfimd.skipframesize = 256;
 	    wfimd.sectorsize = sectorsize;
@@ -200,6 +240,27 @@ int main(int argc, char* argv[])
             wfimd.reserved1 = 0x0;
 	    wfimd.reserved2 = 0x0;
 	    wfimd.totalbytes = totalbytes;
+	    */
+	    /*
+	    printf("\nwombatinfo v0.1\n\n");
+	    printf("Raw Media Size: %llu bytes\n", wfimd.totalbytes);
+	    printf("Case Number:\t %s\n", wfimd.casenumber);
+	    printf("Examiner:\t %s\n", wfimd.examiner);
+	    printf("Evidence Number: %s\n", wfimd.evidencenumber);
+	    printf("Description:\t %s\n", wfimd.description);
+	    printf("BLAKE3 Hash:\t ");
+	    for(size_t i=0; i < 32; i++)
+		printf("%02x", wfimd.devhash[i]);
+	    printf("\n");
+	     */ 
+
+	    // OPEN FILEINFO AND START POPULATING THE INFORMATION
+	    fileinfo = fopen(infopath.c_str(), "w+");
+	    if(fileinfo == NULL)
+	    {
+		printf("Error opening info file.\n");
+		return 1;
+	    }
 
             time_t starttime = time(NULL);
             char dtbuf[35];
@@ -255,14 +316,14 @@ int main(int argc, char* argv[])
             udev_unref(udev);
             
 	    fseek(fin, 0, SEEK_SET);
-	    fseek(fout, 0, SEEK_SET);
+	    //fseek(fout, 0, SEEK_SET);
 
             // BLAKE3_OUT_LEN IS 32 BYTES LONG
             uint8_t srchash[BLAKE3_OUT_LEN];
             uint8_t wfihash[BLAKE3_OUT_LEN];
 
-	    blake3_hasher srchasher;
-	    blake3_hasher_init(&srchasher);
+	    //blake3_hasher srchasher;
+	    //blake3_hasher_init(&srchasher);
 
 /*
     size_t read, toRead = buffInSize;
@@ -364,8 +425,8 @@ int main(int argc, char* argv[])
 	    ZSTD_freeCCtx(cctx);
 	    */
 
-	    blake3_hasher_finalize(&srchasher, srchash, BLAKE3_OUT_LEN);
-            memcpy(wfimd.devhash, srchash, BLAKE3_OUT_LEN);
+	    //blake3_hasher_finalize(&srchasher, srchash, BLAKE3_OUT_LEN);
+            //memcpy(wfimd.devhash, srchash, BLAKE3_OUT_LEN);
 	    // NEED TO WRITE SKIPPABLE FRAME CONTENT HERE
 	    //fmd = fopen_orDie(mdpath.c_str(), "wb");
 	    //fseek(fmd, 0, SEEK_SET);
@@ -383,11 +444,13 @@ int main(int argc, char* argv[])
             fprintf(filelog, "Forensic Image finished at: %s\n", GetDateTime(dtbuf));
             fprintf(filelog, "Forensic Image created in: %f seconds\n\n", difftime(endtime, starttime));
             printf("\nForensic Image Creation Finished\n");
+	    /*
             for(size_t i=0; i < BLAKE3_OUT_LEN; i++)
             {
                 fprintf(filelog, "%02x", srchash[i]);
                 printf("%02x", srchash[i]);
             }
+	    */
             printf(" - BLAKE3 Source Device\n");
             fprintf(filelog, " - BLAKE3 Source Device\n");
 
@@ -403,8 +466,8 @@ int main(int argc, char* argv[])
                 fprintf(filelog, "Verification started at: %s\n", GetDateTime(dtbuf));
                 printf("Verification Started\n");
                 uint8_t forimghash[BLAKE3_OUT_LEN];
-                blake3_hasher imghasher;
-                blake3_hasher_init(&imghasher);
+                //blake3_hasher imghasher;
+                //blake3_hasher_init(&imghasher);
                 
 		/*
 		fout = fopen_orDie(imagepath.c_str(), "rb");
@@ -489,6 +552,7 @@ int main(int argc, char* argv[])
 		free(bufout);
 		*/
 
+		/*
                 blake3_hasher_finalize(&imghasher, forimghash, BLAKE3_OUT_LEN);
 
 		for(size_t i=0; i < BLAKE3_OUT_LEN; i++)
@@ -496,17 +560,21 @@ int main(int argc, char* argv[])
 		    fprintf(filelog, "%02x", srchash[i]);
 		    printf("%02x", srchash[i]);
 		}
+		*/
 		printf(" - BLAKE3 Source Device\n");
 		fprintf(filelog, " - BLAKE3 Source Device\n");
 
+		/*
                 for(size_t i=0; i < BLAKE3_OUT_LEN; i++)
                 {
 		    fprintf(filelog, "%02x", forimghash[i]);
                     printf("%02x", forimghash[i]);
                 }
+		*/
                 printf(" - Forensic Image Hash\n");
                 fprintf(filelog, " - Forensic Image Hash\n");
 		printf("\n");
+		/*
 		if(memcmp(&srchash, &forimghash, BLAKE3_OUT_LEN) == 0)
 		{
 		    printf("Verification Successful\n");
@@ -518,6 +586,7 @@ int main(int argc, char* argv[])
 		    fprintf(filelog, "Verification Failed\n");
 		}
 		printf("\n");
+		*/
 	    }
 	}
 	else
@@ -526,6 +595,11 @@ int main(int argc, char* argv[])
 	    return 1;
 	}
 	fclose(filelog);
+	fclose(fileinfo);
+	/*
+	std::uintmax_t n{fs::remove_all(tmp / "abcdef")};
+	std::cout << "Deleted " << n << " files or directories\n";
+	*/
     }
     else
     {
