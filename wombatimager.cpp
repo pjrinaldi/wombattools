@@ -66,7 +66,45 @@ void ShowUsage(int outtype)
 
 void WritePiece(uint64_t offset, uint64_t size, std::string devpath, std::string imgpath)
 {
+    //int infile = open(inputstr+3, O_RDONLY | O_NONBLOCK);
+    //int outfile = open(outputstr+3, O_RDWR | O_CREAT | O_TRUNC | O_APPEND, S_IRWXU);
     //std::cout << "offset: " << offset << " size: " << size << std::endl;
+    /*
+    lseek(infile, 0, SEEK_SET);
+    lseek(outfile, 0, SEEK_SET);
+    uint8_t sourcehash[BLAKE3_OUT_LEN];
+    uint8_t forimghash[BLAKE3_OUT_LEN];
+    int i;
+    blake3_hasher srchash;
+    blake3_hasher imghash;
+    blake3_hasher_init(&srchash);
+    blake3_hasher_init(&imghash);
+    while(curpos < totalbytes)
+    {
+	char bytebuf[sectorsize];
+	memset(bytebuf, 0, sizeof(bytebuf));
+	char imgbuf[sectorsize];
+	memset(imgbuf, 0, sizeof(imgbuf));
+	ssize_t bytesread = read(infile, bytebuf, sectorsize);
+	if(bytesread == -1)
+	{
+	    memset(bytebuf, 0, sizeof(bytebuf));
+	    errorcount++;
+	    perror("Read Error, Writing zeros instead.");
+	}
+	ssize_t byteswrite = write(outfile, bytebuf, sectorsize);
+	if(byteswrite == -1)
+	    perror("Write error, I haven't accounted for this yet so you probably want to use dc3dd instead.");
+	blake3_hasher_update(&srchash, bytebuf, bytesread);
+	ssize_t byteswrote = pread(outfile, imgbuf, sectorsize, curpos);
+	blake3_hasher_update(&imghash, imgbuf, byteswrote);
+	curpos = curpos + sectorsize;
+	printf("Wrote %llu out of %llu bytes\r", curpos, totalbytes);
+	fflush(stdout);
+    }
+    close(infile);
+    close(outfile);
+    */ 
 }
 
 /*
