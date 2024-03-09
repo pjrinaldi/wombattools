@@ -2,7 +2,8 @@
 #include <fcntl.h>
 #include <linux/fs.h>
 #include <sys/ioctl.h>
-#include <sys/stat.h>
+//#include <sys/stat.h>
+#include <sys/sysinfo.h>
 #include <libudev.h>
 #include <stdio.h>
 #include <unistd.h>
@@ -15,6 +16,7 @@
 #include <string>
 #include <filesystem>
 #include <iostream>
+#include <thread>
 
 #include "blake3/blake3.h"
 
@@ -62,8 +64,52 @@ void ShowUsage(int outtype)
     }
 };
 
+void WritePiece(uint64_t offset, uint64_t size, std::string devpath, std::string imgpath)
+{
+    //std::cout << "offset: " << offset << " size: " << size << std::endl;
+}
+
+/*
+void HashFile(std::string filename, std::string whlfile)
+{
+    std::ifstream fin(filename.c_str());
+    char tmpchar[65536];
+    blake3_hasher hasher;
+    blake3_hasher_init(&hasher);
+    while(fin)
+    {
+	fin.read(tmpchar, 65536);
+	size_t cnt = fin.gcount();
+	blake3_hasher_update(&hasher, tmpchar, cnt);
+	if(!cnt)
+	    break;
+    }
+    uint8_t output[BLAKE3_OUT_LEN];
+    blake3_hasher_finalize(&hasher, output, BLAKE3_OUT_LEN);
+    std::stringstream ss;
+    for(int i=0; i < BLAKE3_OUT_LEN; i++)
+        ss << std::hex << (int)output[i]; 
+    std::string srcmd5 = ss.str();
+    std::string whlstr = srcmd5 + "," + filename + "\n";
+    if(whlfile.compare("") == 0)
+        std::cout << whlstr;
+    else
+    {
+        FILE* whlptr = NULL;
+        whlptr = fopen(whlfile.c_str(), "a");
+        fwrite(whlstr.c_str(), strlen(whlstr.c_str()), 1, whlptr);
+        fclose(whlptr);
+    }
+}
+*/ 
+
 int main(int argc, char* argv[])
 {
+    // START DEBUGGING
+    //argc = 3;
+    //argv[1] = (char*)std::string("/dev/mmcbl0").c_str();
+    //argv[2] = (char*)std::string("WFI").c_str();
+    // END DEBUGGING
     std::string devicepath;
     std::string imagepath;
     std::string logpath;
@@ -165,7 +211,7 @@ int main(int argc, char* argv[])
         if(infile >= 0)
         {
 	    close(infile);
-	    fin = fopen(devicepath.c_str(), "rb");
+	    //fin = fopen(devicepath.c_str(), "rb");
 
 	    // CREATE THE SPARSE IMAGE FILE
 	    int file = 0;
@@ -178,15 +224,46 @@ int main(int argc, char* argv[])
 	    }
 	    ftruncate(file, totalbytes);
 	    close(file);
+	    
+	    // GET THE CPU THREAD COUNT FOR CONCURRENCY PURPOSES
+	    unsigned int threadcount = std::thread::hardware_concurrency();
+	    threadcount = threadcount - 2;
+	    std::cout << "thread count: " << threadcount << std::endl;
 
-	    //fout = fopen_orDie(imagepath.c_str(), "wb");
-	    /*
-	    for(int i=0; i < filelist.size(); i++)
+	    // GET THE TOTAL SYSTEM RAM
+	    struct sysinfo info;
+	    int syserr = sysinfo(&info);
+	    uint64_t totalram = info.totalram;
+	    std::cout << "total ram: " << totalram << std::endl;
+
+	    std::cout << "device bytes: " << totalbytes << std::endl;
+
+	    // MAX PIECE SIZE
+	    uint64_t maxpiecesize = totalram / threadcount;
+	    std::cout << "max piece size: " << maxpiecesize << std::endl;
+
+	    // IF DEVICE SIZE < MAX PIECE SIZE, MAKE MAX PIECE SIZE = DEVICE SIZE
+	    if(totalbytes < maxpiecesize)
+		maxpiecesize = totalbytes;
+	    
+	    // CALCULATE THE CORRECT PIECE SIZE
+	    std::vector<uint64_t> piecesizechoice = { 8589934592, 4294967296, 2147483648, 1073741824, 536870912, 268435456, 134217728, 67108864, 33554432, 16777216, 8388608, 4194304, 1048576, 524288, 131072, 65536, 32768, 16384, 8192, 4096, 2048, 1024, 512 };
+
+	    uint64_t piecesize = 0;
+	    for(int i=0; i < piecesizechoice.size(); i++)
 	    {
-		std::thread tmp(HashFile, filelist.at(i).string(), whlstr);
-		tmp.join();
+		std::cout << i << ": " << piecesizechoice.at(i) << " " << totalbytes / piecesizechoice.at(i) << " " << totalbytes % piecesizechoice.at(i) << std::endl;
+		if(maxpiecesize > piecesizechoice.at(i) && totalbytes % piecesizechoice.at(i) == 0)
+		{
+		    piecesize = piecesizechoice.at(i);
+		    break;
+		}
 	    }
-	    */ 
+	    std::cout << "piece size: " << piecesize << std::endl;
+
+	    uint64_t piececount = totalbytes / piecesize;
+	    std::cout << "piece count: " << piececount << std::endl;
+
 
 	    /*
 	    // OPEN FILEINFO AND START POPULATING THE INFORMATION
@@ -251,17 +328,33 @@ int main(int argc, char* argv[])
             udev_enumerate_unref(enumerate);
             udev_unref(udev);
             
-	    fseek(fin, 0, SEEK_SET);
+	    //fseek(fin, 0, SEEK_SET);
+	    //fout = fopen(imagepath.c_str(), "wb");
 	    //fseek(fout, 0, SEEK_SET);
+	    
+	    // MULTI THREAD THE raw image creation process
+	    for(int i=0; i < piececount; i++)
+	    {
+		std::thread tmp(WritePiece, i*piecesize, piecesize, devicepath, imagepath);
+		tmp.join();
+	    }
+
+	    /*
+	    parallel -j $threadcount --bar dd if=$1 bs=$curpiecesize of=$2.dd skip={} seek={} count=1 status=none ::: $(seq 0 $piececount)
+	    for(int i=0; i < filelist.size(); i++)
+	    {
+		std::thread tmp(HashFile, filelist.at(i).string(), whlstr);
+		tmp.join();
+	    }
+	    */ 
 
             // BLAKE3_OUT_LEN IS 32 BYTES LONG
-            uint8_t srchash[BLAKE3_OUT_LEN];
-            uint8_t wfihash[BLAKE3_OUT_LEN];
+            //uint8_t srchash[BLAKE3_OUT_LEN];
+            //uint8_t wfihash[BLAKE3_OUT_LEN];
 
-	    blake3_hasher srchasher;
-	    blake3_hasher_init(&srchasher);
+	    //blake3_hasher srchasher;
+	    //blake3_hasher_init(&srchasher);
 	    
-	    fout = fopen(imagepath.c_str(), "wb");
 
 /*
     size_t read, toRead = buffInSize;
@@ -391,6 +484,9 @@ int main(int argc, char* argv[])
 	    */
             printf(" - BLAKE3 Source Device\n");
             fprintf(filelog, " - BLAKE3 Source Device\n");
+
+	    //fclose(fin);
+	    //fclose(fout);
 
 	    /*
 	    fclose_orDie(fout);
