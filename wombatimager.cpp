@@ -16,6 +16,7 @@
 #include <string>
 #include <filesystem>
 #include <iostream>
+#include <fstream>
 #include <thread>
 
 #include "blake3/blake3.h"
@@ -162,6 +163,7 @@ int main(int argc, char* argv[])
         imagepath = imgdirpath + "/" + filename + ".dd";
         logpath = imgdirpath + "/" + filename + ".log";
 	infopath = imgdirpath + "/" + filename + ".info";
+	std::cout << "device path: " << devicepath << std::endl;
 	std::cout << "image path: " << imagepath << std::endl;
 	std::cout << "log path: " << logpath << std::endl;
 	std::cout << "info path: " << infopath << std::endl;
@@ -180,8 +182,8 @@ int main(int argc, char* argv[])
         int64_t curpos = 0;
         int64_t errcnt = 0;
         infile = open(devicepath.c_str(), O_RDONLY | O_NONBLOCK);
-	FILE* fin = NULL;
-	FILE* fout = NULL;
+	//FILE* fin = NULL;
+	//FILE* fout = NULL;
 	FILE* fmd = NULL;
         FILE* filelog = NULL;
         filelog = fopen(logpath.c_str(), "w+");
@@ -193,7 +195,6 @@ int main(int argc, char* argv[])
         if(infile >= 0)
         {
 	    close(infile);
-	    //fin = fopen(devicepath.c_str(), "rb");
 
 	    // CREATE THE SPARSE IMAGE FILE
 	    int file = 0;
@@ -257,16 +258,6 @@ int main(int argc, char* argv[])
 		}
 	    }
 	    std::cout << "hash size: " << hashsize << std::endl;
-
-	    /*
-	    // OPEN FILEINFO AND START POPULATING THE INFORMATION
-	    fileinfo = fopen(infopath.c_str(), "w+");
-	    if(fileinfo == NULL)
-	    {
-		printf("Error opening info file.\n");
-		return 1;
-	    }
-	    */
 
             time_t starttime = time(NULL);
             char dtbuf[35];
@@ -340,34 +331,68 @@ int main(int argc, char* argv[])
             uint8_t devhash[BLAKE3_OUT_LEN];
 	    blake3_hasher devhasher;
 	    blake3_hasher_init(&devhasher);
-	    fin = fopen(devicepath.c_str(), "rb");	    
-	    fseek(fin, 0, SEEK_SET);
+	    /*
+    int infile = open(devpath.c_str(), O_RDONLY | O_NONBLOCK);
+    int outfile = open(imgpath.c_str(), O_RDWR, S_IRWXU);
+    lseek(infile, offset, SEEK_SET);
+    lseek(outfile, 0, SEEK_SET);
+    lseek(outfile, offset, SEEK_SET);
+    char inbuf[size];
+    memset(inbuf, 0, sizeof(inbuf));
+    ssize_t bytesread = read(infile, inbuf, size);
+    close(infile);
+    if(bytesread == -1)
+    {
+	memset(inbuf, 0, sizeof(inbuf));
+    }
+    ssize_t byteswrite = write(outfile, inbuf, size);
+    close(outfile);
+	     */ 
+	    std::ifstream instream(devicepath, std::ifstream::binary);
+	    //fin = fopen(devicepath.c_str(), "rb");	    
+	    //fseek(fin, 0, SEEK_SET);
 	    int curpos = 0;
-	    while(curpos < totalbytes)
+	    //while(curpos < totalbytes)
+	    while(!instream.eof())
 	    {
 		char inbuf[hashsize];
 		memset(inbuf, 0, sizeof(inbuf));
-		ssize_t bytesread = fread(inbuf, hashsize, 1, fin);
+		instream.read(inbuf, hashsize);
+		//ssize_t bytesread = fread(inbuf, hashsize, 1, fin);
 		//ssize_t bytesread = fread(fin, inbuf, hashsize);
 		curpos = curpos + hashsize;
-		blake3_hasher_update(&devhasher, inbuf, bytesread);
-		printf("Hashing %llu of %llu bytes\r", curpos, totalbytes);
+		blake3_hasher_update(&devhasher, inbuf, hashsize);
+		//blake3_hasher_update(&devhasher, inbuf, bytesread);
+		printf("Hashing %llu of %llu bytes\r", instream.gcount(), totalbytes);
 		fflush(stdout);
 	    }
 	    blake3_hasher_finalize(&devhasher, devhash, BLAKE3_OUT_LEN);
-	    fclose(fin);
+	    //fclose(fin);
+
+	    // OPEN FILEINFO AND START POPULATING THE INFORMATION
+	    fileinfo = fopen(infopath.c_str(), "w+");
+	    if(fileinfo == NULL)
+	    {
+		printf("Error opening info file.\n");
+		return 1;
+	    }
+
+	    fprintf(filelog, "%s", infocontent);
+	    std::cout << infocontent << std::endl;
 
             for(size_t i=0; i < BLAKE3_OUT_LEN; i++)
             {
                 fprintf(filelog, "%02x", devhash[i]);
                 printf("%02x", devhash[i]);
+		fprintf(fileinfo, "%02x", devhash[i]);
             }
             printf(" - BLAKE3 Source Device\n");
             fprintf(filelog, " - BLAKE3 Source Device\n");
+            fprintf(fileinfo, " - BLAKE3 Source Device\n");
 	    time_t devhashend = time(NULL);
             fprintf(filelog, "Hashed %llu bytes\n", totalbytes);
             fprintf(filelog, "Hash of Source Device finished at: %s\n", GetDateTime(dtbuf));
-            fprintf(filelog, "Hash of Source Device created in: %f seconds\n\n", difftime(devhashend, devhashstart));
+            fprintf(filelog, "Hash of Source Device created in: %5.2f seconds\n\n", difftime(devhashend, devhashstart));
             printf("\nSource Device Hashing Finished\n");
 
 	    // START VERIFYING THE FORENSIC IMAGE IF ENABLED
@@ -379,16 +404,33 @@ int main(int argc, char* argv[])
                 uint8_t forimghash[BLAKE3_OUT_LEN];
                 blake3_hasher imghasher;
                 blake3_hasher_init(&imghasher); 
-		fout = fopen(imagepath.c_str(), "rb");
+	    /*
+    int infile = open(devpath.c_str(), O_RDONLY | O_NONBLOCK);
+    int outfile = open(imgpath.c_str(), O_RDWR, S_IRWXU);
+    lseek(infile, offset, SEEK_SET);
+    lseek(outfile, 0, SEEK_SET);
+    lseek(outfile, offset, SEEK_SET);
+    char inbuf[size];
+    memset(inbuf, 0, sizeof(inbuf));
+    ssize_t bytesread = read(infile, inbuf, size);
+    close(infile);
+    if(bytesread == -1)
+    {
+	memset(inbuf, 0, sizeof(inbuf));
+    }
+    ssize_t byteswrite = write(outfile, inbuf, size);
+    close(outfile);
+	     */ 
+		FILE* fout = fopen(imagepath.c_str(), "rb");
 		fseek(fout, 0, SEEK_SET);
 		int curpos = 0;
 		while(curpos < totalbytes)
 		{
 		    char inbuf[hashsize];
 		    memset(inbuf, 0, sizeof(inbuf));
-		    ssize_t bytesread = fread(inbuf, hashsize, 1, fin);
+		    ssize_t bytesread = fread(inbuf, hashsize, 1, fout);
 		    //ssize_t bytesread = fread(fout, inbuf, hashsize);
-		    curpos = curpos + hashsize;
+		    curpos = curpos + bytesread;
 		    blake3_hasher_update(&imghasher, inbuf, bytesread);
 		    printf("Hashing %llu of %llu bytes\r", curpos, totalbytes);
 		    fflush(stdout);
@@ -399,13 +441,15 @@ int main(int argc, char* argv[])
                 {
 		    fprintf(filelog, "%02x", forimghash[i]);
                     printf("%02x", forimghash[i]);
+		    fprintf(fileinfo, "%02x", forimghash[i]);
                 }
                 printf(" - Forensic Image Hash\n");
                 fprintf(filelog, " - Forensic Image Hash\n");
+                fprintf(fileinfo, " - Forensic Image Hash\n");
 		time_t imghashend = time(NULL);
 		fprintf(filelog, "Hashed %llu bytes\n", totalbytes);
 		fprintf(filelog, "Hash of Forensic Image finished at: %s\n", GetDateTime(dtbuf));
-		fprintf(filelog, "Hash of Forensic Image created in: %f seconds\n\n", difftime(imghashend, imghashstart));
+		fprintf(filelog, "Hash of Forensic Image created in: %5.2f seconds\n\n", difftime(imghashend, imghashstart));
 		printf("\nForensic Image Hashing Finished\n");
 		printf("\n");
 		if(memcmp(&devhash, &forimghash, BLAKE3_OUT_LEN) == 0)
@@ -428,11 +472,8 @@ int main(int argc, char* argv[])
 	}
 	fclose(filelog);
 	fclose(fileinfo);
-	//std::uintmax_t n{std::filesystem::remove_all(
-	/*
-	std::uintmax_t n{fs::remove_all(tmp / "abcdef")};
-	std::cout << "Deleted " << n << " files or directories\n";
-	*/
+	std::uintmax_t rmcnt = std::filesystem::remove_all(imgdirpath);
+	std::cout << "Deleted: " << rmcnt << " files or directories" << std::endl;
     }
     else
     {
