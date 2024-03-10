@@ -129,6 +129,7 @@ int main(int argc, char* argv[])
 		infostring = iss.str();
 	    }
 	    std::size_t infofind = infostring.find(" - BLAKE3 Source Device\n");
+	    std::cout << "infostring: " << std::endl << infostring << std::endl;
 	    std::cout << infostring.substr(infofind - 32, 32) << " - BLAKE3 Source Device" << std::endl;
 	    uint8_t input[BLAKE3_OUT_LEN];
 	    for(int i=0; i < BLAKE3_OUT_LEN; i++)
