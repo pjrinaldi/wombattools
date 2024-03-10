@@ -24,6 +24,6 @@ wombatverify: $(WALAFUS_OBJS)
 	g++ -O3 -o wombatverify $(WALAFUS_OBJS) wombatverify.cpp -lzstd blake3/libblake3.a
 
 wombatrestore:
-	g++ -O3 -o wombatrestore wombatrestore.cpp -lzstd -lpthread -L. -lblake3
+	g++ -O3 -o wombatrestore wombatrestore.cpp -lzstd -lpthread blake3/libblake3.a
 
 #wombatlogical:

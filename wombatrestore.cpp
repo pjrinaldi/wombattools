@@ -15,7 +15,7 @@
 #include <filesystem>
 #include <iostream>
 
-#include "blake3.h"
+#include "blake3/blake3.h"
 
 #include "walafus/filesystem.h"
 #include "walafus/wltg_packer.h"
@@ -50,8 +50,6 @@ void ShowUsage(int outtype)
 int main(int argc, char* argv[])
 {
 
-
-    /*
     std::string devicepath;
     std::string imagepath;
     uint8_t verify = 0;
@@ -83,6 +81,7 @@ int main(int argc, char* argv[])
                 return 1;
             }
         }
+	/*
 	//printf("Command called: %s %s %s\n", argv[0], argv[1], argv[2]);
         devicepath = argv[2];
         std::string filestr = argv[1];
