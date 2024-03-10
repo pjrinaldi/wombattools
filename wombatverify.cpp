@@ -4,9 +4,11 @@
 #include <string.h>
 #include <stdlib.h>
 
-#include "blake3.h"
-#include "zstdcommon.h"
-#include <zstd.h>
+#include "blake3/blake3.h"
+
+#include "walafus/filesystem.h"
+#include "walafus/wltg_packer.h"
+#include "walafus/wltg_reader.h"
 
 #define DTTMFMT "%F %T %z"
 #define DTTMSZ 35
@@ -38,7 +40,7 @@ void ShowUsage(int outtype)
     {
         printf("Verify the BLAKE3 hash for a wombat forensic or wombat logical image.\n\n");
         printf("Usage :\n");
-        printf("\twombatinfo IMAGE_FILE\n\n");
+        printf("\twombatverify IMAGE_FILE\n\n");
         printf("IMAGE_FILE\t: the file name for the wombat forensic or wombat logical image.\n");
         printf("Arguments :\n");
         printf("-v\t: Prints Version information\n");
@@ -48,7 +50,7 @@ void ShowUsage(int outtype)
     }
     else if(outtype == 1)
     {
-        printf("wombatverify v0.1\n");
+        printf("wombatverify v0.2\n");
 	printf("License CC0-1.0: Creative Commons Zero v1.0 Universal\n");
         printf("This software is in the public domain\n");
         printf("There is NO WARRANTY, to the extent permitted by law.\n\n");
@@ -72,86 +74,78 @@ int main(int argc, char* argv[])
 	}
 	else
 	{
-	    FILE* imgfile = NULL;
-	    imgfile = fopen(argv[1], "rb");
-	    fseek(imgfile, 0, SEEK_END);
-	    fseek(imgfile, -264, SEEK_CUR);
-	    fread(&wfimd, sizeof(struct wfi_metadata), 1, imgfile);
-	    fclose(imgfile);
+	    Filesystem wltgfilesystem;
+	    WltgReader pack_wltg(argv[1]);
+	    //std::cout << "argv1: " << argv[1] << std::endl;
+
+	    wltgfilesystem.add_source(&pack_wltg);
+
+	    std::string wltgimg = std::filesystem::path(argv[1]).filename().string();
+	    size_t found = wltgimg.rfind(".");
+	    std::string wltgrawimg = wltgimg.substr(0, found) + ".dd";
+	    std::string virtpath = "/" + wltgimg.substr(0, found) + "/" + wltgrawimg;
+	    std::string wltginfo = wltgimg.substr(0, found) + ".info";
+	    std::string virtinfo = "/" + wltgimg.substr(0, found) + "/" + wltginfo;
+	    //std::cout << virtpath << std::endl;
 	    
-
-            time_t starttime = time(NULL);
-            char dtbuf[35];
-	    printf("Verification Started at %s\n", GetDateTime(dtbuf));
-
-	    uint8_t forimghash[BLAKE3_OUT_LEN];
-	    blake3_hasher imghasher;
-	    blake3_hasher_init(&imghasher);
-	    
-	    FILE* fout = NULL;
-	    fout = fopen_orDie(argv[1], "rb");
-	    size_t bufinsize = ZSTD_DStreamInSize();
-	    void* bufin = malloc_orDie(bufinsize);
-	    size_t bufoutsize = ZSTD_DStreamOutSize();
-	    void* bufout = malloc_orDie(bufoutsize);
-
-	    ZSTD_DCtx* dctx = ZSTD_createDCtx();
-	    CHECK(dctx != NULL, "ZSTD_createDCtx() failed");
-
-	    size_t toread = bufinsize;
-	    size_t read;
-	    size_t lastret = 0;
-	    int isempty = 1;
-	    size_t readcount = 0;
-	    while( (read = fread_orDie(bufin, toread, fout)) )
+	    std::unique_ptr<BaseFileStream> handle = wltgfilesystem.open_file_read(virtpath.c_str());
+	    if(!handle)
 	    {
-		isempty = 0;
-		ZSTD_inBuffer input = { bufin, read, 0 };
-		while(input.pos < input.size)
-		{
-		    ZSTD_outBuffer output = { bufout, bufoutsize, 0 };
-		    size_t ret = ZSTD_decompressStream(dctx, &output, &input);
-		    CHECK_ZSTD(ret);
-		    blake3_hasher_update(&imghasher, bufout, output.pos);
-		    lastret = ret;
-		    readcount = readcount + output.pos;
-		    printf("Read %llu of %llu bytes\r", readcount, wfimd.totalbytes);
-		    fflush(stdout);
-		}
-	    }
-	    printf("\nVerification Finished\n");
-
-	    if(isempty)
-	    {
-		printf("input is empty\n");
+		std::cout << "failed to open file" << std::endl;
 		return 1;
 	    }
+	    //std::cout << handle->size() << std::endl;
 
-	    if(lastret != 0)
-	    {
-		printf("EOF before end of stream: %zu\n", lastret);
-		exit(1);
-	    }
-	    ZSTD_freeDCtx(dctx);
-	    fclose_orDie(fout);
-	    free(bufin);
-	    free(bufout);
+	    blake3_hasher hasher;
+	    blake3_hasher_init(&hasher);
 
-	    blake3_hasher_finalize(&imghasher, forimghash, BLAKE3_OUT_LEN);
-	    printf("Image Hash:\t   ");
-	    for(size_t i=0; i < 32; i++)
-		printf("%02x", wfimd.devhash[i]);
-	    printf("\n");
-	    printf("Verification Hash: ");
-	    for(size_t i=0; i < BLAKE3_OUT_LEN; i++)
+	    char buf[131072];
+	    uint64_t curoffset = 0;
+	    while(curoffset < handle->size())
 	    {
-		printf("%02x", forimghash[i]);
+		handle->seek(curoffset);
+		uint64_t bytesread = handle->read_into(buf, 131072);
+		blake3_hasher_update(&hasher, buf, bytesread);
+		curoffset += bytesread;
+		printf("Hashed %llu of %llu bytes\r", curoffset, handle->size());
+		fflush(stdout);
 	    }
-	    printf("\n\n");
-	    if(memcmp(&wfimd.devhash, &forimghash, BLAKE3_OUT_LEN) == 0)
-		printf("Verification Successful\n");
+
+	    std::unique_ptr<BaseFileStream> infohandle = wltgfilesystem.open_file_read(virtinfo.c_str());
+	    if(!infohandle)
+	    {
+		std::cout << "failed to open file" << std::endl;
+		return 1;
+	    }
+	    std::cout << std::endl;
+
+	    char infobuf[infohandle->size()];
+	    uint64_t bytesread = infohandle->read_into(buf, infohandle->size());
+	    std::string infostring = "";
+	    if(bytesread == infohandle->size())
+	    {
+		std::stringstream iss;
+		iss << infobuf;
+		infostring = iss.str();
+	    }
+	    std::size_t infofind = infostring.find(" - BLAKE3 Source Device\n");
+	    std::cout << infostring.substr(infofind - 32, 32) << " - BLAKE3 Source Device" << std::endl;
+	    uint8_t input[BLAKE3_OUT_LEN];
+	    for(int i=0; i < BLAKE3_OUT_LEN; i++)
+		input[i] = (uint8_t)infostring.substr(infofind - 32, 32).at(i);
+
+	    uint8_t output[BLAKE3_OUT_LEN];
+	    blake3_hasher_finalize(&hasher, output, BLAKE3_OUT_LEN);
+	    std::stringstream ss;
+	    for(int i=0; i < BLAKE3_OUT_LEN; i++)
+		ss << std::hex << std::setfill('0') << std::setw(2) << (int)output[i]; 
+	    std::string srcmd5 = ss.str();
+	    std::cout << std::endl << ss.str() << " - BLAKE3 Forensic Image" << std::endl << std::endl;
+	    
+	    if(memcmp(&input, output, BLAKE3_OUT_LEN) == 0)
+		std::cout << "Verification Successful" << std::endl;
 	    else
-		printf("Verification Failed\n");
+		std::cout << "Verification Failed" << std::endl;
 
 	    return 0;
 	}
