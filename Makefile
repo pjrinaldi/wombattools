@@ -28,6 +28,9 @@ WALAFUS_OBJS = walafus/filesystem.cpp walafus/wltg_reader.cpp walafus/wltg_packe
 wombatimager: $(WALAFUS_OBJS)
 	g++ -O3 -o wombatimager $(WALAFUS_OBJS) wombatimager.cpp -ludev -lpthread -lzstd blake3/libblake3.a
 
+wombatread: $(WALAFUS_OBJS)
+	g++ -O3 -o wombatreader $(WALAFUS_OBJS) wombatreader.cpp -lzstd
+
 b3hasher:
 	g++ -O3 -o b3hasher b3hasher.cpp -lpthread blake3/libblake3.a
 
