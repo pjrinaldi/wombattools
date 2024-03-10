@@ -125,32 +125,32 @@ int main(int argc, char* argv[])
             printf("ERROR: Device is not large enough to hold the image. Exiting.\n");
             return 1;
         }
-	//FILE* fout = fopen(devicepath.c_str(), "w+");
-	int outfile = open(devicepath.c_str(), O_RDWR);
-	lseek(outfile, 0, SEEK_SET);
-	/*
+	FILE* fout = fopen(devicepath.c_str(), "wb");
+	//int outfile = open(devicepath.c_str(), O_RDWR | O_NONBLOCK);
+	//lseek(outfile, 0, SEEK_SET);
         if(fout == NULL)
         {
             printf("Error opening device.\n");
             return 1;
         }
-	*/
 	char buf[131072];
 	uint64_t curoffset = 0;
 	std::cout << "forensic image size: " << handle->size() << std::endl;
 	printf("Starting to Write Forensic Image to device %s\n", devicepath.c_str());
+	std::cout << "starting curoffset: " << curoffset << std::endl;
 	while(curoffset < handle->size());
 	{
 	    handle->seek(curoffset);
 	    uint64_t bytesread = handle->read_into(buf, 131072);
-	    ssize_t byteswrite = write(outfile, buf, bytesread);
-	    curoffset += byteswrite;
-	    //fwrite(buf, 1, bytesread, fout);
-            printf("Written %llu of %llu bytes\r", byteswrite, handle->size());
+	    //ssize_t byteswrite = write(outfile, buf, bytesread);
+	    curoffset += bytesread;
+	    std::cout << "curoffset: " << curoffset << std::endl;
+	    fwrite(buf, 1, bytesread, fout);
+            printf("Written %llu of %llu bytes\r", bytesread, handle->size());
             fflush(stdout);
 	}
-	close(outfile);
-	//fclose(fout);
+	//close(outfile);
+	fclose(fout);
         printf("\nForensic Image has been sucessfully restored\n");
 
 	printf("Start verification\n");
