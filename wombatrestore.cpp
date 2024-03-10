@@ -81,15 +81,12 @@ int main(int argc, char* argv[])
                 return 1;
             }
         }
-	/*
-	//printf("Command called: %s %s %s\n", argv[0], argv[1], argv[2]);
+	printf("Command called: %s %s %s\n", argv[0], argv[1], argv[2]);
         devicepath = argv[2];
-        std::string filestr = argv[1];
-        std::size_t found = filestr.find_last_of("/");
-        std::string pathname = filestr.substr(0, found);
-        std::string filename = filestr.substr(found+1);
-        std::filesystem::path initpath = std::filesystem::canonical(pathname + "/");
-        imagepath = initpath.string() + "/" + filename;
+	std::filesystem::path imagepath = std::filesystem::path(argv[1]).string();
+	std::string imgname = imagepath.filename().string();
+	size_t found = imgname.rfind(".");
+	std::string virtpath = "/" + imgname.substr(0, found) + "/" + imgname.substr(0, found) + ".dd";
         if(devicepath.empty())
         {
             ShowUsage(0);
@@ -100,171 +97,94 @@ int main(int argc, char* argv[])
             ShowUsage(0);
             return 1;
         }
-	*/
-
-	    /*	    
-	    Filesystem wltgfilesystem;
-	    WltgReader pack_wltg(argv[1]);
-
-	    wltgfilesystem.add_source(&pack_wltg);
-
-	    std::string wltgimg = std::filesystem::path(argv[1]).filename().string();
-	    size_t found = wltgimg.rfind(".");
-	    std::string wltgrawimg = wltgimg.substr(0, found) + ".dd";
-	    std::string virtpath = "/" + wltgimg.substr(0, found) + "/" + wltgrawimg;
-	    
-	    std::unique_ptr<BaseFileStream> handle = wltgfilesystem.open_file_read(virtpath.c_str());
-	    if(!handle)
-	    {
-		std::cout << "failed to open file" << std::endl;
-		return 1;
-	    }
-
-	    FILE* fout = stdout;
-
-	    char buf[131072];
-	    uint64_t curoffset = 0;
-	    while(curoffset < handle->size())
-	    {
-		handle->seek(curoffset);
-		uint64_t bytesread = handle->read_into(buf, 131072);
-		curoffset += bytesread;
-		fwrite(buf, 1, bytesread, fout);
-	    }
-	    fclose(fout);
-	    */ 
-
-	/*
-        // GET IMAGE TOTAL SIZE TO RESTORE
-        FILE* imgfile = NULL;
-        imgfile = fopen(imagepath.c_str(), "rb");
-        fseek(imgfile, 0, SEEK_END);
-        fseek(imgfile, -264, SEEK_CUR);
-        fread(&wfimd, sizeof(struct wfi_metadata), 1, imgfile);
-        fclose(imgfile);
-        //printf("Image Size to Restore: %llu bytes\n", wfimd.totalbytes);
-
         // GET DEVICE TOTAL SIZE
-        int64_t devtotalbytes = 0;
+        int64_t totalbytes = 0;
         int infile = open(devicepath.c_str(), O_RDONLY | O_NONBLOCK);
         if(infile >= 0)
         {
-            ioctl(infile, BLKGETSIZE64, &devtotalbytes);
+            ioctl(infile, BLKGETSIZE64, &totalbytes);
             close(infile);
         }
-        //printf("Device Size: %llu bytes\n", devtotalbytes);
+        printf("Device Size: %llu bytes\n", totalbytes);
 
+	std::cout << "devicepath: " << devicepath << std::endl;
+
+	Filesystem wltgfilesystem;
+	WltgReader pack_wltg(argv[1]);
+	wltgfilesystem.add_source(&pack_wltg);
+	std::unique_ptr<BaseFileStream> handle = wltgfilesystem.open_file_read(virtpath.c_str());
+	if(!handle)
+	{
+	    std::cout << "failed to open file" << std::endl;
+	    return 1;
+	}
+	std::cout << "Raw Image Size: " << handle->size() << " bytes" << std::endl;
         // ENSURE THE DEVICE IS LARGE ENOUGH TO HOLD IMAGE
-        if(devtotalbytes < wfimd.totalbytes)
+        if(totalbytes < handle->size())
         {
             printf("ERROR: Device is not large enough to hold the image. Exiting.\n");
             return 1;
         }
-
-        FILE* fin = NULL;
-        FILE* fout = NULL;
-
-        fin = fopen_orDie(imagepath.c_str(), "rb");
-        fout = fopen_orDie(devicepath.c_str(), "wb");
-
-        fseek(fin, 0, SEEK_SET);
-        fseek(fout, 0, SEEK_SET);
-        // DECOMPRESS THE RAW IMAGE AND WRITE IT TO THE DEVICE
-        size_t bufinsize = ZSTD_DStreamInSize();
-        void* bufin = malloc_orDie(bufinsize);
-        size_t bufoutsize = ZSTD_DStreamOutSize();
-        void* bufout = malloc_orDie(bufoutsize);
-
-        ZSTD_DCtx* dctx = ZSTD_createDCtx();
-        CHECK(dctx != NULL, "ZSTD_createDCtx() failed");
-
-        size_t toread = bufinsize;
-        size_t read;
-        size_t lastret;
-        int isempty = 1;
-        size_t readcount = 0;
-        while( (read = fread_orDie(bufin, toread, fin)) )
+	//FILE* fout = fopen(devicepath.c_str(), "w+");
+	int outfile = open(devicepath.c_str(), O_RDWR);
+	lseek(outfile, 0, SEEK_SET);
+	/*
+        if(fout == NULL)
         {
-            isempty = 0;
-            ZSTD_inBuffer input = { bufin, read, 0 };
-            while(input.pos < input.size)
-            {
-                ZSTD_outBuffer output = { bufout, bufoutsize, 0 };
-                size_t ret = ZSTD_decompressStream(dctx, &output, &input);
-                CHECK_ZSTD(ret);
-		fwrite_orDie(bufout, output.pos, fout);
-                lastret = ret;
-                readcount = readcount + output.pos;
-                printf("Written %llu of %llu bytes\r", readcount, wfimd.totalbytes);
-                fflush(stdout);
-            }
-        }
-
-        if(isempty)
-        {
-            printf("input is empty\n");
+            printf("Error opening device.\n");
             return 1;
         }
-        if(lastret != 0)
-        {
-            printf("EOF before end of stream: %zu\n", lastret);
-            return 1;
-        }
-        ZSTD_freeDCtx(dctx);
-        fclose_orDie(fout);
-        fclose_orDie(fin);
-        free(bufin);
-        free(bufout);
-
+	*/
+	char buf[131072];
+	uint64_t curoffset = 0;
+	std::cout << "forensic image size: " << handle->size() << std::endl;
+	printf("Starting to Write Forensic Image to device %s\n", devicepath.c_str());
+	while(curoffset < handle->size());
+	{
+	    handle->seek(curoffset);
+	    uint64_t bytesread = handle->read_into(buf, 131072);
+	    ssize_t byteswrite = write(outfile, buf, bytesread);
+	    curoffset += byteswrite;
+	    //fwrite(buf, 1, bytesread, fout);
+            printf("Written %llu of %llu bytes\r", byteswrite, handle->size());
+            fflush(stdout);
+	}
+	close(outfile);
+	//fclose(fout);
         printf("\nForensic Image has been sucessfully restored\n");
 
+	printf("Start verification\n");
         if(verify == 1) // start verification of the device
         {
-	    */
-
-	    /*
-	    Filesystem wltgfilesystem;
-	    WltgReader pack_wltg(argv[1]);
-
-	    wltgfilesystem.add_source(&pack_wltg);
-
-	    std::string wltgimg = std::filesystem::path(argv[1]).filename().string();
-	    size_t found = wltgimg.rfind(".");
-	    std::string wltgrawimg = wltgimg.substr(0, found) + ".dd";
-	    std::string virtpath = "/" + wltgimg.substr(0, found) + "/" + wltgrawimg;
-	    std::string wltginfo = wltgimg.substr(0, found) + ".info";
-	    std::string virtinfo = "/" + wltgimg.substr(0, found) + "/" + wltginfo;
-	    
-	    std::unique_ptr<BaseFileStream> handle = wltgfilesystem.open_file_read(virtpath.c_str());
-	    if(!handle)
+	    // HASH THE DEVICE | BLAKE3_OUT_LEN IS 32 BYTES LONG
+            uint8_t devhash[BLAKE3_OUT_LEN];
+	    blake3_hasher devhasher;
+	    blake3_hasher_init(&devhasher);
+	    int infile = open(devicepath.c_str(), O_RDONLY | O_NONBLOCK);
+	    lseek(infile, 0, SEEK_SET);
+	    int curpos = 0;
+	    while(curpos < totalbytes)
 	    {
-		std::cout << "failed to open file" << std::endl;
-		return 1;
-	    }
-
-	    blake3_hasher hasher;
-	    blake3_hasher_init(&hasher);
-
-	    char buf[131072];
-	    uint64_t curoffset = 0;
-	    while(curoffset < handle->size())
-	    {
-		handle->seek(curoffset);
-		uint64_t bytesread = handle->read_into(buf, 131072);
-		blake3_hasher_update(&hasher, buf, bytesread);
-		curoffset += bytesread;
-		printf("Hashed %llu of %llu bytes\r", curoffset, handle->size());
+		char inbuf[131072];
+		memset(inbuf, 0, sizeof(inbuf));
+		ssize_t bytesread = read(infile, inbuf, 131072);
+		curpos = curpos + bytesread;
+		blake3_hasher_update(&devhasher, inbuf, bytesread);
+		printf("Hashing %llu of %llu bytes\r", curpos, totalbytes);
 		fflush(stdout);
 	    }
-
-	    std::unique_ptr<BaseFileStream> infohandle = wltgfilesystem.open_file_read(virtinfo.c_str());
+	    close(infile);
+	    blake3_hasher_finalize(&devhasher, devhash, BLAKE3_OUT_LEN);
+	    std::stringstream devstream;
+            for(size_t i=0; i < BLAKE3_OUT_LEN; i++)
+		devstream << std::hex << std::setfill('0') << std::setw(2) << (int)devhash[i];
+	    std::string virtinfopath = "/" + imgname.substr(0, found) + "/" + imgname.substr(0, found) + ".info";
+	    std::unique_ptr<BaseFileStream> infohandle = wltgfilesystem.open_file_read(virtinfopath.c_str());
 	    if(!infohandle)
 	    {
 		std::cout << "failed to open file" << std::endl;
 		return 1;
 	    }
-	    std::cout << std::endl;
-
 	    // GET ORIGINAL SOURCE DEVICE BLAKE3 HASH
 	    char infobuf[infohandle->size()];
 	    uint64_t bytesread = infohandle->read_into(infobuf, infohandle->size());
@@ -277,63 +197,13 @@ int main(int argc, char* argv[])
 		infostring = iss.str();
 	    }
 	    std::size_t infofind = infostring.find(" - BLAKE3 Source Device\n");
-	    std::cout << infostring.substr(infofind - 2*BLAKE3_OUT_LEN, 2*BLAKE3_OUT_LEN) << " - BLAKE3 Source Device" << std::endl;
-
-	    // CALCULATE THE FORENSIC IMAGE BLAKE3 HASH
-	    uint8_t output[BLAKE3_OUT_LEN];
-	    blake3_hasher_finalize(&hasher, output, BLAKE3_OUT_LEN);
-	    std::stringstream ss;
-	    for(int i=0; i < BLAKE3_OUT_LEN; i++)
-		ss << std::hex << std::setfill('0') << std::setw(2) << (int)output[i]; 
-	    std::cout << ss.str() << " - BLAKE3 Forensic Image" << std::endl << std::endl;
-	    
 	    // COMPARE THE 2 HASHES to VERIFY
-	    if(ss.str().compare(infostring.substr(infofind - 2*BLAKE3_OUT_LEN, 2*BLAKE3_OUT_LEN)) == 0)
+	    if(devstream.str().compare(infostring.substr(infofind - 2*BLAKE3_OUT_LEN, 2*BLAKE3_OUT_LEN)) == 0)
 		std::cout << "Verification Successful" << std::endl;
 	    else
 		std::cout << "Verification Failed" << std::endl;
-	    */
-
-
-            /*
-	    printf("Verification Started\n");
-            // GET BLOCKSIZE FOR SPEEDY VERIFICATION
-            int64_t bufinsize = GetBlockSize(&wfimd.totalbytes);
-            //printf("selected block size for verification: %llu\n", bufinsize);
-            uint8_t devhash[BLAKE3_OUT_LEN];
-            blake3_hasher devhasher;
-            blake3_hasher_init(&devhasher);
-	    fin = fopen_orDie(devicepath.c_str(), "rb");
-	    fseek(fin, 0, SEEK_SET);
-	    size_t writecount = 0;
-	    void* bufin = malloc_orDie(bufinsize);
-            while(writecount < wfimd.totalbytes)
-            {
-	        size_t read = fread_orDie(bufin, bufinsize, fin);
-		writecount = writecount + read;
-		printf("Verifying %llu of %llu bytes\r", writecount, wfimd.totalbytes);
-		fflush(stdout);
-		blake3_hasher_update(&devhasher, bufin, read);
-            }
-            printf("\n");
-	    blake3_hasher_finalize(&devhasher, devhash, BLAKE3_OUT_LEN);
-	    fclose_orDie(fin);
-	    free(bufin);
-            for(size_t i=0; i < BLAKE3_OUT_LEN; i++)
-            {
-                printf("%02x", devhash[i]);
-            }
-            printf(" - BLAKE3 Restored Device\n");
-	    for(size_t i=0; i < BLAKE3_OUT_LEN; i++)
-		printf("%02x", wfimd.devhash[i]);
-	    printf(" - BLAKE3 Source Image\n");
-            printf("\n");
-	    if(memcmp(&wfimd.devhash, &devhash, BLAKE3_OUT_LEN) == 0)
-		printf("Verification Successful\n\n");
-	    else
-		printf("Verification Failed\n\n");
-        }
-	*/
+	    //std::cout << infostring.substr(infofind - 2*BLAKE3_OUT_LEN, 2*BLAKE3_OUT_LEN) << " - BLAKE3 Source Device" << std::endl;
+	}
     }
     else
     {
