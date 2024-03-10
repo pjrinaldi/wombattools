@@ -276,7 +276,7 @@ void WltgPacker::write_fs_blob(const char* real_path, int compression_level, con
         ubyte encryption_key[32];
         hash_password(password, encryption_key);
         write_fs_blob(real_path, compression_level, encryption_key, prefer_min_size);
-        std::cout << "dec key: " << (int) encryption_key[0] << " " << (int) encryption_key[1] << std::endl;
+        //std::cout << "dec key: " << (int) encryption_key[0] << " " << (int) encryption_key[1] << std::endl;
         secure_zero_mem(encryption_key, sizeof(encryption_key));
     }
     else {

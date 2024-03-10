@@ -12,8 +12,7 @@ void WltgRealFileSystemWritingStream::flush() {
 
 void WltgZstdCompressionWritingStream::write(const void* data, size_t size) {
     auto compressed_size = ZSTD_compress(compr_buf.get(), compress_bound, data, size, compression_level);
-    std::cout << "writing " << write_counts.size() << "th block; " << size << " source bytes as " <<
-              compressed_size << " compressed" << std::endl;
+    //std::cout << "writing " << write_counts.size() << "th block; " << size << " source bytes as " << compressed_size << " compressed" << std::endl;
     write_counts.push_back(compressed_size);
     dst_stream->write(compr_buf.get(), compressed_size);
 }
