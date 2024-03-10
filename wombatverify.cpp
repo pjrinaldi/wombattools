@@ -10,30 +10,6 @@
 #include "walafus/wltg_packer.h"
 #include "walafus/wltg_reader.h"
 
-#define DTTMFMT "%F %T %z"
-#define DTTMSZ 35
-
-struct wfi_metadata
-{
-    uint32_t skipframeheader; // skippable frame header
-    uint32_t skipframesize; // skippable frame content size (not including header and this size
-    uint16_t sectorsize; // raw forensic image sector size
-    int64_t reserved; // reserved
-    int64_t totalbytes; // raw forensic image total size
-    char casenumber[24]; // 24 character string
-    char evidencenumber[24]; // 24 character string
-    char examiner[24]; // 24 character string
-    char description[128]; // 128 character string
-    uint8_t devhash[32]; // blake3 source hash
-} wfimd;
-
-static char* GetDateTime(char *buff)
-{
-    time_t t = time(0);
-    strftime(buff, DTTMSZ, DTTMFMT, localtime(&t));
-    return buff;
-};
-
 void ShowUsage(int outtype)
 {
     if(outtype == 0)
@@ -76,7 +52,6 @@ int main(int argc, char* argv[])
 	{
 	    Filesystem wltgfilesystem;
 	    WltgReader pack_wltg(argv[1]);
-	    //std::cout << "argv1: " << argv[1] << std::endl;
 
 	    wltgfilesystem.add_source(&pack_wltg);
 
@@ -86,7 +61,6 @@ int main(int argc, char* argv[])
 	    std::string virtpath = "/" + wltgimg.substr(0, found) + "/" + wltgrawimg;
 	    std::string wltginfo = wltgimg.substr(0, found) + ".info";
 	    std::string virtinfo = "/" + wltgimg.substr(0, found) + "/" + wltginfo;
-	    //std::cout << virtpath << std::endl;
 	    
 	    std::unique_ptr<BaseFileStream> handle = wltgfilesystem.open_file_read(virtpath.c_str());
 	    if(!handle)
@@ -94,7 +68,6 @@ int main(int argc, char* argv[])
 		std::cout << "failed to open file" << std::endl;
 		return 1;
 	    }
-	    //std::cout << handle->size() << std::endl;
 
 	    blake3_hasher hasher;
 	    blake3_hasher_init(&hasher);
@@ -119,31 +92,30 @@ int main(int argc, char* argv[])
 	    }
 	    std::cout << std::endl;
 
+	    // GET ORIGINAL SOURCE DEVICE BLAKE3 HASH
 	    char infobuf[infohandle->size()];
-	    uint64_t bytesread = infohandle->read_into(buf, infohandle->size());
+	    uint64_t bytesread = infohandle->read_into(infobuf, infohandle->size());
 	    std::string infostring = "";
+	    std::stringstream iss;
 	    if(bytesread == infohandle->size())
 	    {
-		std::stringstream iss;
-		iss << infobuf;
+		for(int i=0; i < infohandle->size(); i++)
+		    iss << infobuf[i];
 		infostring = iss.str();
 	    }
 	    std::size_t infofind = infostring.find(" - BLAKE3 Source Device\n");
-	    std::cout << "infostring: " << std::endl << infostring << std::endl;
-	    std::cout << infostring.substr(infofind - 32, 32) << " - BLAKE3 Source Device" << std::endl;
-	    uint8_t input[BLAKE3_OUT_LEN];
-	    for(int i=0; i < BLAKE3_OUT_LEN; i++)
-		input[i] = (uint8_t)infostring.substr(infofind - 32, 32).at(i);
+	    std::cout << infostring.substr(infofind - 2*BLAKE3_OUT_LEN, 2*BLAKE3_OUT_LEN) << " - BLAKE3 Source Device" << std::endl;
 
+	    // CALCULATE THE FORENSIC IMAGE BLAKE3 HASH
 	    uint8_t output[BLAKE3_OUT_LEN];
 	    blake3_hasher_finalize(&hasher, output, BLAKE3_OUT_LEN);
 	    std::stringstream ss;
 	    for(int i=0; i < BLAKE3_OUT_LEN; i++)
 		ss << std::hex << std::setfill('0') << std::setw(2) << (int)output[i]; 
-	    std::string srcmd5 = ss.str();
-	    std::cout << std::endl << ss.str() << " - BLAKE3 Forensic Image" << std::endl << std::endl;
+	    std::cout << ss.str() << " - BLAKE3 Forensic Image" << std::endl << std::endl;
 	    
-	    if(memcmp(&input, output, BLAKE3_OUT_LEN) == 0)
+	    // COMPARE THE 2 HASHES to VERIFY
+	    if(ss.str().compare(infostring.substr(infofind - 2*BLAKE3_OUT_LEN, 2*BLAKE3_OUT_LEN)) == 0)
 		std::cout << "Verification Successful" << std::endl;
 	    else
 		std::cout << "Verification Failed" << std::endl;
