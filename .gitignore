@@ -11,6 +11,7 @@ wombatverify
 wombatrestore
 wombatlogical
 wombatreader
+wombatlog
 wombatfileforensics
 test/wombatreader
 sdcard.*

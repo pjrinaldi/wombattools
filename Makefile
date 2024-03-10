@@ -34,8 +34,11 @@ wombatread: $(WALAFUS_OBJS)
 b3hasher:
 	g++ -O3 -o b3hasher b3hasher.cpp -lpthread blake3/libblake3.a
 
-wombatinfo:
+wombatinfo: $(WALAFUS_OBJS)
 	g++ -O3 -o wombatinfo $(WALAFUS_OBJS) wombatinfo.cpp -lzstd
+
+wombatlog: $(WALAFUS_OBJS)
+	g++ -O3 -o wombatlog $(WALAFUS_OBJS) wombatlog.cpp -lzstd
 
 wombatverify:
 	gcc -O3 -o wombatverify wombatverify.c blake3.c blake3_dispatch.c blake3_portable.c blake3_sse2_x86-64_unix.S blake3_sse41_x86-64_unix.S blake3_avx2_x86-64_unix.S blake3_avx512_x86-64_unix.S -lzstd

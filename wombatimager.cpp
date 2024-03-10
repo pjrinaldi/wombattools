@@ -323,7 +323,7 @@ int main(int argc, char* argv[])
             //fprintf(filelog, "%llu blocks replaced with zeroes\n", errcnt);
             fprintf(filelog, "Forensic Image: %s\n", imagepath.c_str());
             fprintf(filelog, "Forensic Image finished at: %s\n", GetDateTime(dtbuf));
-            fprintf(filelog, "Forensic Image created in: %f seconds\n\n", difftime(endtime, starttime));
+            fprintf(filelog, "Forensic Image created in: %5.2f seconds\n\n", difftime(endtime, starttime));
             printf("\nForensic Image Creation Finished\n");
 
 	    time_t devhashstart = time(NULL);
@@ -355,7 +355,7 @@ int main(int argc, char* argv[])
 		return 1;
 	    }
 
-	    fprintf(filelog, "%s", infocontent);
+	    fprintf(fileinfo, "%s", infocontent.c_str());
 	    //std::cout << infocontent << std::endl;
 
             for(size_t i=0; i < BLAKE3_OUT_LEN; i++)
