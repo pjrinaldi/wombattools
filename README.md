@@ -7,4 +7,5 @@ The wombat logical image (wli), will be a zstd compressed tar file with the fore
 
 ## Version 0.2 Tools
 
-* 
+- wombatimager - create a walafus read only zstd compressed forensic image given a source device and an image format name.
+- 
