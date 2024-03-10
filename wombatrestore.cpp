@@ -49,7 +49,6 @@ void ShowUsage(int outtype)
 
 int main(int argc, char* argv[])
 {
-
     std::string devicepath;
     std::string imagepath;
     uint8_t verify = 0;
@@ -81,7 +80,6 @@ int main(int argc, char* argv[])
                 return 1;
             }
         }
-	printf("Command called: %s %s %s\n", argv[0], argv[1], argv[2]);
         devicepath = argv[2];
 	std::filesystem::path imagepath = std::filesystem::path(argv[1]).string();
 	std::string imgname = imagepath.filename().string();
@@ -105,10 +103,7 @@ int main(int argc, char* argv[])
             ioctl(infile, BLKGETSIZE64, &totalbytes);
             close(infile);
         }
-        printf("Device Size: %llu bytes\n", totalbytes);
-
-	std::cout << "devicepath: " << devicepath << std::endl;
-
+	// LOAD RAW IMAGE FROM WFI FILE
 	Filesystem wltgfilesystem;
 	WltgReader pack_wltg(argv[1]);
 	wltgfilesystem.add_source(&pack_wltg);
@@ -118,7 +113,6 @@ int main(int argc, char* argv[])
 	    std::cout << "failed to open file" << std::endl;
 	    return 1;
 	}
-	std::cout << "Raw Image Size: " << handle->size() << " bytes" << std::endl;
         // ENSURE THE DEVICE IS LARGE ENOUGH TO HOLD IMAGE
         if(totalbytes < handle->size())
         {
@@ -126,8 +120,6 @@ int main(int argc, char* argv[])
             return 1;
         }
 	FILE* fout = fopen(devicepath.c_str(), "wb");
-	//int outfile = open(devicepath.c_str(), O_RDWR | O_NONBLOCK);
-	//lseek(outfile, 0, SEEK_SET);
         if(fout == NULL)
         {
             printf("Error opening device.\n");
@@ -135,25 +127,20 @@ int main(int argc, char* argv[])
         }
 	char buf[131072];
 	uint64_t curoffset = 0;
-	std::cout << "forensic image size: " << handle->size() << std::endl;
 	printf("Starting to Write Forensic Image to device %s\n", devicepath.c_str());
-	std::cout << "starting curoffset: " << curoffset << std::endl;
-	while(curoffset < handle->size());
+	while(curoffset < handle->size())
 	{
 	    handle->seek(curoffset);
 	    uint64_t bytesread = handle->read_into(buf, 131072);
-	    //ssize_t byteswrite = write(outfile, buf, bytesread);
-	    curoffset += bytesread;
-	    std::cout << "curoffset: " << curoffset << std::endl;
+	    curoffset = curoffset + bytesread;
 	    fwrite(buf, 1, bytesread, fout);
-            printf("Written %llu of %llu bytes\r", bytesread, handle->size());
+            printf("Written %llu of %llu bytes\r", curoffset, handle->size());
             fflush(stdout);
 	}
-	//close(outfile);
 	fclose(fout);
-        printf("\nForensic Image has been sucessfully restored\n");
+        printf("\nForensic Image has been sucessfully restored to %s\n", devicepath.c_str());
 
-	printf("Start verification\n");
+	printf("Starting Device %s Verification\n", devicepath.c_str());
         if(verify == 1) // start verification of the device
         {
 	    // HASH THE DEVICE | BLAKE3_OUT_LEN IS 32 BYTES LONG
@@ -197,12 +184,12 @@ int main(int argc, char* argv[])
 		infostring = iss.str();
 	    }
 	    std::size_t infofind = infostring.find(" - BLAKE3 Source Device\n");
+	    std::cout << std::endl;
 	    // COMPARE THE 2 HASHES to VERIFY
 	    if(devstream.str().compare(infostring.substr(infofind - 2*BLAKE3_OUT_LEN, 2*BLAKE3_OUT_LEN)) == 0)
 		std::cout << "Verification Successful" << std::endl;
 	    else
 		std::cout << "Verification Failed" << std::endl;
-	    //std::cout << infostring.substr(infofind - 2*BLAKE3_OUT_LEN, 2*BLAKE3_OUT_LEN) << " - BLAKE3 Source Device" << std::endl;
 	}
     }
     else
