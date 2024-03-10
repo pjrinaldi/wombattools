@@ -16,70 +16,10 @@
 #include <iostream>
 
 #include "blake3.h"
-#include "zstdcommon.h"
-#include <zstd.h>
 
-#define DTTMFMT "%F %T %z"
-#define DTTMSZ 35
-
-struct wfi_metadata
-{
-    uint32_t skipframeheader; // skippable frame header - 4
-    uint32_t skipframesize; // skippable frame content size (not including header and this size) - 4
-    uint16_t sectorsize; // raw forensic image sector size - 2
-    int64_t reserved; // reserved
-    int64_t totalbytes; // raw forensic image total size - 8
-    char casenumber[24]; // 24 character string - 24
-    char evidencenumber[24]; // 24 character string - 24
-    char examiner[24]; // 24 character string - 24
-    char description[128]; // 128 character string - 128
-    uint8_t devhash[32]; // blake3 source hash - 32
-} wfimd; // 256
-
-static char* GetDateTime(char *buff)
-{
-    time_t t = time(0);
-    strftime(buff, DTTMSZ, DTTMFMT, localtime(&t));
-    return buff;
-};
-
-// BLOCKSIZE FOR IMAGE VERIFICATION...
-int64_t GetBlockSize(int64_t* totalsize)
-{
-    int64_t blocksize = 512;
-    if(*totalsize % 1073741824 == 0) // 1GB
-        blocksize = 1073741824;
-    else if(*totalsize % 536870912 == 0) // 512MB
-        blocksize = 536870912;
-    else if(*totalsize % 268435456 == 0) // 256MB
-        blocksize = 268435456;
-    else if(*totalsize % 134217728 == 0) // 128MB
-        blocksize = 134217728;
-    else if(*totalsize % 4194304 == 0) // 4MB
-        blocksize = 4194304;
-    else if(*totalsize % 1048576 == 0) // 1MB
-        blocksize = 1048576;
-    else if(*totalsize % 52488 == 0) // 512KB
-        blocksize = 52488;
-    else if(*totalsize % 131072 == 0) // 128KB
-        blocksize = 131072;
-    else if(*totalsize % 65536 == 0) //64KB
-        blocksize = 65536;
-    else if(*totalsize % 32768 == 0) // 32KB
-        blocksize = 32768;
-    else if(*totalsize % 16384 == 0) //16KB
-        blocksize = 16384;
-    else if(*totalsize % 8192 == 0) // 8KB
-        blocksize = 8192;
-    else if(*totalsize % 4096 == 0) // 4KB
-        blocksize = 4096;
-    else if(*totalsize % 2048 == 0) // 2KB
-        blocksize = 2048;
-    else if(*totalsize % 1024 == 0) // 1KB
-        blocksize = 1024;
-
-    return blocksize;
-}
+#include "walafus/filesystem.h"
+#include "walafus/wltg_packer.h"
+#include "walafus/wltg_reader.h"
 
 void ShowUsage(int outtype)
 {
@@ -99,7 +39,7 @@ void ShowUsage(int outtype)
     }
     else if(outtype == 1)
     {
-        printf("wombatrestore v0.1\n");
+        printf("wombatrestore v0.2\n");
 	printf("License CC0-1.0: Creative Commons Zero v1.0 Universal\n");
         printf("This software is in the public domain\n");
         printf("There is NO WARRANTY, to the extent permitted by law.\n\n");
@@ -109,6 +49,9 @@ void ShowUsage(int outtype)
 
 int main(int argc, char* argv[])
 {
+
+
+    /*
     std::string devicepath;
     std::string imagepath;
     uint8_t verify = 0;
@@ -158,6 +101,41 @@ int main(int argc, char* argv[])
             ShowUsage(0);
             return 1;
         }
+	*/
+
+	    /*	    
+	    Filesystem wltgfilesystem;
+	    WltgReader pack_wltg(argv[1]);
+
+	    wltgfilesystem.add_source(&pack_wltg);
+
+	    std::string wltgimg = std::filesystem::path(argv[1]).filename().string();
+	    size_t found = wltgimg.rfind(".");
+	    std::string wltgrawimg = wltgimg.substr(0, found) + ".dd";
+	    std::string virtpath = "/" + wltgimg.substr(0, found) + "/" + wltgrawimg;
+	    
+	    std::unique_ptr<BaseFileStream> handle = wltgfilesystem.open_file_read(virtpath.c_str());
+	    if(!handle)
+	    {
+		std::cout << "failed to open file" << std::endl;
+		return 1;
+	    }
+
+	    FILE* fout = stdout;
+
+	    char buf[131072];
+	    uint64_t curoffset = 0;
+	    while(curoffset < handle->size())
+	    {
+		handle->seek(curoffset);
+		uint64_t bytesread = handle->read_into(buf, 131072);
+		curoffset += bytesread;
+		fwrite(buf, 1, bytesread, fout);
+	    }
+	    fclose(fout);
+	    */ 
+
+	/*
         // GET IMAGE TOTAL SIZE TO RESTORE
         FILE* imgfile = NULL;
         imgfile = fopen(imagepath.c_str(), "rb");
@@ -243,7 +221,83 @@ int main(int argc, char* argv[])
 
         if(verify == 1) // start verification of the device
         {
-            printf("Verification Started\n");
+	    */
+
+	    /*
+	    Filesystem wltgfilesystem;
+	    WltgReader pack_wltg(argv[1]);
+
+	    wltgfilesystem.add_source(&pack_wltg);
+
+	    std::string wltgimg = std::filesystem::path(argv[1]).filename().string();
+	    size_t found = wltgimg.rfind(".");
+	    std::string wltgrawimg = wltgimg.substr(0, found) + ".dd";
+	    std::string virtpath = "/" + wltgimg.substr(0, found) + "/" + wltgrawimg;
+	    std::string wltginfo = wltgimg.substr(0, found) + ".info";
+	    std::string virtinfo = "/" + wltgimg.substr(0, found) + "/" + wltginfo;
+	    
+	    std::unique_ptr<BaseFileStream> handle = wltgfilesystem.open_file_read(virtpath.c_str());
+	    if(!handle)
+	    {
+		std::cout << "failed to open file" << std::endl;
+		return 1;
+	    }
+
+	    blake3_hasher hasher;
+	    blake3_hasher_init(&hasher);
+
+	    char buf[131072];
+	    uint64_t curoffset = 0;
+	    while(curoffset < handle->size())
+	    {
+		handle->seek(curoffset);
+		uint64_t bytesread = handle->read_into(buf, 131072);
+		blake3_hasher_update(&hasher, buf, bytesread);
+		curoffset += bytesread;
+		printf("Hashed %llu of %llu bytes\r", curoffset, handle->size());
+		fflush(stdout);
+	    }
+
+	    std::unique_ptr<BaseFileStream> infohandle = wltgfilesystem.open_file_read(virtinfo.c_str());
+	    if(!infohandle)
+	    {
+		std::cout << "failed to open file" << std::endl;
+		return 1;
+	    }
+	    std::cout << std::endl;
+
+	    // GET ORIGINAL SOURCE DEVICE BLAKE3 HASH
+	    char infobuf[infohandle->size()];
+	    uint64_t bytesread = infohandle->read_into(infobuf, infohandle->size());
+	    std::string infostring = "";
+	    std::stringstream iss;
+	    if(bytesread == infohandle->size())
+	    {
+		for(int i=0; i < infohandle->size(); i++)
+		    iss << infobuf[i];
+		infostring = iss.str();
+	    }
+	    std::size_t infofind = infostring.find(" - BLAKE3 Source Device\n");
+	    std::cout << infostring.substr(infofind - 2*BLAKE3_OUT_LEN, 2*BLAKE3_OUT_LEN) << " - BLAKE3 Source Device" << std::endl;
+
+	    // CALCULATE THE FORENSIC IMAGE BLAKE3 HASH
+	    uint8_t output[BLAKE3_OUT_LEN];
+	    blake3_hasher_finalize(&hasher, output, BLAKE3_OUT_LEN);
+	    std::stringstream ss;
+	    for(int i=0; i < BLAKE3_OUT_LEN; i++)
+		ss << std::hex << std::setfill('0') << std::setw(2) << (int)output[i]; 
+	    std::cout << ss.str() << " - BLAKE3 Forensic Image" << std::endl << std::endl;
+	    
+	    // COMPARE THE 2 HASHES to VERIFY
+	    if(ss.str().compare(infostring.substr(infofind - 2*BLAKE3_OUT_LEN, 2*BLAKE3_OUT_LEN)) == 0)
+		std::cout << "Verification Successful" << std::endl;
+	    else
+		std::cout << "Verification Failed" << std::endl;
+	    */
+
+
+            /*
+	    printf("Verification Started\n");
             // GET BLOCKSIZE FOR SPEEDY VERIFICATION
             int64_t bufinsize = GetBlockSize(&wfimd.totalbytes);
             //printf("selected block size for verification: %llu\n", bufinsize);
@@ -280,6 +334,7 @@ int main(int argc, char* argv[])
 	    else
 		printf("Verification Failed\n\n");
         }
+	*/
     }
     else
     {
