@@ -17,6 +17,9 @@ static const char* infopath = NULL;
 static off_t imgsize = 0;
 static off_t logsize = 0;
 static off_t infosize = 0;
+static const char* vimg = NULL;
+static const char* vlog = NULL;
+static const char* vinf = NULL;
 
 class WombatFileSystem : public Fusepp::Fuse<WombatFileSystem>
 {
@@ -102,39 +105,57 @@ class WombatFileSystem : public Fusepp::Fuse<WombatFileSystem>
 
 	static int read(const char* path, char* buf, size_t size, off_t offset, struct fuse_file_info* fi)
 	{
-	/*
-	Filesystem wltgfilesystem;
-	WltgReader pack_wltg(argv[1]);
+	    Filesystem wltgfilesystem;
+	    WltgReader pack_wltg(rootpath);
 
-	wltgfilesystem.add_source(&pack_wltg);
+	    wltgfilesystem.add_source(&pack_wltg);
 
-	std::string wltgimg = std::filesystem::path(argv[1]).filename().string();
-	size_t found = wltgimg.rfind(".");
-	std::string wltgrawimg = wltgimg.substr(0, found) + ".dd";
-	std::string virtpath = "/" + wltgimg.substr(0, found) + "/" + wltgrawimg;
-	
-	std::unique_ptr<BaseFileStream> handle = wltgfilesystem.open_file_read(virtpath.c_str());
-	if(!handle)
-	{
-	    std::cout << "failed to open file" << std::endl;
-	    return 1;
-	}
+	    /*
+	    std::string wltgimg = std::filesystem::path(argv[1]).filename().string();
+	    size_t found = wltgimg.rfind(".");
+	    std::string wltgrawimg = wltgimg.substr(0, found) + ".dd";
+	    std::string virtpath = "/" + wltgimg.substr(0, found) + "/" + wltgrawimg;
+	    */
+	    
+	    char tmpbuf[size];
+	    if(strcmp(path, imgpath) == 0)
+	    {
+		std::unique_ptr<BaseFileStream> handle = wltgfilesystem.open_file_read(vimg);
+		if(!handle)
+		    return -ENOENT;
+		handle->seek(offset);
+		uint64_t bytesread = handle->read_into(tmpbuf, size);
+	    }
+	    else if(strcmp(path, logpath) == 0)
+	    {
+		std::unique_ptr<BaseFileStream> handle = wltgfilesystem.open_file_read(vlog);
+		//if(!handle)
+		//    return -ENOENT;
+		handle->seek(offset);
+		uint64_t bytesread = handle->read_into(tmpbuf, size);
+	    }
+	    else if(strcmp(path, infopath) == 0)
+	    {
+		std::unique_ptr<BaseFileStream> handle = wltgfilesystem.open_file_read(vinf);
+		if(!handle)
+		    return -ENOENT;
+		handle->seek(offset);
+		uint64_t bytesread = handle->read_into(tmpbuf, size);
+	    }
 
-	FILE* fout = stdout;
+	    buf = &tmpbuf[0];
 
-	char buf[131072];
-	uint64_t curoffset = 0;
-	while(curoffset < handle->size())
-	{
-	    handle->seek(curoffset);
-	    uint64_t bytesread = handle->read_into(buf, 131072);
-	    curoffset += bytesread;
-	    fwrite(buf, 1, bytesread, fout);
-	}
-	fclose(fout);
+	    //FILE* fout = stdout;
 
-	return 0;
-	*/
+	    //memcpy(buf, tmpbuffer+relpos, size);
+	    //char buf[131072];
+	    //uint64_t curoffset = 0;
+	    //while(curoffset < )
+	    //{
+		//curoffset += bytesread;
+		//fwrite(buf, 1, bytesread, fout);
+	    //}
+	    //fclose(fout);
 
 	    /*
 	if (path != hello_path)
@@ -198,8 +219,9 @@ int main(int argc, char* argv[])
 	//std::cout << "wfipath: " << wfipath << " mntpath: " << mntpath << std::endl;
 	std::string wltgimg = std::filesystem::path(argv[1]).filename().string();
 	size_t found = wltgimg.rfind(".");
-	std::string proot = "/" + wltgimg.substr(0, found);
-	rootpath = argv[1];
+	//std::string proot = "/" + wltgimg.substr(0, found);
+	rootpath = wfipath.c_str();
+	std::cout << "root path: " << rootpath << std::endl;
 	//rootpath = proot.c_str();
 	std::string pimg = "/" + wltgimg.substr(0, found) + ".dd";
 	std::string plog = "/" + wltgimg.substr(0, found) + ".log";
@@ -215,6 +237,9 @@ int main(int argc, char* argv[])
 	std::string virtimg = "/" + wltgimg.substr(0, found) + "/" + wltgimg.substr(0, found) + ".dd";
 	std::string virtlog = "/" + wltgimg.substr(0, found) + "/" + wltgimg.substr(0, found) + ".log";
 	std::string virtinfo = "/" + wltgimg.substr(0, found) + "/" + wltgimg.substr(0, found) + ".info";
+	vimg = virtimg.c_str();
+	vlog = virtlog.c_str();
+	vinf = virtinfo.c_str();
 	
 	Filesystem wltgfilesystem;
 	WltgReader pack_wltg(argv[1]);
