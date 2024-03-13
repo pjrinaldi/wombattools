@@ -10,6 +10,8 @@
 #include "fusepp/Fuse.h"
 #include "fusepp/Fuse-impl.h"
 
+static const char* rootpath = NULL;
+
 class WombatFileSystem : public Fusepp::Fuse<WombatFileSystem>
 {
     public:
@@ -46,15 +48,16 @@ void ShowUsage(int outtype)
 {
     if(outtype == 0)
     {
-        printf("Write raw forensic image contents to stdout.\n\n");
+        printf("Mount the raw forensic image contents to a folder.\n\n");
         printf("Usage :\n");
-        printf("\twombatread IMAGE_FILE\n\n");
+        printf("\twombatmount IMAGE_FILE MOUNT_POINT\n\n");
         printf("IMAGE_FILE\t: the file name for the wombat forensic image.\n");
+	printf("MOUNT_POINT\t: the empty directory where the wombat forensic image will be mounted.\n");
         printf("Arguments :\n");
         printf("-v\t: Prints version information\n");
         printf("-h\t: Prints help information\n\n");
         printf("Example Usage :\n");
-        printf("wombatread item1.wfi\n");
+        printf("wombatmount item1.wfi /mnt/\n");
     }
     else if(outtype == 1)
     {
@@ -80,6 +83,15 @@ int main(int argc, char* argv[])
     }
     else if(argc == 3)
     {
+	std::string wfipath = argv[1];
+	std::string mntpath = argv[2];
+	std::cout << "wfipath: " << wfipath << " mntpath: " << mntpath << std::endl;
+
+	WombatFileSystem wfs;
+	int status = wfs.run(argc, argv);
+
+	return status;
+	/*
 	Filesystem wltgfilesystem;
 	WltgReader pack_wltg(argv[1]);
 
@@ -111,5 +123,6 @@ int main(int argc, char* argv[])
 	fclose(fout);
 
 	return 0;
+	*/
     }
 }
