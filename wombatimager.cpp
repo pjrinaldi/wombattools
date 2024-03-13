@@ -430,6 +430,8 @@ int main(int argc, char* argv[])
 	    printf("error opening device: %d %s\n", infile, errno);
 	    return 1;
 	}
+	fprintf(filelog, "Packing files into the Wombat Forensic Image and cleaning up.\n");
+	printf("Packing files into the Wombat Forensic Image and cleaning up.\n");
 	fclose(filelog);
 	fclose(fileinfo);
 
@@ -439,9 +441,8 @@ int main(int argc, char* argv[])
 	//std::cout << "virtpath: " << virtpath << std::endl;
 	//std::cout << "realpath: " << imgdirpath << std::endl;
 	packer.index_real_dir(virtpath.c_str(), imgdirpath.c_str());
-	fprintf(filelog, "Creating Wombat Forensic Image\n");
 	packer.write_fs_blob(wfipath.c_str());
-	fprintf(filelog, "Wombat Forensic Image Created. Starting Cleanup\n");
+	printf("Wombat Forensic Image created successfully.\n");
 
 	// DELETE RAW IMG TMP DIRECTORY
 	std::uintmax_t rmcnt = std::filesystem::remove_all(imgdirpath);
