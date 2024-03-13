@@ -141,13 +141,13 @@ int main(int argc, char* argv[])
                 return 1;
             }
             else if(strcmp(argv[i], "-c") == 0)
-                infocontent += "Case Number: \t" + std::string(argv[i+1]) + "\n";
+                infocontent += "Case Number: \t " + std::string(argv[i+1]) + "\n";
             else if(strcmp(argv[i], "-e") == 0)
-                infocontent += "Examiner: \t" + std::string(argv[i+1]) + "\n";
+                infocontent += "Examiner: \t " + std::string(argv[i+1]) + "\n";
             else if(strcmp(argv[i], "-n") == 0)
                 infocontent += "Evidence Number: " + std::string(argv[i+1]) + "\n";
             else if(strcmp(argv[i], "-d") == 0)
-                infocontent += "Description:\t " + std::string(argv[i+1]) + "\n";
+                infocontent += "Description:\t " + std::string(argv[i+1]) + "\n\n";
         }
 	//printf("Command called: %s %s %s\n", argv[0], argv[1], argv[2]);
         std::string filestr = argv[2];
@@ -439,7 +439,9 @@ int main(int argc, char* argv[])
 	//std::cout << "virtpath: " << virtpath << std::endl;
 	//std::cout << "realpath: " << imgdirpath << std::endl;
 	packer.index_real_dir(virtpath.c_str(), imgdirpath.c_str());
+	fprintf(filelog, "Creating Wombat Forensic Image\n");
 	packer.write_fs_blob(wfipath.c_str());
+	fprintf(filelog, "Wombat Forensic Image Created. Starting Cleanup\n");
 
 	// DELETE RAW IMG TMP DIRECTORY
 	std::uintmax_t rmcnt = std::filesystem::remove_all(imgdirpath);

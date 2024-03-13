@@ -18,28 +18,68 @@ class WombatFileSystem : public Fusepp::Fuse<WombatFileSystem>
 	WombatFileSystem() {};
 	~WombatFileSystem() {};
 
-	static int getattr(const char*, struct stat*, struct fuse_file_info*)
+	static int getattr(const char*, struct stat *stbuf, struct fuse_file_info*)
 	{
 	    int res = 0;
 	    memset(stbuf, 0, sizeof(struct stat));
+	    /*	
+	if (path == root_path) {
+		stbuf->st_mode = S_IFDIR | 0755;
+		stbuf->st_nlink = 2;
+	} else if (path == hello_path) {
+		stbuf->st_mode = S_IFREG | 0444;
+		stbuf->st_nlink = 1;
+		stbuf->st_size = hello_str.length();
+	} else
+		res = -ENOENT;
+
+	     */ 
 
 	    return res;
 	};
 
 	static int readdir(const char* path, void* buf, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info* fi, enum fuse_readdir_flags)
 	{
+	    /*
+	if (path != root_path)
+		return -ENOENT;
+
+	filler(buf, ".", NULL, 0, FUSE_FILL_DIR_PLUS);
+	filler(buf, "..", NULL, 0, FUSE_FILL_DIR_PLUS);
+	filler(buf, hello_path.c_str() + 1, NULL, 0, FUSE_FILL_DIR_PLUS);
+	     */ 
 
 	    return 0;
 	};
 
 	static int open(const char* path, struct fuse_file_info* fi)
 	{
+	    /*
+	if (path != hello_path)
+		return -ENOENT;
+
+	if ((fi->flags & 3) != O_RDONLY)
+		return -EACCES;
+	     */ 
 
 	    return 0;
 	};
 
 	static int read(const char* path, char* buf, size_t size, off_t offset, struct fuse_file_info* fi)
 	{
+	    /*
+	if (path != hello_path)
+		return -ENOENT;
+
+	size_t len;
+	len = hello_str.length();
+	if ((size_t)offset < len) {
+		if (offset + size > len)
+			size = len - offset;
+		memcpy(buf, hello_str.c_str() + offset, size);
+	} else
+		size = 0;
+	     */ 
 
 	    return size;
 	};
