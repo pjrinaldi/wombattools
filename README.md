@@ -8,8 +8,10 @@ The wombat logical image (wli), will be a zstd compressed tar file with the fore
 ## Version 0.2 Tools
 
 - wombatimager  - create a walafus read only zstd compressed forensic image given a source device and an image format name.
+- wombatlist    - displays the files and their sizes within the wombat forensic image 
 - wombatinfo    - displays the forensic image metadata information
 - wombatlog     - displays the log from the creation of the forensic image
-- wombaverify   - verifies the raw forensic image within the walafus forensic image to ensure nothing has changed
+- wombaverify   - verifies the raw forensic image within the wombat forensic image to ensure nothing has changed
 - wombatreader  - reads the raw forensic image and sends to stdout for use with other tools such as b3sum, xxd, etc.
 - wombatrestore - restores the raw forensic image to a physical device and can optionally verify the device when done
+- wombatmount   - working on a fuse module to enable fuse mounting the forensic image and accessing the files within
