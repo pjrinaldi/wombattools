@@ -26,4 +26,7 @@ wombatverify: $(WALAFUS_OBJS)
 wombatrestore: $(WALAFUS_OBJS)
 	g++ -O3 -o wombatrestore $(WALAFUS_OBJS) wombatrestore.cpp -lzstd -lpthread blake3/libblake3.a
 
+wombatmount: $(WALAFUS_OBJS)
+	g++ -O3 -o wombatmount $(WALAFUS_OBJS) fusepp/Fuse.cpp wombatmount.cpp -I/usr/include/fuse3 -lfuse3 -lzstd -D_FILE_OFFSET_BITS=64
+
 #wombatlogical:
