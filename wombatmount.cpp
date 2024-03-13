@@ -21,6 +21,7 @@ class WombatFileSystem : public Fusepp::Fuse<WombatFileSystem>
 	static int getattr(const char*, struct stat*, struct fuse_file_info*)
 	{
 	    int res = 0;
+	    memset(stbuf, 0, sizeof(struct stat));
 
 	    return res;
 	};
